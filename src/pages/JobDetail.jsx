@@ -32,7 +32,7 @@ export default function JobDetail() {
   useEffect(() => {
     if (!jobId) return;
     const loadJob = async () => {
-      const jobs = await base44.entities.Job.filter({ jobId }, "-created_date", 1);
+      const jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
@@ -49,9 +49,19 @@ export default function JobDetail() {
 
     try {
       const data = await pollJob(jobId);
-      const updates = { status: data.status };
+      const updates = { status: data.status, lastPolledAt: new Date().toISOString() };
       if (data.error) updates.error = data.error;
-      if (data.status === "done" && data.result) updates.result = data.result;
+      if (data.status === "done" && data.result) {
+        updates.result = data.result;
+        // Compute derived fields
+        if (data.result.cues && data.result.cues.length > 0) {
+          const lastCue = data.result.cues[data.result.cues.length - 1];
+          updates.durationMs = lastCue.end;
+        }
+        if (data.result.qc) {
+          updates.issuesCount = data.result.qc.issuesCount || 0;
+        }
+      }
 
       await base44.entities.Job.update(job.id, updates);
       setJob((prev) => ({ ...prev, ...updates }));
@@ -72,10 +82,9 @@ export default function JobDetail() {
 
     const tick = () => {
       const elapsed = Date.now() - pollStartRef.current;
-      const interval = elapsed < 30000 ? 2000 : 5000;
+      const interval = elapsed < 20000 ? 2000 : 5000;
       pollingRef.current = setTimeout(async () => {
         await doPoll();
-        // re-check if still needs polling
         tick();
       }, interval);
     };
@@ -179,11 +188,16 @@ export default function JobDetail() {
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 mb-6">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <h2 className="text-base font-semibold text-red-300 mb-1">Job Failed</h2>
-                <p className="text-sm text-red-400/80 mb-4">{job.error || "An unknown error occurred."}</p>
-                <Button variant="outline" size="sm" onClick={handleRetry} className="border-red-500/30 text-red-300 hover:bg-red-500/10">
-                  Try again
+              <div className="flex-1">
+                <h2 className="text-base font-semibold text-red-300 mb-1">We couldn't process this media URL.</h2>
+                <details className="mt-3">
+                  <summary className="text-xs text-red-400/60 cursor-pointer hover:text-red-400/80">Show error details</summary>
+                  <div className="mt-2 p-3 rounded-md bg-red-950/30 border border-red-500/10">
+                    <p className="text-xs text-red-400/70 font-mono break-all">{job.error || "An unknown error occurred."}</p>
+                  </div>
+                </details>
+                <Button variant="outline" size="sm" onClick={handleRetry} className="border-red-500/30 text-red-300 hover:bg-red-500/10 mt-4">
+                  Retry Job
                 </Button>
               </div>
             </div>

@@ -4,16 +4,19 @@ import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
 import { createJob } from "../components/shared/RailwayApi";
 import { NBCU_DEFAULTS } from "../components/shared/RulesDefaults";
+import { ensureSettingsExist, getSettings, matchesDomainAllowlist, checkRateLimit } from "../components/shared/ValidationUtils";
 import RulesPanel from "../components/newjob/RulesPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Sparkles, Info, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export default function NewJob() {
   const navigate = useNavigate();
   const [mediaUrl, setMediaUrl] = useState("");
+  const [allowHttp, setAllowHttp] = useState(false);
   const [speakerLabels, setSpeakerLabels] = useState(true);
   const [languageDetection, setLanguageDetection] = useState(true);
   const [rules, setRules] = useState({ ...NBCU_DEFAULTS });
@@ -22,23 +25,40 @@ export default function NewJob() {
   const [error, setError] = useState(null);
   const [urlError, setUrlError] = useState(null);
   const [user, setUser] = useState(null);
+  const [settings, setSettings] = useState(null);
 
   useEffect(() => {
-    // Check for prefilled data from query params
-    const params = new URLSearchParams(window.location.search);
-    const prefillUrl = params.get("mediaUrl");
-    const prefillRules = params.get("rules");
-    if (prefillUrl) setMediaUrl(prefillUrl);
-    if (prefillRules) {
-      try { setRules(JSON.parse(prefillRules)); setPreset("custom"); } catch {}
-    }
-    base44.auth.me().then(setUser);
+    const init = async () => {
+      const u = await base44.auth.me();
+      setUser(u);
+      
+      await ensureSettingsExist(base44);
+      const s = await getSettings(base44);
+      setSettings(s);
+      setAllowHttp(s.defaultAllowHttp || false);
+      
+      // Check for prefilled data from query params
+      const params = new URLSearchParams(window.location.search);
+      const prefillUrl = params.get("mediaUrl");
+      const prefillRules = params.get("rules");
+      if (prefillUrl) setMediaUrl(prefillUrl);
+      if (prefillRules) {
+        try { setRules(JSON.parse(prefillRules)); setPreset("custom"); } catch {}
+      }
+    };
+    init();
   }, []);
 
   const validateUrl = (url) => {
     try {
       const u = new URL(url);
       if (!["http:", "https:"].includes(u.protocol)) return "URL must use http or https protocol";
+      
+      // HTTPS-only enforcement
+      if (u.protocol === "http:" && !allowHttp) {
+        return "HTTP is disabled by default. Enable 'Allow HTTP' if your source doesn't support HTTPS.";
+      }
+      
       return null;
     } catch {
       return "Please enter a valid URL";
@@ -59,6 +79,39 @@ export default function NewJob() {
     const vErr = validateUrl(mediaUrl);
     if (vErr) { setUrlError(vErr); return; }
     setUrlError(null);
+    
+    // Apply allowlist if enabled
+    if (settings?.allowlistEnabled) {
+      const allowed = matchesDomainAllowlist(mediaUrl, settings.allowedDomains);
+      if (!allowed) {
+        try {
+          const hostname = new URL(mediaUrl).hostname;
+          setUrlError(`Domain not approved: ${hostname}. Contact an admin.`);
+        } catch {
+          setUrlError("This URL domain is not approved. Contact an admin.");
+        }
+        return;
+      }
+    }
+    
+    // Rate limiting
+    const rateCheck = checkRateLimit(settings?.jobsPerMinute || 3);
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.message);
+      return;
+    }
+    
+    // Concurrency check
+    const processingJobs = await base44.entities.Job.filter({
+      userId: user?.email,
+      status: { $in: ["queued", "processing"] }
+    });
+    const maxConcurrent = settings?.maxConcurrentProcessingJobsPerUser || 3;
+    if (processingJobs.length >= maxConcurrent) {
+      toast.error(`You already have ${processingJobs.length} job${processingJobs.length !== 1 ? 's' : ''} in progress. Please wait for one to finish.`);
+      return;
+    }
+    
     setSubmitting(true);
 
     try {
@@ -72,14 +125,16 @@ export default function NewJob() {
 
       // Save to DB
       await base44.entities.Job.create({
-        jobId: data.id,
+        railwayJobId: data.id,
         userId: user?.email || "",
         mediaUrl,
         title: deriveTitleFromUrl(mediaUrl),
         status: data.status || "processing",
-        rules,
+        error: data.error || null,
+        allowHttp,
         speakerLabels,
         languageDetection,
+        rules,
       });
 
       navigate(createPageUrl("JobDetail") + `?jobId=${data.id}`);
@@ -113,7 +168,13 @@ export default function NewJob() {
                 {urlError && (
                   <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {urlError}</p>
                 )}
-                <p className="text-xs text-zinc-600">Publicly accessible URL required. Do not submit confidential media unless you control access.</p>
+                <div className="flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-zinc-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-zinc-600">
+                    Media URLs must be publicly accessible (signed URLs supported). 
+                    {settings?.allowlistEnabled && <span className="text-amber-400"> Only approved domains are allowed.</span>}
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-6">
@@ -124,6 +185,10 @@ export default function NewJob() {
                 <div className="flex items-center gap-2.5">
                   <Switch checked={languageDetection} onCheckedChange={setLanguageDetection} className="data-[state=checked]:bg-blue-600" />
                   <Label className="text-xs text-zinc-400">Language detection</Label>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Switch checked={allowHttp} onCheckedChange={setAllowHttp} className="data-[state=checked]:bg-blue-600" />
+                  <Label className="text-xs text-zinc-400">Allow HTTP</Label>
                 </div>
               </div>
             </div>

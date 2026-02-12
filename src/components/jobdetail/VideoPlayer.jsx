@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 
-export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate }) {
+export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, captionSettings }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [activeCue, setActiveCue] = useState(null);
 
@@ -15,6 +15,50 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate }) 
     setActiveCue(active || null);
   }, [cues, onTimeUpdate, videoRef]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!videoRef.current) return;
+      const vid = videoRef.current;
+      
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      
+      switch(e.key) {
+        case " ":
+          e.preventDefault();
+          vid.paused ? vid.play() : vid.pause();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          vid.currentTime = Math.max(0, vid.currentTime - 5);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 5);
+          break;
+        case "j":
+        case "J":
+          vid.currentTime = Math.max(0, vid.currentTime - 10);
+          break;
+        case "k":
+        case "K":
+          vid.paused ? vid.play() : vid.pause();
+          break;
+        case "l":
+        case "L":
+          vid.currentTime = Math.min(vid.duration || 0, vid.currentTime + 10);
+          break;
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [videoRef]);
+
+  const fontSize = captionSettings?.fontSize || 16;
+  const opacity = captionSettings?.opacity ?? 0.8;
+  const position = captionSettings?.position || "bottom";
+
   return (
     <div className="relative rounded-lg overflow-hidden bg-black group">
       <video
@@ -27,9 +71,9 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate }) 
       />
       {/* Caption overlay */}
       {activeCue && (
-        <div className="absolute bottom-12 left-0 right-0 flex justify-center pointer-events-none px-4">
-          <div className="bg-black/80 backdrop-blur-sm rounded-md px-4 py-2 max-w-[80%] border border-zinc-700/30">
-            <p className="text-white text-sm sm:text-base font-medium text-center leading-relaxed whitespace-pre-line">
+        <div className={`absolute left-0 right-0 flex justify-center pointer-events-none px-4 ${position === "top" ? "top-12" : "bottom-12"}`}>
+          <div className="rounded-md px-4 py-2 max-w-[80%] border border-zinc-700/30" style={{ backgroundColor: `rgba(0, 0, 0, ${opacity})`, backdropFilter: "blur(4px)" }}>
+            <p className="text-white font-medium text-center leading-relaxed whitespace-pre-line" style={{ fontSize: `${fontSize}px` }}>
               {activeCue.text}
             </p>
           </div>

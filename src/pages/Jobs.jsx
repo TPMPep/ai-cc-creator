@@ -115,7 +115,7 @@ export default function Jobs() {
                   <TableRow key={job.id} className="border-zinc-800/40 hover:bg-zinc-800/20">
                     <TableCell>
                       <Link
-                        to={createPageUrl("JobDetail") + `?jobId=${job.jobId}`}
+                        to={createPageUrl("JobDetail") + `?jobId=${job.railwayJobId || job.jobId}`}
                         className="text-sm font-medium text-zinc-200 hover:text-blue-400 transition-colors"
                       >
                         {job.title || "Untitled"}
@@ -128,7 +128,7 @@ export default function Jobs() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Link to={createPageUrl("JobDetail") + `?jobId=${job.jobId}`}>
+                        <Link to={createPageUrl("JobDetail") + `?jobId=${job.railwayJobId || job.jobId}`}>
                           <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-white h-7 w-7 p-0">
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
