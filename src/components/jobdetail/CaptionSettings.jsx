@@ -39,7 +39,7 @@ export default function CaptionSettings({ settings, onSettingsChange }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="border-zinc-800 text-zinc-400 hover:text-white gap-2">
+        <Button variant="outline" size="sm" className="border-zinc-800 bg-transparent text-zinc-400 hover:text-white hover:bg-zinc-800 gap-2">
           <Settings2 className="w-3.5 h-3.5" /> Caption Settings
         </Button>
       </SheetTrigger>

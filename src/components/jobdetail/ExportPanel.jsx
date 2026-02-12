@@ -37,21 +37,21 @@ export default function ExportPanel({ result, title, jobId }) {
       <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Exports</h3>
       <div className="grid grid-cols-2 gap-2">
         {result.srt && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.srt, `${safeName}_${jobId}.srt`, "text/plain")} className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
+          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.srt, `${safeName}_${jobId}.srt`, "text/plain")} className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
             <Download className="w-3 h-3 mr-1.5" /> SRT
           </Button>
         )}
         {result.vtt && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.vtt, `${safeName}_${jobId}.vtt`, "text/plain")} className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
+          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.vtt, `${safeName}_${jobId}.vtt`, "text/plain")} className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
             <Download className="w-3 h-3 mr-1.5" /> VTT
           </Button>
         )}
         {result.scc && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.scc, `${safeName}_${jobId}.scc`, "text/plain")} className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
+          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.scc, `${safeName}_${jobId}.scc`, "text/plain")} className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
             <Download className="w-3 h-3 mr-1.5" /> SCC
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => downloadBlob(JSON.stringify(result, null, 2), `${safeName}_${jobId}.json`, "application/json")} className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
+        <Button variant="outline" size="sm" onClick={() => downloadBlob(JSON.stringify(result, null, 2), `${safeName}_${jobId}.json`, "application/json")} className="border-zinc-800 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
           <Download className="w-3 h-3 mr-1.5" /> JSON
         </Button>
       </div>
