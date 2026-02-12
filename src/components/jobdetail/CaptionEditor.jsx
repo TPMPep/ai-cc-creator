@@ -321,11 +321,11 @@ export default function CaptionEditor({
                       <SelectTrigger className="h-7 text-xs bg-zinc-900 border-zinc-800 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-800">
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="A">A</SelectItem>
-                        <SelectItem value="B">B</SelectItem>
-                        <SelectItem value="C">C</SelectItem>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                        <SelectItem value="none" className="text-zinc-300">None</SelectItem>
+                        <SelectItem value="A" className="text-zinc-300">A</SelectItem>
+                        <SelectItem value="B" className="text-zinc-300">B</SelectItem>
+                        <SelectItem value="C" className="text-zinc-300">C</SelectItem>
                       </SelectContent>
                     </Select>
                   </td>
@@ -339,12 +339,12 @@ export default function CaptionEditor({
                       <SelectTrigger className="h-7 text-xs bg-zinc-900 border-zinc-800 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-800">
-                        <SelectItem value="dialogue">Dialogue</SelectItem>
-                        <SelectItem value="sdh">SDH</SelectItem>
-                        <SelectItem value="music">Music</SelectItem>
-                        <SelectItem value="foreign_language">Foreign</SelectItem>
-                        <SelectItem value="sound_effect">Sound FX</SelectItem>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                        <SelectItem value="dialogue" className="text-zinc-300">Dialogue</SelectItem>
+                        <SelectItem value="sdh" className="text-zinc-300">SDH</SelectItem>
+                        <SelectItem value="music" className="text-zinc-300">Music</SelectItem>
+                        <SelectItem value="foreign_language" className="text-zinc-300">Foreign</SelectItem>
+                        <SelectItem value="sound_effect" className="text-zinc-300">Sound FX</SelectItem>
                       </SelectContent>
                     </Select>
                   </td>
