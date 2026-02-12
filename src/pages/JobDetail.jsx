@@ -9,6 +9,7 @@ import CueList from "../components/jobdetail/CueList";
 import ExportPanel from "../components/jobdetail/ExportPanel";
 import QCPanel from "../components/jobdetail/QCPanel";
 import CaptionSettings from "../components/jobdetail/CaptionSettings";
+import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
@@ -24,6 +25,7 @@ export default function JobDetail() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [captionSettings, setCaptionSettings] = useState({ fontSize: 16, opacity: 0.8, position: "bottom" });
+  const [cues, setCues] = useState([]);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
@@ -38,6 +40,7 @@ export default function JobDetail() {
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
+        setCues(jobs[0].result?.cues || []);
       }
       setLoading(false);
     };
@@ -67,6 +70,7 @@ export default function JobDetail() {
 
       await base44.entities.Job.update(job.id, updates);
       setJob((prev) => ({ ...prev, ...updates }));
+      if (updates.result?.cues) setCues(updates.result.cues);
 
       if (data.status === "done" || data.status === "error") {
         clearInterval(pollingRef.current);
@@ -136,7 +140,6 @@ export default function JobDetail() {
     );
   }
 
-  const cues = job.result?.cues || [];
   const isDone = job.status === "done";
   const isProcessing = job.status === "processing" || job.status === "queued";
   const isError = job.status === "error";
@@ -212,46 +215,54 @@ export default function JobDetail() {
 
         {/* Done state - main content */}
         {isDone && (
-          <div className="grid lg:grid-cols-5 gap-6">
-            {/* Left: Video + caption overlay */}
-            <div className="lg:col-span-3 space-y-4">
-              <div className="flex items-center justify-between mb-2">
-                <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
-                <p className="text-[10px] text-zinc-600">
-                  Shortcuts: Space (play/pause) • ←/→ (±5s) • J/K/L (−10s/pause/+10s)
-                </p>
-              </div>
-              <VideoPlayer
-                mediaUrl={job.mediaUrl}
-                cues={cues}
-                videoRef={videoRef}
-                onTimeUpdate={setCurrentTimeMs}
-                captionSettings={captionSettings}
-              />
-            </div>
-
-            {/* Right: Cues + Exports + QC */}
-            <div className="lg:col-span-2 flex flex-col gap-4">
-              {/* Cue list */}
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 overflow-hidden flex-1 min-h-0" style={{ maxHeight: "420px" }}>
-                <CueList
+          <>
+            {/* Top Section: 70% Video Left / 30% QC + Exports Right */}
+            <div className="grid grid-cols-10 gap-6 mb-6">
+              {/* Left: Video (70%) */}
+              <div className="col-span-7 space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
+                  <p className="text-[10px] text-zinc-600">
+                    Shortcuts: Space (play/pause) • ←/→ (±5s) • J/K/L (−10s/pause/+10s)
+                  </p>
+                </div>
+                <VideoPlayer
+                  mediaUrl={job.mediaUrl}
                   cues={cues}
-                  currentTimeMs={currentTimeMs}
-                  onSeek={(t) => { if (videoRef.current) videoRef.current.currentTime = t; }}
+                  videoRef={videoRef}
+                  onTimeUpdate={setCurrentTimeMs}
+                  captionSettings={captionSettings}
                 />
               </div>
 
-              {/* Exports */}
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-                <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} />
-              </div>
+              {/* Right: QC Panel + Exports (30%) */}
+              <div className="col-span-3 flex flex-col gap-4" style={{ height: "fit-content", maxHeight: "600px" }}>
+                {/* Exports */}
+                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
+                  <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} />
+                </div>
 
-              {/* QC */}
-              <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-                <QCPanel qc={job.result?.qc} onJumpToCue={handleJumpToCue} />
+                {/* QC Panel - scrollable */}
+                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 overflow-auto flex-1">
+                  <QCPanel qc={job.result?.qc} onJumpToCue={handleJumpToCue} />
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Full Width Caption Editor Below */}
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 overflow-hidden">
+              <CaptionEditor 
+                cues={cues}
+                currentTimeMs={currentTimeMs}
+                videoRef={videoRef}
+                job={job}
+                onCuesChanged={(updatedCues) => {
+                  setCues(updatedCues);
+                  setJob(prev => ({ ...prev, result: { ...prev.result, cues: updatedCues } }));
+                }}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
