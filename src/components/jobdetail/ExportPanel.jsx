@@ -24,7 +24,7 @@ export default function ExportPanel({ result, title, jobId }) {
 
   if (!result) return null;
 
-  const safeName = sanitizeFilename(title);
+  const safeName = sanitizeFilename(title || "export");
 
   const handleCopy = async (text, setter) => {
     await navigator.clipboard.writeText(text);

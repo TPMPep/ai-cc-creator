@@ -159,6 +159,33 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Security & Privacy */}
+      <section className="py-20 sm:py-28 border-t border-zinc-800/60 bg-zinc-900/20">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <p className="text-blue-400 font-medium text-sm tracking-wide uppercase mb-3">Security & Privacy</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white">Secure by design</h2>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-6 text-center">
+            <div className="p-5 rounded-lg border border-zinc-800/60 bg-zinc-900/30">
+              <Shield className="w-6 h-6 text-emerald-400 mx-auto mb-3" />
+              <p className="text-sm text-zinc-300 font-medium mb-1">Server-Side Processing</p>
+              <p className="text-xs text-zinc-500">Your AssemblyAI credentials are never stored in the browser.</p>
+            </div>
+            <div className="p-5 rounded-lg border border-zinc-800/60 bg-zinc-900/30">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-3" />
+              <p className="text-sm text-zinc-300 font-medium mb-1">Signed URLs Supported</p>
+              <p className="text-xs text-zinc-500">Processing happens securely server-side.</p>
+            </div>
+            <div className="p-5 rounded-lg border border-zinc-800/60 bg-zinc-900/30">
+              <Shield className="w-6 h-6 text-emerald-400 mx-auto mb-3" />
+              <p className="text-sm text-zinc-300 font-medium mb-1">NBCU-Ready Output</p>
+              <p className="text-xs text-zinc-500">QC checks included. SRT / VTT / SCC exports.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Banner */}
       <section className="py-20 sm:py-28 border-t border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

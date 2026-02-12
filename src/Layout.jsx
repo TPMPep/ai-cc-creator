@@ -160,6 +160,11 @@ export default function Layout({ children, currentPageName }) {
                 <Link to={createPageUrl("Jobs")} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${currentPageName === "Jobs" || currentPageName === "JobDetail" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"}`}>
                   Jobs
                 </Link>
+                {user?.role === "admin" && (
+                  <Link to={createPageUrl("Admin")} className={`px-3 py-1.5 text-sm rounded-md transition-colors ${currentPageName === "Admin" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"}`}>
+                    Admin
+                  </Link>
+                )}
               </nav>
             </div>
 

@@ -8,6 +8,7 @@ import VideoPlayer from "../components/jobdetail/VideoPlayer";
 import CueList from "../components/jobdetail/CueList";
 import ExportPanel from "../components/jobdetail/ExportPanel";
 import QCPanel from "../components/jobdetail/QCPanel";
+import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
@@ -22,6 +23,7 @@ export default function JobDetail() {
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [captionSettings, setCaptionSettings] = useState({ fontSize: 16, opacity: 0.8, position: "bottom" });
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
@@ -110,7 +112,11 @@ export default function JobDetail() {
   };
 
   const handleRetry = () => {
-    navigate(createPageUrl("NewJob") + `?mediaUrl=${encodeURIComponent(job.mediaUrl)}&rules=${encodeURIComponent(JSON.stringify(job.rules || {}))}`);
+    const params = new URLSearchParams({
+      mediaUrl: job.mediaUrl,
+      rules: JSON.stringify(job.rules || {}),
+    });
+    navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
 
   if (loading) {
@@ -209,11 +215,18 @@ export default function JobDetail() {
           <div className="grid lg:grid-cols-5 gap-6">
             {/* Left: Video + caption overlay */}
             <div className="lg:col-span-3 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
+                <p className="text-[10px] text-zinc-600">
+                  Shortcuts: Space (play/pause) • ←/→ (±5s) • J/K/L (−10s/pause/+10s)
+                </p>
+              </div>
               <VideoPlayer
                 mediaUrl={job.mediaUrl}
                 cues={cues}
                 videoRef={videoRef}
                 onTimeUpdate={setCurrentTimeMs}
+                captionSettings={captionSettings}
               />
             </div>
 
@@ -230,7 +243,7 @@ export default function JobDetail() {
 
               {/* Exports */}
               <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-                <ExportPanel result={job.result} title={job.title} jobId={job.jobId} />
+                <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} />
               </div>
 
               {/* QC */}

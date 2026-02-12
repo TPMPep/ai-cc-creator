@@ -55,6 +55,7 @@ import NewJob from './pages/NewJob';
 import Jobs from './pages/Jobs';
 import JobDetail from './pages/JobDetail';
 import Account from './pages/Account';
+import Admin from './pages/Admin';
 import __Layout from './Layout.jsx';
 
 
@@ -67,6 +68,7 @@ export const PAGES = {
     "Jobs": Jobs,
     "JobDetail": JobDetail,
     "Account": Account,
+    "Admin": Admin,
 }
 
 export const pagesConfig = {
