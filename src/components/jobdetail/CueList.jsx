@@ -1,64 +1,130 @@
-import React, { useRef, useEffect, useState } from "react";
-import { formatMs } from "../shared/TimeDisplay";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import React, { useEffect, useMemo, useRef } from "react";
 
-export default function CueList({ cues, currentTimeMs, onSeek }) {
-  const [autoFollow, setAutoFollow] = useState(true);
+function formatTC(ms) {
+  if (ms == null) return "—";
+  const total = Math.max(0, Number(ms));
+  const h = Math.floor(total / 3600000);
+  const m = Math.floor((total % 3600000) / 60000);
+  const s = Math.floor((total % 60000) / 1000);
+  const mm = Math.floor(total % 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(mm).padStart(3, "0")}`;
+}
+
+export default function CueList({
+  cues = [],
+  currentTimeMs = 0,
+  onSeek,
+  showSpeaker = true,
+}) {
+  const [autoFollow, setAutoFollow] = React.useState(true);
   const listRef = useRef(null);
-  const activeRef = useRef(null);
 
-  const activeCueIndex = cues?.findIndex((c) => c.start <= currentTimeMs && currentTimeMs <= c.end) ?? -1;
+  const rows = useMemo(() => {
+    return (cues || []).map((c, idx) => ({
+      idx,
+      number: idx + 1,
+      start: c?.start ?? 0,
+      end: c?.end ?? 0,
+      speaker: c?.speaker ?? "",
+      text: (c?.text ?? "").toString(),
+    }));
+  }, [cues]);
+
+  const activeCueIndex = useMemo(() => {
+    return rows.findIndex(r => currentTimeMs >= r.start && currentTimeMs <= r.end);
+  }, [rows, currentTimeMs]);
 
   useEffect(() => {
-    if (autoFollow && activeRef.current && listRef.current) {
-      activeRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    if (!autoFollow) return;
+    if (activeCueIndex === -1) return;
+    const el = document.getElementById(`cue-row-${activeCueIndex}`);
+    if (!el) return;
+
+    // Keep the active row comfortably in view
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeCueIndex, autoFollow]);
 
-  if (!cues || cues.length === 0) return null;
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/60">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Cues ({cues.length})</h3>
-        <div className="flex items-center gap-2">
-          <Label className="text-[10px] text-zinc-600">Auto-follow</Label>
-          <Switch checked={autoFollow} onCheckedChange={setAutoFollow} className="data-[state=checked]:bg-blue-600 h-4 w-7" />
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+        <div className="text-xs tracking-widest text-zinc-400">
+          CUES ({rows.length})
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-zinc-500">Auto-follow</div>
+          <button
+            type="button"
+            onClick={() => setAutoFollow(!autoFollow)}
+            className={[
+              "relative inline-flex h-6 w-11 items-center rounded-full transition",
+              autoFollow ? "bg-blue-600" : "bg-zinc-700",
+            ].join(" ")}
+            aria-label="Toggle auto-follow"
+          >
+            <span
+              className={[
+                "inline-block h-5 w-5 transform rounded-full bg-white transition",
+                autoFollow ? "translate-x-5" : "translate-x-1",
+              ].join(" ")}
+            />
+          </button>
         </div>
       </div>
-      <div ref={listRef} className="flex-1 overflow-y-auto">
-        {cues.map((cue, i) => {
-          const isActive = i === activeCueIndex;
+
+      {/* Column header */}
+      <div className="grid grid-cols-[56px_120px_120px_1fr] gap-3 px-4 py-2 border-b border-zinc-800 text-[11px] font-semibold text-zinc-500">
+        <div className="text-zinc-500">NO.</div>
+        <div className="text-zinc-500">TC IN</div>
+        <div className="text-zinc-500">TC OUT</div>
+        <div className="text-zinc-500">
+          TEXT{showSpeaker ? " / SPEAKER" : ""}
+        </div>
+      </div>
+
+      {/* Rows */}
+      <div ref={listRef} className="max-h-[520px] overflow-auto">
+        {rows.map((r) => {
+          const isActive = r.idx === activeCueIndex;
+
           return (
-            <div
-              key={i}
-              ref={isActive ? activeRef : null}
-              onClick={() => onSeek(cue.start / 1000)}
-              className={`px-4 py-2.5 border-b border-zinc-800/30 cursor-pointer transition-colors ${
-                isActive
-                  ? "bg-blue-600/10 border-l-2 border-l-blue-500"
-                  : "hover:bg-zinc-800/30 border-l-2 border-l-transparent"
-              }`}
+            <button
+              key={r.idx}
+              id={`cue-row-${r.idx}`}
+              type="button"
+              onClick={() => onSeek?.(r.start / 1000)}
+              className={[
+                "w-full text-left px-4 py-2 border-b border-zinc-900",
+                "grid grid-cols-[56px_120px_120px_1fr] gap-3 items-start",
+                "hover:bg-zinc-900/50 transition",
+                isActive ? "bg-blue-500/10" : "",
+              ].join(" ")}
             >
-              <div className="flex items-center gap-3 mb-1">
-                <span className={`font-mono text-[10px] ${isActive ? "text-blue-400" : "text-zinc-600"}`}>
-                  {formatMs(cue.start)}
-                </span>
-                <span className="text-zinc-700 text-[10px]">→</span>
-                <span className={`font-mono text-[10px] ${isActive ? "text-blue-400" : "text-zinc-600"}`}>
-                  {formatMs(cue.end)}
-                </span>
-                {cue.speaker && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-medium ml-auto">
-                    {cue.speaker}
-                  </span>
-                )}
+              <div className="text-xs text-zinc-400 tabular-nums">
+                {r.number}
               </div>
-              <p className={`text-xs leading-relaxed ${isActive ? "text-zinc-200" : "text-zinc-400"}`}>
-                {cue.text}
-              </p>
-            </div>
+
+              <div className="text-xs text-zinc-300 tabular-nums">
+                {formatTC(r.start)}
+              </div>
+
+              <div className="text-xs text-zinc-300 tabular-nums">
+                {formatTC(r.end)}
+              </div>
+
+              <div className="min-w-0">
+                <div className="text-sm text-zinc-100 whitespace-pre-line leading-5">
+                  {r.text || "—"}
+                </div>
+
+                {showSpeaker && r.speaker ? (
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Speaker: <span className="text-zinc-400">{r.speaker}</span>
+                  </div>
+                ) : null}
+              </div>
+            </button>
           );
         })}
       </div>
