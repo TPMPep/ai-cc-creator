@@ -212,7 +212,7 @@ export default function CaptionEditor({
         </div>
         
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={insertSDHCue} className="border-zinc-800 text-zinc-400 hover:text-white text-xs h-8">
+          <Button variant="outline" size="sm" onClick={insertSDHCue} className="bg-transparent border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white text-xs h-8">
             <Volume2 className="w-3 h-3 mr-1.5" /> Insert SDH Cue
           </Button>
           <Button onClick={handleSaveCues} disabled={saving} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8">
