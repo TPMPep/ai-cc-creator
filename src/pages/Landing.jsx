@@ -6,7 +6,7 @@ import HeroMockup from "../components/landing/HeroMockup";
 import {
   Link2, Sparkles, PlayCircle, Timer, Users, SlidersHorizontal,
   ShieldCheck, MonitorPlay, FileOutput, Film, Globe, Tv, ClipboardCheck,
-  ArrowRight, CheckCircle2
+  ArrowRight, CheckCircle2, Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
