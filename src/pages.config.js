@@ -50,12 +50,12 @@
 import Account from './pages/Account';
 import Admin from './pages/Admin';
 import Contact from './pages/Contact';
+import JobDetail from './pages/JobDetail';
 import Jobs from './pages/Jobs';
 import Landing from './pages/Landing';
 import NewJob from './pages/NewJob';
 import Pricing from './pages/Pricing';
 import Security from './pages/Security';
-import JobDetail from './pages/JobDetail';
 import __Layout from './Layout.jsx';
 
 
@@ -63,12 +63,12 @@ export const PAGES = {
     "Account": Account,
     "Admin": Admin,
     "Contact": Contact,
+    "JobDetail": JobDetail,
     "Jobs": Jobs,
     "Landing": Landing,
     "NewJob": NewJob,
     "Pricing": Pricing,
     "Security": Security,
-    "JobDetail": JobDetail,
 }
 
 export const pagesConfig = {

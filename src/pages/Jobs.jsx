@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Trash2, Eye, ExternalLink } from "lucide-react";
+import { Plus, Search, Trash2, Eye, Copy, Check } from "lucide-react";
 import moment from "moment";
+import { toast } from "sonner";
 
 export default function Jobs() {
   const [jobs, setJobs] = useState([]);
@@ -17,6 +18,7 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [user, setUser] = useState(null);
+  const [copiedUrl, setCopiedUrl] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -33,6 +35,13 @@ export default function Jobs() {
     if (!confirm("Delete this job from your history?")) return;
     await base44.entities.Job.delete(job.id);
     setJobs(jobs.filter((j) => j.id !== job.id));
+  };
+
+  const copyUrl = (url, jobId) => {
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(jobId);
+    toast.success("URL copied to clipboard");
+    setTimeout(() => setCopiedUrl(null), 2000);
   };
 
   const filtered = jobs.filter((j) => {
@@ -104,6 +113,7 @@ export default function Jobs() {
               <TableHeader>
                 <TableRow className="border-zinc-800/60 hover:bg-transparent">
                   <TableHead className="text-zinc-500 text-xs font-medium">Title</TableHead>
+                  <TableHead className="text-zinc-500 text-xs font-medium">Job ID</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Created</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Status</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium hidden md:table-cell">Media URL</TableHead>
@@ -121,10 +131,25 @@ export default function Jobs() {
                         {job.title || "Untitled"}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-xs text-zinc-500">{moment(job.created_date).fromNow()}</TableCell>
+                    <TableCell>
+                      <span className="text-xs text-zinc-500 font-mono">{job.railwayJobId || job.jobId}</span>
+                    </TableCell>
+                    <TableCell className="text-xs text-zinc-500">
+                      {moment(job.created_date).format("MMM D, YYYY h:mm A")}
+                    </TableCell>
                     <TableCell><StatusBadge status={job.status} /></TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <span className="text-xs text-zinc-600 max-w-[200px] truncate block">{job.mediaUrl}</span>
+                      <button
+                        onClick={() => copyUrl(job.mediaUrl, job.id)}
+                        className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors group"
+                      >
+                        <span className="max-w-[180px] truncate">{job.mediaUrl}</span>
+                        {copiedUrl === job.id ? (
+                          <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <Copy className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </button>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
