@@ -20,14 +20,21 @@ export default function CueList({
   const listRef = useRef(null);
 
   const rows = useMemo(() => {
-    return (cues || []).map((c, idx) => ({
-      idx,
-      number: idx + 1,
-      start: c?.start ?? 0,
-      end: c?.end ?? 0,
-      speaker: c?.speaker ?? "",
-      text: (c?.text ?? "").toString(),
-    }));
+    return (cues || []).map((c, idx) => {
+      const speaker = c?.speaker ?? "";
+      const rawText = (c?.text ?? "").toString();
+      // Format text with speaker in brackets if present
+      const displayText = speaker ? `[${speaker.toUpperCase()}] ${rawText}` : rawText;
+      
+      return {
+        idx,
+        number: idx + 1,
+        start: c?.start ?? 0,
+        end: c?.end ?? 0,
+        speaker,
+        text: displayText,
+      };
+    });
   }, [cues]);
 
   const activeCueIndex = useMemo(() => {
@@ -74,13 +81,11 @@ export default function CueList({
       </div>
 
       {/* Column header */}
-      <div className="grid grid-cols-[56px_120px_120px_1fr] gap-3 px-4 py-2 border-b border-zinc-800 text-[11px] font-semibold text-zinc-500">
+      <div className="grid grid-cols-[56px_120px_120px_1fr] gap-3 px-4 py-2 border-b border-zinc-800 text-[11px] font-semibold text-zinc-500 bg-zinc-900/50">
         <div className="text-zinc-500">NO.</div>
         <div className="text-zinc-500">TC IN</div>
         <div className="text-zinc-500">TC OUT</div>
-        <div className="text-zinc-500">
-          TEXT{showSpeaker ? " / SPEAKER" : ""}
-        </div>
+        <div className="text-zinc-500">TEXT</div>
       </div>
 
       {/* Rows */}
@@ -114,15 +119,9 @@ export default function CueList({
               </div>
 
               <div className="min-w-0">
-                <div className="text-sm text-zinc-100 whitespace-pre-line leading-5">
+                <div className="text-sm text-zinc-100 whitespace-pre-wrap leading-5 font-mono">
                   {r.text || "—"}
                 </div>
-
-                {showSpeaker && r.speaker ? (
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    Speaker: <span className="text-zinc-400">{r.speaker}</span>
-                  </div>
-                ) : null}
               </div>
             </button>
           );

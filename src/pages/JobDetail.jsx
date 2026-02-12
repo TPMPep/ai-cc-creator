@@ -233,8 +233,8 @@ export default function JobDetail() {
               </div>
 
               {/* QC + Exports */}
-              <div className="space-y-4">
-                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 overflow-auto" style={{ height: "480px" }}>
+              <div className="flex flex-col gap-4" style={{ height: "480px" }}>
+                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 overflow-auto flex-1">
                   <QCPanel qc={job.result?.qc} onJumpToCue={handleJumpToCue} />
                 </div>
                 <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
