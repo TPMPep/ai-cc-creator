@@ -67,7 +67,6 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
         controls
         className="w-full aspect-video bg-black"
         onTimeUpdate={handleTimeUpdate}
-        crossOrigin="anonymous"
       />
       {/* Caption overlay */}
       {activeCue && (
