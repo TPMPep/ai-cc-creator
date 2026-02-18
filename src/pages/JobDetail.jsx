@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
 import { pollJob } from "../components/shared/RailwayApi";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 export default function JobDetail() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const videoRef = useRef(null);
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,8 +30,7 @@ export default function JobDetail() {
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
-  const params = new URLSearchParams(window.location.search);
-  const jobId = params.get("jobId");
+  const jobId = searchParams.get("jobId");
 
   // Load job from DB
   useEffect(() => {
@@ -122,6 +122,16 @@ export default function JobDetail() {
     });
     navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
+
+  if (!jobId) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <AlertCircle className="w-8 h-8 text-red-400 mb-2" />
+        <p className="text-zinc-400 text-sm">Missing jobId in URL</p>
+        <Link to={createPageUrl("Jobs")}><Button variant="outline" className="border-zinc-800 text-zinc-300">Go to Jobs</Button></Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
