@@ -3,16 +3,25 @@ import { base44 } from "@/api/base44Client";
 const API_BASE = "https://web-production-eba27.up.railway.app";
 
 export async function createJob(payload) {
-  const response = await fetch(`${API_BASE}/v1/jobs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Job creation failed (${response.status}): ${err}`);
+  try {
+    const response = await fetch(`${API_BASE}/v1/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    
+    const responseText = await response.text();
+    console.log('POST /v1/jobs response:', { status: response.status, body: responseText });
+    
+    if (!response.ok) {
+      throw new Error(`Job creation failed (${response.status}): ${responseText}`);
+    }
+    
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error('Job creation error:', error.message);
+    throw error;
   }
-  return response.json();
 }
 
 export async function pollJob(jobId) {
