@@ -32,5 +32,7 @@ export async function pollJob(jobId) {
   if (!response.ok) {
     throw new Error(`Poll failed (${response.status})`);
   }
-  return response.json();
+  const data = await response.json();
+  console.log('GET /v1/jobs/:id response:', { jobId, status: data.status, hasResult: !!data.result, hasExports: !!data.exports, data });
+  return data;
 }
