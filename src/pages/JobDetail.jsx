@@ -54,16 +54,27 @@ export default function JobDetail() {
 
     try {
       const data = await pollJob(jobId);
-      const updates = { status: data.status, lastPolledAt: new Date().toISOString() };
+      
+      // Map Railway API status to app status
+      const statusMap = { "completed": "done", "failed": "error" };
+      const mappedStatus = statusMap[data.status] || data.status;
+      
+      const updates = { status: mappedStatus, lastPolledAt: new Date().toISOString() };
       if (data.error) updates.error = data.error;
-      if (data.status === "done" && data.result) {
-        updates.result = data.result;
+      
+      // Save exports when completed
+      if (mappedStatus === "done") {
+        if (data.result) updates.result = data.result;
+        if (data.exports) {
+          updates.result = { ...updates.result, exports: data.exports };
+        }
+        
         // Compute derived fields
-        if (data.result.cues && data.result.cues.length > 0) {
+        if (data.result?.cues && data.result.cues.length > 0) {
           const lastCue = data.result.cues[data.result.cues.length - 1];
           updates.durationMs = lastCue.end;
         }
-        if (data.result.qc) {
+        if (data.result?.qc) {
           updates.issuesCount = data.result.qc.issuesCount || 0;
         }
       }
@@ -72,7 +83,7 @@ export default function JobDetail() {
       setJob((prev) => ({ ...prev, ...updates }));
       if (updates.result?.cues) setCues(updates.result.cues);
 
-      if (data.status === "done" || data.status === "error") {
+      if (mappedStatus === "done" || mappedStatus === "error") {
         clearInterval(pollingRef.current);
       }
     } catch (err) {
