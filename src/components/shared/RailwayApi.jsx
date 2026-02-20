@@ -33,6 +33,6 @@ export async function pollJob(jobId) {
     throw new Error(`Poll failed (${response.status})`);
   }
   const data = await response.json();
-  console.log('GET /v1/jobs/:id response:', { jobId, status: data.status, hasResult: !!data.result, hasExports: !!data.exports, data });
+  console.log('GET /v1/jobs/:id response:', { jobId, status: data.status, hasResult: !!data.result, hasExports: !!data.exports, exports: data.exports, data });
   return data;
 }
