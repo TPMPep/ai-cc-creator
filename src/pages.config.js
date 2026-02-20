@@ -50,13 +50,13 @@
 import Account from './pages/Account';
 import Admin from './pages/Admin';
 import Contact from './pages/Contact';
+import Debug from './pages/Debug';
 import JobDetail from './pages/JobDetail';
 import Jobs from './pages/Jobs';
 import Landing from './pages/Landing';
 import NewJob from './pages/NewJob';
 import Pricing from './pages/Pricing';
 import Security from './pages/Security';
-import Debug from './pages/Debug';
 import __Layout from './Layout.jsx';
 
 
@@ -64,17 +64,17 @@ export const PAGES = {
     "Account": Account,
     "Admin": Admin,
     "Contact": Contact,
+    "Debug": Debug,
     "JobDetail": JobDetail,
     "Jobs": Jobs,
     "Landing": Landing,
     "NewJob": NewJob,
     "Pricing": Pricing,
     "Security": Security,
-    "Debug": Debug,
 }
 
 export const pagesConfig = {
-    mainPage: "Landing",
+    mainPage: "Account",
     Pages: PAGES,
     Layout: __Layout,
 };
