@@ -187,11 +187,20 @@ export default function JobDetailAI() {
             </span>
             <span className="text-xs text-zinc-600">{moment(job.created_date).format("MMM D, YYYY h:mm A")}</span>
           </div>
-          <Link to={createPageUrl("NewJobAI")}>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-3.5 h-3.5 mr-1.5" /> New Job
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            {isDone && (
+              <Link to={createPageUrl("DiagnosticAI") + `?jobId=${job.id}`}>
+                <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  <FlaskConical className="w-3.5 h-3.5 mr-1.5" /> Diagnostic
+                </Button>
+              </Link>
+            )}
+            <Link to={createPageUrl("NewJobAI")}>
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> New Job
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Processing */}
