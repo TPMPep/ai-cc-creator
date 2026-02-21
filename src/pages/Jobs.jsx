@@ -205,7 +205,7 @@ export default function Jobs() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Link to={createPageUrl("JobDetail") + `?jobId=${job.railwayJobId || job.jobId}`}>
+                        <Link to={createPageUrl(job.pipeline === "ai" ? "JobDetailAI" : "JobDetail") + `?jobId=${job.pipeline === "ai" ? job.railwayJobId : (job.railwayJobId || job.jobId)}`}>
                           <Button variant="ghost" size="sm" className="text-zinc-500 hover:text-white h-7 w-7 p-0">
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
