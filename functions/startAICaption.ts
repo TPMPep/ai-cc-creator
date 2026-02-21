@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
         language_detection: true,
         punctuate: true,
         format_text: true,
+        speech_model: "universal-2",
       }),
     });
 
