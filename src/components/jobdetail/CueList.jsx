@@ -11,8 +11,15 @@ export default function CueList({ cues, currentTimeMs, onSeek }) {
   const activeCueIndex = cues?.findIndex((c) => c.start <= currentTimeMs && currentTimeMs <= c.end) ?? -1;
 
   useEffect(() => {
-    if (autoFollow && activeRef.current && listRef.current) {
-      activeRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!autoFollow || !activeRef.current || !listRef.current) return;
+    const container = listRef.current;
+    const row = activeRef.current;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const rowTop = row.offsetTop;
+    const rowBottom = rowTop + row.offsetHeight;
+    if (rowTop < containerTop || rowBottom > containerBottom) {
+      container.scrollTop = rowTop - container.clientHeight / 2 + row.offsetHeight / 2;
     }
   }, [activeCueIndex, autoFollow]);
 

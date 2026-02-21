@@ -89,10 +89,18 @@ export default function CaptionEditor({
     setCues(initialCues || []);
   }, [initialCues]);
   
-  // Auto-scroll active cue into view
+  // Auto-scroll active cue into view — scroll only within the table container, not the page
   useEffect(() => {
-    if (!autoFollow || !activeRowRef.current) return;
-    activeRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!autoFollow || !activeRowRef.current || !tableRef.current) return;
+    const container = tableRef.current;
+    const row = activeRowRef.current;
+    const containerTop = container.scrollTop;
+    const containerBottom = containerTop + container.clientHeight;
+    const rowTop = row.offsetTop;
+    const rowBottom = rowTop + row.offsetHeight;
+    if (rowTop < containerTop || rowBottom > containerBottom) {
+      container.scrollTop = rowTop - container.clientHeight / 2 + row.offsetHeight / 2;
+    }
   }, [currentTimeMs, autoFollow]);
   
   const activeCueIndex = cues.findIndex(c => c.start <= currentTimeMs && currentTimeMs <= c.end);

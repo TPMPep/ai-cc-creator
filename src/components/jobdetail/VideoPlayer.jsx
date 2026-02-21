@@ -13,7 +13,7 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
     onTimeUpdate?.(timeMs);
 
     if (!cues || cues.length === 0) { setActiveCue(null); return; }
-    const active = cues.find((c) => c.start <= timeMs && timeMs <= c.end);
+    const active = cues.find((c) => c.start <= timeMs && timeMs < c.end + 100);
     setActiveCue(active || null);
   }, [cues, onTimeUpdate, videoRef]);
 
