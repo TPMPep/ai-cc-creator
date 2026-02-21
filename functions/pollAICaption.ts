@@ -211,7 +211,7 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided — do not reference or invent content from outside this batch.\n\n`
     : '';
 
-  const prompt = `You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
 
 You will receive pre-timed caption segments. Your job is:
 1. Fix grammar, punctuation, and homophones in each segment's text
