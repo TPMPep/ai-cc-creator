@@ -104,18 +104,17 @@ export default function JobDetailAI() {
     }
   }, [jobId]);
 
-  // Elapsed time counter while processing
+  // Elapsed time counter — based on job.created_date so navigating away and back doesn't reset it
   useEffect(() => {
     if (!job) return;
     if (job.status === "done" || job.status === "error") { setElapsedSec(0); return; }
 
-    const startTime = Date.now();
-    setElapsedSec(0);
-    const timer = setInterval(() => {
-      setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
+    const startTime = new Date(job.created_date).getTime();
+    const tick = () => setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [job?.id, job?.status]);
+  }, [job?.id, job?.status, job?.created_date]);
 
   useEffect(() => {
     if (!job) return;
