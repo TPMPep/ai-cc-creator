@@ -332,16 +332,15 @@ function runQC(cues) {
   return { issuesCount: issues.length, issues };
 }
 
-// ─── MAIN: Process ONE batch at a time, save incrementally ───────────────────
+// ─── MAIN ────────────────────────────────────────────────────────────────────
 //
-// Called by the frontend once per batch. Frontend iterates through batches sequentially.
-// Each call processes ONE 5-minute window and saves partial results to DB incrementally.
-// This way no single function call ever exceeds ~60s.
+// Two modes:
+//   action="prepare"  → fetch AssemblyAI transcript, build segments, save to DB, return batch plan
+//   action="batch"    → GPT-polish ONE batch (by index), save partial cues to DB
+//   action="finalize" → enforce rules, build exports, QC, mark job done
 //
-// Payload: { transcript_id, job_db_id, batch_index }
-//   batch_index=0 fetches the transcript and processes batch 0
-//   batch_index=N processes batch N and merges with existing cues in DB
-//   When batch_index >= total_batches, finalize (run QC, build exports, mark done)
+// The frontend calls prepare once, then batch N times, then finalize.
+// Each call is short enough to never timeout.
 
 Deno.serve(async (req) => {
   try {
@@ -349,44 +348,89 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id, job_db_id, batch_index = 0 } = await req.json();
+    const { transcript_id, job_db_id, action = 'prepare', batch_index = 0 } = await req.json();
     if (!transcript_id || !job_db_id) return Response.json({ error: 'transcript_id and job_db_id required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-    if (transcript.status !== 'completed') {
-      return Response.json({ status: transcript.status });
-    }
+    // ── PREPARE: fetch transcript, build segment plan, save to DB ──
+    if (action === 'prepare') {
+      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+      if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
 
-    const utterances = transcript.utterances || [];
-    const rawSegments = buildRawSegments(utterances);
-    const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-    const highlights = transcript.auto_highlights_result?.results || [];
-    const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
+      const utterances = transcript.utterances || [];
+      const rawSegments = buildRawSegments(utterances);
+      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
+      const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
+      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-    // Build all batches — use 2-minute windows to stay well under function time limits
-    const BATCH_WINDOW_MS = 2 * 60 * 1000;
-    const firstStart = rawSegments.length > 0 ? rawSegments[0].start : 0;
-    const batches = [];
-    let batchStart = 0;
-    for (let i = 1; i <= rawSegments.length; i++) {
-      const isLast = i === rawSegments.length;
-      const crossedWindow = !isLast && (rawSegments[i].start - firstStart) >= (batches.length + 1) * BATCH_WINDOW_MS;
-      if (crossedWindow || isLast) {
-        batches.push(rawSegments.slice(batchStart, i));
-        batchStart = i;
+      // Build 2-minute batches
+      const BATCH_WINDOW_MS = 2 * 60 * 1000;
+      const firstStart = rawSegments.length > 0 ? rawSegments[0].start : 0;
+      const batches = [];
+      let batchStart = 0;
+      for (let i = 1; i <= rawSegments.length; i++) {
+        const isLast = i === rawSegments.length;
+        const crossedWindow = !isLast && (rawSegments[i].start - firstStart) >= (batches.length + 1) * BATCH_WINDOW_MS;
+        if (crossedWindow || isLast) {
+          batches.push(rawSegments.slice(batchStart, i));
+          batchStart = i;
+        }
       }
+
+      // Save the plan to DB (segments + gaps + highlights + raw cues)
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        result: {
+          _plan: { batches, gaps, highlights, language: transcript.language_code, assemblyRawCues },
+          partial_cues: [],
+        },
+        lastPolledAt: new Date().toISOString(),
+      });
+
+      return Response.json({ status: 'ready', total_batches: batches.length, language: transcript.language_code });
     }
 
-    const totalBatches = batches.length;
+    // ── BATCH: GPT-polish one batch ──
+    if (action === 'batch') {
+      const jobRecords = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
+      const plan = jobRecords[0]?.result?._plan;
+      if (!plan) return Response.json({ error: 'No plan found. Run prepare first.' }, { status: 400 });
 
-    if (batch_index >= totalBatches) {
-      // All batches done — finalize: load accumulated cues, run QC, build exports, mark done
-      const jobRecord = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
-      const accumulatedCues = jobRecord[0]?.result?.partial_cues || [];
-      const allOpenaiRaw = jobRecord[0]?.result?.partial_openai_raw || [];
+      const { batches, gaps, highlights, language } = plan;
+      const totalBatches = batches.length;
+
+      if (batch_index >= totalBatches) {
+        return Response.json({ status: 'all_batches_done', total_batches: totalBatches });
+      }
+
+      const batch = batches[batch_index];
+      const batchWindowStart = batch[0].start;
+      const batchWindowEnd = batch[batch.length - 1].end;
+      const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+      const highlightObjs = (highlights || []).map(t => ({ text: t }));
+
+      const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlightObjs, OPENAI_API_KEY, batch_index, totalBatches);
+
+      // Append to partial_cues in DB
+      const existingCues = jobRecords[0]?.result?.partial_cues || [];
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        result: {
+          ...jobRecords[0].result,
+          partial_cues: [...existingCues, ...batchResult],
+        },
+        lastPolledAt: new Date().toISOString(),
+      });
+
+      return Response.json({ status: 'batch_done', batch_index, total_batches: totalBatches, next_batch: batch_index + 1 });
+    }
+
+    // ── FINALIZE: enforce rules, QC, build exports, mark done ──
+    if (action === 'finalize') {
+      const jobRecords = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
+      const plan = jobRecords[0]?.result?._plan;
+      const accumulatedCues = jobRecords[0]?.result?.partial_cues || [];
+      const assemblyRawCues = plan?.assemblyRawCues || [];
 
       const cues = finalEnforce(accumulatedCues);
       const srt = buildSRT(cues);
@@ -400,49 +444,18 @@ Deno.serve(async (req) => {
           cues,
           exports: { srt, vtt, scc },
           qc,
-          language: transcript.language_code,
-          diagnostic: { assemblyRawCues, openaiRawCues: allOpenaiRaw },
+          language: plan?.language || null,
+          diagnostic: { assemblyRawCues, openaiRawCues: accumulatedCues },
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
         issuesCount: qc.issuesCount || 0,
         lastPolledAt: new Date().toISOString(),
       });
 
-      return Response.json({ status: 'completed', total_batches: totalBatches });
+      return Response.json({ status: 'completed' });
     }
 
-    // Process this batch
-    const batch = batches[batch_index];
-    const batchWindowStart = batch[0].start;
-    const batchWindowEnd = batch[batch.length - 1].end;
-    const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-
-    const batchResult = await polishBatchWithGPT(batch, batchGaps, transcript.language_code, highlights, OPENAI_API_KEY, batch_index, totalBatches);
-
-    // Load existing partial cues and append
-    const jobRecord = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
-    const existingCues = jobRecord[0]?.result?.partial_cues || [];
-    const existingOpenaiRaw = jobRecord[0]?.result?.partial_openai_raw || [];
-
-    const mergedCues = [...existingCues, ...batchResult];
-    const mergedOpenaiRaw = [...existingOpenaiRaw, ...batchResult];
-
-    // Save partial progress to DB so work is never lost
-    await base44.asServiceRole.entities.Job.update(job_db_id, {
-      result: {
-        partial_cues: mergedCues,
-        partial_openai_raw: mergedOpenaiRaw,
-        diagnostic: { assemblyRawCues },
-      },
-      lastPolledAt: new Date().toISOString(),
-    });
-
-    return Response.json({
-      status: 'batch_done',
-      batch_index,
-      total_batches: totalBatches,
-      next_batch: batch_index + 1,
-    });
+    return Response.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
