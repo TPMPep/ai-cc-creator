@@ -334,13 +334,10 @@ function runQC(cues) {
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 //
-// Two modes:
-//   action="prepare"  → fetch AssemblyAI transcript, build segments, save to DB, return batch plan
-//   action="batch"    → GPT-polish ONE batch (by index), save partial cues to DB
-//   action="finalize" → enforce rules, build exports, QC, mark job done
+// action="prepare"  → fetch transcript, build slim segment plan, return it to frontend
+// action="finalize" → receive polished cues from frontend, enforce rules, build exports, save to DB
 //
-// The frontend calls prepare once, then batch N times, then finalize.
-// Each call is short enough to never timeout.
+// GPT processing happens IN THE FRONTEND (no timeout constraints) using the returned plan.
 
 Deno.serve(async (req) => {
   try {
@@ -348,13 +345,12 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id, job_db_id, action = 'prepare', batch_index = 0 } = await req.json();
+    const { transcript_id, job_db_id, action = 'prepare', polished_cues } = await req.json();
     if (!transcript_id || !job_db_id) return Response.json({ error: 'transcript_id and job_db_id required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    // ── PREPARE: fetch transcript, build segment plan, save to DB ──
+    // ── PREPARE: fetch transcript, build and return the segment plan ──
     if (action === 'prepare') {
       const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
       if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
@@ -365,73 +361,32 @@ Deno.serve(async (req) => {
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
       const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-      // Batch by segment count: 10 segments per batch keeps GPT calls well under 60s
-      const BATCH_SIZE = 10;
+      // Batch by segment count: 15 segments per batch
+      const BATCH_SIZE = 15;
       const batches = [];
       for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
-        batches.push(rawSegments.slice(i, i + BATCH_SIZE));
+        // Strip word arrays — frontend only needs start/end/text/speaker
+        batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      // Strip word-level detail from batches before saving — only need start/end/text/speaker for GPT
-      const slimBatches = batches.map(batch =>
-        batch.map(({ start, end, text, speaker }) => ({ start, end, text, speaker }))
-      );
-      const slimAssemblyRawCues = assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker }));
-
-      // Save the plan to DB
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        result: {
-          _plan: { batches: slimBatches, gaps, highlights, language: transcript.language_code, assemblyRawCues: slimAssemblyRawCues },
-          partial_cues: [],
-        },
-        lastPolledAt: new Date().toISOString(),
+      // Return plan to frontend — frontend will call GPT, then call finalize
+      return Response.json({
+        status: 'ready',
+        batches,
+        gaps,
+        highlights,
+        language: transcript.language_code,
+        assemblyRawCues: assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker })),
       });
-
-      return Response.json({ status: 'ready', total_batches: batches.length, language: transcript.language_code });
     }
 
-    // ── BATCH: GPT-polish one batch ──
-    if (action === 'batch') {
-      const jobRecords = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
-      const plan = jobRecords[0]?.result?._plan;
-      if (!plan) return Response.json({ error: 'No plan found. Run prepare first.' }, { status: 400 });
-
-      const { batches, gaps, highlights, language } = plan;
-      const totalBatches = batches.length;
-
-      if (batch_index >= totalBatches) {
-        return Response.json({ status: 'all_batches_done', total_batches: totalBatches });
-      }
-
-      const batch = batches[batch_index];
-      const batchWindowStart = batch[0].start;
-      const batchWindowEnd = batch[batch.length - 1].end;
-      const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-      const highlightObjs = (highlights || []).map(t => ({ text: t }));
-
-      const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlightObjs, OPENAI_API_KEY, batch_index, totalBatches);
-
-      // Append to partial_cues in DB
-      const existingCues = jobRecords[0]?.result?.partial_cues || [];
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        result: {
-          ...jobRecords[0].result,
-          partial_cues: [...existingCues, ...batchResult],
-        },
-        lastPolledAt: new Date().toISOString(),
-      });
-
-      return Response.json({ status: 'batch_done', batch_index, total_batches: totalBatches, next_batch: batch_index + 1 });
-    }
-
-    // ── FINALIZE: enforce rules, QC, build exports, mark done ──
+    // ── FINALIZE: receive polished cues, enforce, QC, export, save ──
     if (action === 'finalize') {
-      const jobRecords = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1);
-      const plan = jobRecords[0]?.result?._plan;
-      const accumulatedCues = jobRecords[0]?.result?.partial_cues || [];
-      const assemblyRawCues = plan?.assemblyRawCues || [];
+      if (!polished_cues || !Array.isArray(polished_cues)) {
+        return Response.json({ error: 'polished_cues array required' }, { status: 400 });
+      }
 
-      const cues = finalEnforce(accumulatedCues);
+      const cues = finalEnforce(polished_cues);
       const srt = buildSRT(cues);
       const vtt = buildVTT(cues);
       const scc = buildSCC(cues);
@@ -443,15 +398,13 @@ Deno.serve(async (req) => {
           cues,
           exports: { srt, vtt, scc },
           qc,
-          language: plan?.language || null,
-          diagnostic: { assemblyRawCues, openaiRawCues: accumulatedCues },
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
         issuesCount: qc.issuesCount || 0,
         lastPolledAt: new Date().toISOString(),
       });
 
-      return Response.json({ status: 'completed' });
+      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
