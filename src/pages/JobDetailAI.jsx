@@ -104,6 +104,19 @@ export default function JobDetailAI() {
     }
   }, [jobId]);
 
+  // Elapsed time counter while processing
+  useEffect(() => {
+    if (!job) return;
+    if (job.status === "done" || job.status === "error") { setElapsedSec(0); return; }
+
+    const startTime = Date.now();
+    setElapsedSec(0);
+    const timer = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [job?.id, job?.status]);
+
   useEffect(() => {
     if (!job) return;
     if (job.status === "done" || job.status === "error") return;
