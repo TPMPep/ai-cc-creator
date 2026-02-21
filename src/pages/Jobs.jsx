@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
@@ -19,6 +19,10 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [user, setUser] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(null);
+  const pollTimerRef = useRef(null);
+  const jobsRef = useRef([]);
+
+  useEffect(() => { jobsRef.current = jobs; }, [jobs]);
 
   useEffect(() => {
     const load = async () => {
@@ -29,6 +33,54 @@ export default function Jobs() {
       setLoading(false);
     };
     load();
+  }, []);
+
+  // Poll processing AI jobs so the list stays accurate when user navigates back
+  useEffect(() => {
+    const pollProcessing = async () => {
+      const processingAIJobs = jobsRef.current.filter(
+        j => (j.status === "processing" || j.status === "queued") && j.pipeline === "ai"
+      );
+      if (processingAIJobs.length === 0) return;
+
+      for (const job of processingAIJobs) {
+        try {
+          const res = await base44.functions.invoke("pollAICaption", { transcript_id: job.railwayJobId });
+          const data = res.data;
+
+          if (data.status === "completed") {
+            const updates = {
+              status: "done",
+              result: {
+                cues: data.cues,
+                srt: data.exports?.srt,
+                vtt: data.exports?.vtt,
+                scc: data.exports?.scc,
+                qc: data.qc,
+                language: data.language,
+                diagnostic: data.diagnostic || null,
+              },
+              durationMs: data.cues?.length > 0 ? data.cues[data.cues.length - 1].end : 0,
+              issuesCount: data.qc?.issuesCount || 0,
+              lastPolledAt: new Date().toISOString(),
+            };
+            await base44.entities.Job.update(job.id, updates);
+            setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j));
+            toast.success(`"${job.title || "Job"}" is ready!`);
+          } else if (data.status === "error") {
+            const updates = { status: "error", error: data.error || "Transcription failed" };
+            await base44.entities.Job.update(job.id, updates);
+            setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j));
+          }
+        } catch (err) {
+          console.error("Background poll error for job", job.id, err);
+        }
+      }
+    };
+
+    // Poll every 20s — GPT-4o takes time, no need to hammer it
+    pollTimerRef.current = setInterval(pollProcessing, 20000);
+    return () => clearInterval(pollTimerRef.current);
   }, []);
 
   const handleDelete = async (job) => {
