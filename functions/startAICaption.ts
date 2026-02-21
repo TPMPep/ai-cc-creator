@@ -28,6 +28,7 @@ Deno.serve(async (req) => {
         auto_highlights: true,
         content_safety: true,
         speech_model: "best",
+        speech_models: { best: {} },
       }),
     });
 
