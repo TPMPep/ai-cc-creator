@@ -120,49 +120,164 @@ function buildSCC(cues) {
 }
 
 // Apply NBCU rules via OpenAI
-async function applyNBCURules(rawWords, utterances, language, apiKey) {
-  // Build raw transcript text with timing info
-  const wordDump = rawWords.slice(0, 1500).map(w => `[${w.start}-${w.end}ms] ${w.text}`).join(' ');
+async function applyNBCURules(rawWords, utterances, language, highlights, contentSafety, apiKey) {
+  // Build raw transcript text with timing info — send more words for longer videos
+  const wordDump = rawWords.slice(0, 2500).map(w => `[${w.start}-${w.end}ms] ${w.text}`).join(' ');
 
-  const utteranceDump = utterances ? utterances.slice(0, 80).map(u =>
+  const utteranceDump = utterances ? utterances.slice(0, 120).map(u =>
     `[${u.start}-${u.end}ms] (Speaker ${u.speaker}): ${u.text}`
   ).join('\n') : '';
 
-  const prompt = `You are a professional broadcast closed caption editor following NBCU spec CM-051. Your job is to produce ACCURATE, NATURAL-READING captions from a raw transcript.
+  // Auto highlights give GPT hints about music/key terms
+  const highlightDump = highlights && highlights.length > 0
+    ? highlights.slice(0, 30).map(h => `"${h.text}" (${h.timestamps.map(t => `${t.start}-${t.end}ms`).join(', ')})`).join('\n')
+    : '';
 
-CRITICAL GRAMMAR & PUNCTUATION RULES (strictly enforce these):
-- PRESERVE all correct punctuation. If a sentence is clearly a question, it MUST end with "?". If it is an exclamation, use "!".
-- CORRECT homophones and common speech-to-text errors. Examples: "to" meaning "also/as well" should be "too". "there" vs "their" vs "they're" based on context. "its" vs "it's". "your" vs "you're". "we're" vs "were". Use correct grammar based on context.
-- PRESERVE natural speech patterns, contractions (don't, can't, I'm, you're, we're, etc.)
-- Do NOT drop punctuation. Every sentence must end with a period, question mark, or exclamation point as appropriate.
-- Use commas, em-dashes, and ellipses naturally where the speaker pauses or trails off.
+  // Content safety labels help identify non-speech segments
+  const safetySummary = contentSafety && contentSafety.results && contentSafety.results.length > 0
+    ? contentSafety.results.slice(0, 10).map(r => `[${r.timestamp?.start}-${r.timestamp?.end}ms] ${r.labels?.map(l => l.label).join(', ')}`).join('\n')
+    : '';
 
-NBCU FORMATTING RULES:
-- Max 32 characters per line
-- Max 2 lines per cue
-- Max reading speed ~180 words per minute (roughly 0.3-8 seconds per cue)
-- Minimum cue gap: 2 frames at 29.97fps (~67ms)
-- Use upper/lower case as spoken (not all caps unless shouting/emphasis)
-- No translation of foreign language — mark it as [Speaking Spanish] or whichever language
-- Include music cues where appropriate as [ ♪ MUSIC ♪ ] or [ ♪ song description ♪ ]
-- Speaker identification: when two different speakers appear in the SAME cue, prefix EACH speaker's line with "- " (dash + space). Example:
-  - Hello, how are you?
-  - I'm doing great.
-  Do NOT use ">>" — ONLY use "- " dashes for speaker changes within a single cue.
-- Single-speaker cues do NOT get a dash prefix.
-- Round timecodes to nearest frame at 29.97fps
-- Format output as a JSON array of cues with: start (ms), end (ms), text (string, use \\n for line breaks within 2-line cues), speaker (string, e.g. "A", "B", or null)
+  const prompt = `You are a professional broadcast closed caption editor with 20+ years of experience following NBCU spec CM-051 and FCC closed caption standards. Your job is to produce BROADCAST-QUALITY, NATURAL-READING captions from a raw speech-to-text transcript. These captions will go directly to a human QC editor before broadcast — make them as close to final as possible.
 
+════════════════════════════════════════
+SECTION 1: GRAMMAR & PUNCTUATION (MANDATORY)
+════════════════════════════════════════
+- Every sentence MUST end with a period (.), question mark (?), or exclamation point (!). NEVER leave a sentence without terminal punctuation.
+- Detect and CORRECT all homophones and speech-to-text errors:
+  • "to" used as "also/as well" → "too"
+  • "there/their/they're" — use correct form based on context
+  • "its/it's", "your/you're", "were/we're", "then/than", "affect/effect"
+  • "gonna" → "gonna" (keep contractions as spoken)
+  • "wanna" → "wanna", "kinda" → "kinda" (preserve natural speech)
+- PRESERVE contractions exactly as spoken: don't, can't, I'm, you're, we're, I'll, that's, it's, etc.
+- Use commas to reflect natural speech pauses within sentences.
+- Use em-dashes (—) for abrupt interruptions or strong pauses mid-thought.
+- Use ellipsis (...) ONLY when a speaker trails off and the thought is incomplete.
+- Do NOT use ALL CAPS unless the speaker is clearly shouting or emphasizing a word dramatically.
+- Capitalize proper nouns, names, titles, and places correctly.
+
+════════════════════════════════════════
+SECTION 2: SOUND & MUSIC CUES (CRITICAL — DO NOT SKIP)
+════════════════════════════════════════
+Sound cues and music notation are MANDATORY for broadcast compliance. You MUST include them whenever applicable.
+
+MUSIC RULES:
+- When music or a song is playing (with or without lyrics), insert a music cue.
+- Format: [ ♪ DESCRIPTION ♪ ] — use ALL CAPS for the description inside brackets.
+- Examples:
+  • [ ♪ UPBEAT MUSIC ♪ ]
+  • [ ♪ TENSE ORCHESTRAL MUSIC ♪ ]
+  • [ ♪ HIP HOP MUSIC ♪ ]
+  • [ ♪ "SONG TITLE" BY ARTIST ♪ ] (if identifiable)
+  • [ ♪ MUSIC PLAYING ♪ ] (if genre is unclear)
+- If lyrics are sung: transcribe them with ♪ prefix and suffix on EACH LINE.
+  • ♪ I can see clearly now ♪
+  • ♪ The rain is gone ♪
+- Place music cue cues at the correct timecode where music starts/ends.
+- Music cues that last more than ~5 seconds should have an opening AND closing cue.
+
+SOUND EFFECT (SDH) RULES:
+- Bracket ALL significant non-speech audio that a deaf viewer needs to know about:
+  • [DOOR SLAMS]
+  • [PHONE RINGING]
+  • [CROWD CHEERING]
+  • [GUNSHOT]
+  • [EXPLOSION]
+  • [SIREN WAILING]
+  • [LAUGHING]
+  • [CRYING]
+  • [APPLAUSE]
+  • [INDISTINCT CHATTER]
+  • [SPEAKING FOREIGN LANGUAGE] — for non-English speech
+- Use ALL CAPS inside brackets for sound effects.
+- Duration indicators: [SIGHS], [SCREAMS], [LAUGHS] for short sounds.
+- Infer sound events from CONTEXT and GAPS in speech. If there's a long gap with no words, consider whether music, ambient sound, or a sound effect should be noted.
+
+════════════════════════════════════════
+SECTION 3: SPEAKER IDENTIFICATION RULES
+════════════════════════════════════════
+- Use speaker labels from utterance data (A, B, C, etc.).
+- Single-speaker cues: NO dash prefix. Just the text.
+- Two different speakers in the SAME cue: prefix EACH line with "- " (dash + space):
+  CORRECT:
+  - Are you sure about that?
+  - Absolutely certain.
+  WRONG: >> Are you sure? or >Are you sure?
+- NEVER use ">>" or ">" for speaker changes.
+- If speaker changes mid-sentence, split into separate cues at the changeover point.
+- [OFF CAMERA] or [V.O.] — add these tags when a speaker is clearly off-camera or voiceover.
+
+════════════════════════════════════════
+SECTION 4: NBCU FORMATTING RULES (STRICT)
+════════════════════════════════════════
+- MAXIMUM 32 characters per line (count every character including spaces and brackets)
+- MAXIMUM 2 lines per cue
+- MINIMUM cue duration: 500ms
+- MAXIMUM cue duration: 8 seconds
+- Reading speed: target ~160-180 words per minute. If a cue is too long to read in the allotted time, split it.
+- Minimum gap between cues: 2 frames (~67ms at 29.97fps)
+- Foreign language speech: do NOT translate. Mark as [SPEAKING FRENCH] or appropriate language.
+- Segment long utterances into multiple cues at natural sentence or clause breaks.
+- Never cut a word mid-cue — always break at word boundaries.
+- Prefer breaking at punctuation (comma, period, em-dash) when splitting.
+
+════════════════════════════════════════
+SECTION 5: FEW-SHOT EXAMPLES
+════════════════════════════════════════
+EXAMPLE 1 — Music + Dialogue:
+Input utterance: "[0-3000ms] (no speech, music playing)" + "[3000-8000ms] Speaker A: welcome to the show"
+Output cues:
+{"start":0,"end":3000,"text":"[ ♪ UPBEAT INTRO MUSIC ♪ ]","speaker":null}
+{"start":3000,"end":5500,"text":"Welcome to the show.","speaker":"A"}
+
+EXAMPLE 2 — Two speakers in one cue:
+Input: "[5500-7500ms] Speaker A: Are you ready? Speaker B: I was born ready."
+Output cues:
+{"start":5500,"end":7500,"text":"- Are you ready?\\n- I was born ready.","speaker":null}
+
+EXAMPLE 3 — Homophone correction:
+Input: "I went to the store to, and I got there to."
+Output: "I went to the store, too, and I got there, too."
+
+EXAMPLE 4 — Sound effect:
+Input: "[10000-10500ms] (gap in speech, loud bang sound context)"
+Output: {"start":10000,"end":10500,"text":"[GUN FIRES]","speaker":null}
+
+EXAMPLE 5 — Long utterance split:
+Input: "[12000-20000ms] Speaker A: I really think that we need to take a look at what's been happening over the last few months and determine if the direction we're heading is actually the right one for the company."
+Output:
+{"start":12000,"end":15000,"text":"I really think that we need to\ntake a look at what's been happening","speaker":"A"}
+{"start":15000,"end":18000,"text":"over the last few months and determine\nif the direction we're heading","speaker":"A"}
+{"start":18000,"end":20000,"text":"is actually the right one\nfor the company.","speaker":"A"}
+
+EXAMPLE 6 — Trailing off / ellipsis:
+Input: Speaker says "I just... I don't know..."
+Output: {"start":X,"end":Y,"text":"I just... I don't know...","speaker":"A"}
+
+════════════════════════════════════════
+SECTION 6: INPUT DATA
+════════════════════════════════════════
 Detected language: ${language || 'en'}
 
 RAW WORD-LEVEL TRANSCRIPT (with timings in ms):
 ${wordDump}
 
-UTTERANCES (speaker-separated, use these for speaker labels):
+UTTERANCES WITH SPEAKER LABELS:
 ${utteranceDump}
+${highlightDump ? `\nKEY TERMS/HIGHLIGHTS DETECTED BY AUDIO ANALYSIS (use for context):\n${highlightDump}` : ''}
+${safetySummary ? `\nCONTENT ANALYSIS (may indicate music/sensitive content segments):\n${safetySummary}` : ''}
 
-Return ONLY a valid JSON array. No markdown, no explanation, no code fences. Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
-Ensure all cues follow the 32-char/line, 2-line max rules. Split long utterances into multiple cues. CRITICALLY: fix all grammar, punctuation, and homophone errors.`;
+════════════════════════════════════════
+SECTION 7: OUTPUT FORMAT
+════════════════════════════════════════
+Return ONLY a valid JSON array. No markdown, no explanation, no code fences, no comments.
+Each element MUST have: {"start": number, "end": number, "text": string, "speaker": string|null}
+- Use \\n (literal backslash-n) for line breaks within 2-line cues.
+- "speaker" should be "A", "B", "C" etc. from utterances, or null for sound/music cues.
+- CRITICALLY: Include ALL sound cues, music cues, and SDH annotations. Do not omit them.
+- CRITICALLY: Fix ALL grammar errors, homophone errors, and missing punctuation.
+- CRITICALLY: Every dialogue sentence must end with terminal punctuation.`;
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
