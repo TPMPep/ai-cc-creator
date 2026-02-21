@@ -289,7 +289,7 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
