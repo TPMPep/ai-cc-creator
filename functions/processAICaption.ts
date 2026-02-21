@@ -392,29 +392,15 @@ Deno.serve(async (req) => {
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
-      // Upload large exports as files using base64 encoding
-      const encodeBase64 = (str) => {
-        return btoa(unescape(encodeURIComponent(str)));
-      };
-
-      const srtFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${encodeBase64(srt)}`,
-      });
-      const vttFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${encodeBase64(vtt)}`,
-      });
-      const sccFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${encodeBase64(scc)}`,
-      });
-
+      // Store only cues and QC; exports are generated on-demand via download endpoints
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues,
           exports: { 
-            srt: srtFile.file_url, 
-            vtt: vttFile.file_url, 
-            scc: sccFile.file_url 
+            srt: null,  // Generated on-demand
+            vtt: null,  // Generated on-demand
+            scc: null   // Generated on-demand
           },
           qc,
         },
@@ -423,7 +409,7 @@ Deno.serve(async (req) => {
         lastPolledAt: new Date().toISOString(),
       });
 
-      return Response.json({ status: 'completed', cues, exports: { srt: srtFile.file_url, vtt: vttFile.file_url, scc: sccFile.file_url }, qc });
+      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
