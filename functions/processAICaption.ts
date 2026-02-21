@@ -392,15 +392,19 @@ Deno.serve(async (req) => {
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
-      // Upload large exports as files instead of storing inline
+      // Upload large exports as files using base64 encoding
+      const encodeBase64 = (str) => {
+        return btoa(unescape(encodeURIComponent(str)));
+      };
+
       const srtFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${Deno.core.ops.op_encode_base64(srt)}`,
+        file: `data:text/plain;base64,${encodeBase64(srt)}`,
       });
       const vttFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${Deno.core.ops.op_encode_base64(vtt)}`,
+        file: `data:text/plain;base64,${encodeBase64(vtt)}`,
       });
       const sccFile = await base44.asServiceRole.integrations.Core.UploadFile({
-        file: `data:text/plain;base64,${Deno.core.ops.op_encode_base64(scc)}`,
+        file: `data:text/plain;base64,${encodeBase64(scc)}`,
       });
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
