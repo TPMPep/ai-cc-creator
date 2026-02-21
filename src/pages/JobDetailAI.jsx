@@ -75,6 +75,7 @@ export default function JobDetailAI() {
             scc: data.exports?.scc,
             qc: data.qc,
             language: data.language,
+            diagnostic: data.diagnostic || null,
           },
           durationMs: data.cues?.length > 0 ? data.cues[data.cues.length - 1].end : 0,
           issuesCount: data.qc?.issuesCount || 0,
