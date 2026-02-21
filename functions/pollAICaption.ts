@@ -85,13 +85,9 @@ function buildSCC(cues) {
 }
 
 // ─── STEP 1: PRE-SEGMENT using word-level data ───────────────────────────────
-// Group words into raw caption segments based on timing and speaker changes.
-// This ensures every segment is strictly anchored to real spoken word timestamps.
-// GPT then polishes these segments — it cannot change the timecodes, only the text/splits.
 
 function buildRawSegments(utterances) {
-  const MAX_DUR = 7500;     // leave headroom under 8s
-  const MIN_GAP = 67;       // 2 frames
+  const MAX_DUR = 7500;
   const segments = [];
 
   for (const utt of utterances) {
@@ -101,10 +97,8 @@ function buildRawSegments(utterances) {
       continue;
     }
 
-    // Split utterance into chunks that fit under MAX_DUR
     let chunkStart = 0;
     while (chunkStart < words.length) {
-      // Find the furthest word we can include within MAX_DUR from the first word
       let chunkEnd = chunkStart;
       const firstWordStart = words[chunkStart].start;
 
@@ -129,7 +123,6 @@ function buildRawSegments(utterances) {
   return segments;
 }
 
-// Detect silence gaps between utterances for sound cue insertion
 function findGaps(utterances, totalDurationMs) {
   const gaps = [];
   let prevEnd = 0;
@@ -145,38 +138,33 @@ function findGaps(utterances, totalDurationMs) {
   return gaps;
 }
 
-// ─── STEP 2: GPT POLISH ──────────────────────────────────────────────────────
-// Process segments in ~5-minute batches to handle 90-min feature-length videos
-// without hitting token limits or timeouts. Each batch is independent.
+// ─── STEP 2: GPT POLISH (batched) ────────────────────────────────────────────
 
-const BATCH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes per GPT batch
-const BATCH_COOLDOWN_MS = 3000;         // 3s pause between batches to respect rate limits
+const BATCH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes per batch
+const BATCH_COOLDOWN_MS = 3000;
 
 async function polishWithGPT(segments, gaps, language, highlights, apiKey) {
-  // Split segments into 5-minute windows
   if (segments.length === 0) return [];
 
+  // Build 5-minute batches
   const batches = [];
   let batchStart = 0;
   const firstStart = segments[0].start;
 
-  for (let i = 0; i < segments.length; i++) {
-    if (segments[i].start - firstStart >= (batches.length + 1) * BATCH_WINDOW_MS || i === segments.length - 1) {
-      batches.push(segments.slice(batchStart, i === segments.length - 1 ? segments.length : i));
+  for (let i = 1; i <= segments.length; i++) {
+    const isLast = i === segments.length;
+    const crossedWindow = !isLast && (segments[i].start - firstStart) >= (batches.length + 1) * BATCH_WINDOW_MS;
+    if (crossedWindow || isLast) {
+      batches.push(segments.slice(batchStart, i));
       batchStart = i;
     }
   }
-  if (batchStart < segments.length && (batches.length === 0 || batches[batches.length - 1][0] !== segments[batchStart])) {
-    batches.push(segments.slice(batchStart));
-  }
 
-  // Process each batch sequentially
   const allResults = [];
   for (let bi = 0; bi < batches.length; bi++) {
     const batch = batches[bi];
     if (batch.length === 0) continue;
 
-    // Find gaps relevant to this batch's time window
     const batchWindowStart = batch[0].start;
     const batchWindowEnd = batch[batch.length - 1].end;
     const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
@@ -184,7 +172,6 @@ async function polishWithGPT(segments, gaps, language, highlights, apiKey) {
     const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlights, apiKey, bi, batches.length);
     allResults.push(...batchResult);
 
-    // Cooldown between batches to avoid rate limit hammering
     if (bi < batches.length - 1) {
       await new Promise(r => setTimeout(r, BATCH_COOLDOWN_MS));
     }
@@ -208,7 +195,7 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     : '';
 
   const batchNote = totalBatches > 1
-    ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided — do not reference or invent content from outside this batch.\n\n`
+    ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided.\n\n`
     : '';
 
   const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
@@ -306,7 +293,6 @@ ${highlightDump}`;
     });
 
     if (res.status === 429) {
-      // Exponential backoff: 30s, 60s, 90s, 120s
       const wait = 30000 * (attempt + 1);
       await new Promise(r => setTimeout(r, wait));
       continue;
@@ -328,8 +314,6 @@ ${highlightDump}`;
 }
 
 // ─── STEP 3: FINAL ENFORCEMENT ───────────────────────────────────────────────
-// GPT is smart but not perfect. This is the deterministic safety net.
-// It ONLY fixes violations it finds — does not rewrite what's already correct.
 
 function finalEnforce(cues) {
   const MAX_CHARS = 32;
@@ -343,7 +327,6 @@ function finalEnforce(cues) {
     const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
 
     if (allOk || isSoundCue) {
-      // Truncate overlong sound cues but don't re-flow
       if (isSoundCue && lines.some(l => l.length > MAX_CHARS)) {
         result.push({ ...cue, text: lines.map(l => l.substring(0, MAX_CHARS)).join('\n') });
       } else {
@@ -352,7 +335,6 @@ function finalEnforce(cues) {
       continue;
     }
 
-    // Re-flow needed — pack words into ≤32-char lines
     const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
@@ -372,7 +354,6 @@ function finalEnforce(cues) {
     }
     if (cur) packed.push(cur);
 
-    // Emit in groups of 2 lines, splitting the cue's duration proportionally
     const totalDur = cue.end - cue.start;
     const chunkCount = Math.ceil(packed.length / 2);
 
@@ -393,7 +374,6 @@ function finalEnforce(cues) {
     }
   }
 
-  // Sort by start time (GPT sometimes reorders), then fix overlaps/gaps
   result.sort((a, b) => a.start - b.start);
 
   for (let i = 1; i < result.length; i++) {
@@ -407,7 +387,6 @@ function finalEnforce(cues) {
     }
   }
 
-  // Remove empty cues
   return result.filter(c => c.text && c.text.trim().length > 0);
 }
 
@@ -453,6 +432,11 @@ function runQC(cues) {
 }
 
 // ─── MAIN HANDLER ────────────────────────────────────────────────────────────
+// 
+// TWO MODES:
+//   mode=check  → fast poll: returns AssemblyAI status only, no GPT. Never times out.
+//   mode=process → full GPT pipeline. Called once AssemblyAI is confirmed complete.
+//                  Saves result directly to DB and returns status.
 
 Deno.serve(async (req) => {
   try {
@@ -460,52 +444,67 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id } = await req.json();
+    const { transcript_id, mode = 'check', job_db_id } = await req.json();
     if (!transcript_id) return Response.json({ error: 'transcript_id is required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-
-    if (transcript.status === 'queued' || transcript.status === 'processing') {
-      return Response.json({ status: transcript.status });
+    // ── MODE: check ── fast, never times out
+    if (mode === 'check') {
+      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+      return Response.json({ 
+        status: transcript.status,  // queued | processing | completed | error
+        error: transcript.error || null,
+      });
     }
-    if (transcript.status === 'error') {
-      return Response.json({ status: 'error', error: transcript.error || 'Transcription failed' });
+
+    // ── MODE: process ── run full GPT pipeline, save to DB
+    if (mode === 'process') {
+      if (!job_db_id) return Response.json({ error: 'job_db_id required for process mode' }, { status: 400 });
+
+      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+
+      if (transcript.status !== 'completed') {
+        return Response.json({ status: transcript.status });
+      }
+
+      const utterances = transcript.utterances || [];
+      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
+      const rawSegments = buildRawSegments(utterances);
+      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
+      const highlights = transcript.auto_highlights_result?.results || [];
+
+      const openaiRaw = await polishWithGPT(rawSegments, gaps, transcript.language_code, highlights, OPENAI_API_KEY);
+      const cues = finalEnforce(openaiRaw);
+
+      const srt = buildSRT(cues);
+      const vtt = buildVTT(cues);
+      const scc = buildSCC(cues);
+      const qc = runQC(cues);
+
+      const result = {
+        cues,
+        exports: { srt, vtt, scc },
+        qc,
+        language: transcript.language_code,
+        diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw },
+      };
+
+      // Save directly to DB so even if the frontend disconnects, the work is preserved
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        status: 'done',
+        result,
+        durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
+        issuesCount: qc.issuesCount || 0,
+        lastPolledAt: new Date().toISOString(),
+      });
+
+      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc, language: transcript.language_code, diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw } });
     }
 
-    const utterances = transcript.utterances || [];
-    const words = transcript.words || [];
+    return Response.json({ error: 'Invalid mode' }, { status: 400 });
 
-    // Step 1: Build timing-accurate raw segments from utterance/word data
-    const assemblyRawCues = utterances.map(u => ({
-      start: u.start, end: u.end, text: u.text, speaker: u.speaker,
-    }));
-
-    const rawSegments = buildRawSegments(utterances);
-    const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-    const highlights = transcript.auto_highlights_result?.results || [];
-
-    // Step 2: GPT polishes text, line breaks, grammar, sound cues — timecodes locked
-    const openaiRaw = await polishWithGPT(rawSegments, gaps, transcript.language_code, highlights, OPENAI_API_KEY);
-
-    // Step 3: Final enforcement — fix any remaining violations
-    const cues = finalEnforce(openaiRaw);
-
-    const srt = buildSRT(cues);
-    const vtt = buildVTT(cues);
-    const scc = buildSCC(cues);
-    const qc = runQC(cues);
-
-    return Response.json({
-      status: 'completed',
-      cues,
-      exports: { srt, vtt, scc },
-      qc,
-      language: transcript.language_code,
-      diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw },
-    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
