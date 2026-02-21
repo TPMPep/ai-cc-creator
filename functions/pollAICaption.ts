@@ -128,32 +128,41 @@ async function applyNBCURules(rawWords, utterances, language, apiKey) {
     `[${u.start}-${u.end}ms] (Speaker ${u.speaker}): ${u.text}`
   ).join('\n') : '';
 
-  const prompt = `You are a professional broadcast closed caption editor following NBCU spec CM-051 and these rules:
+  const prompt = `You are a professional broadcast closed caption editor following NBCU spec CM-051. Your job is to produce ACCURATE, NATURAL-READING captions from a raw transcript.
 
-NBCU CAPTION RULES:
+CRITICAL GRAMMAR & PUNCTUATION RULES (strictly enforce these):
+- PRESERVE all correct punctuation. If a sentence is clearly a question, it MUST end with "?". If it is an exclamation, use "!".
+- CORRECT homophones and common speech-to-text errors. Examples: "to" meaning "also/as well" should be "too". "there" vs "their" vs "they're" based on context. "its" vs "it's". "your" vs "you're". "we're" vs "were". Use correct grammar based on context.
+- PRESERVE natural speech patterns, contractions (don't, can't, I'm, you're, we're, etc.)
+- Do NOT drop punctuation. Every sentence must end with a period, question mark, or exclamation point as appropriate.
+- Use commas, em-dashes, and ellipses naturally where the speaker pauses or trails off.
+
+NBCU FORMATTING RULES:
 - Max 32 characters per line
 - Max 2 lines per cue
 - Max reading speed ~180 words per minute (roughly 0.3-8 seconds per cue)
 - Minimum cue gap: 2 frames at 29.97fps (~67ms)
-- Use upper/lower case as spoken
-- No translation of foreign language — just mark it as [Speaking (Language)]
-- If non-English speech is detected, create a cue: [Speaking Spanish] (or whichever language)
+- Use upper/lower case as spoken (not all caps unless shouting/emphasis)
+- No translation of foreign language — mark it as [Speaking Spanish] or whichever language
 - Include music cues where appropriate as [ ♪ MUSIC ♪ ] or [ ♪ song description ♪ ]
-- Speaker identification: when two speakers appear in the same cue, prefix each speaker's line with "- " (a dash and a space). Example:\n  - Hello, how are you?\n  - I'm doing great.\n  Do NOT use ">>" — use only "- " dashes for speaker changes within a single cue.
+- Speaker identification: when two different speakers appear in the SAME cue, prefix EACH speaker's line with "- " (dash + space). Example:
+  - Hello, how are you?
+  - I'm doing great.
+  Do NOT use ">>" — ONLY use "- " dashes for speaker changes within a single cue.
+- Single-speaker cues do NOT get a dash prefix.
 - Round timecodes to nearest frame at 29.97fps
-- Start all timecodes at 00:00:00:00 (hour 0, for test purposes)
-- Format output as a JSON array of cues with: start (ms from 0), end (ms from 0), text (string, use \\n for line break within 2-line cues)
+- Format output as a JSON array of cues with: start (ms), end (ms), text (string, use \\n for line breaks within 2-line cues), speaker (string, e.g. "A", "B", or null)
 
 Detected language: ${language || 'en'}
 
 RAW WORD-LEVEL TRANSCRIPT (with timings in ms):
 ${wordDump}
 
-UTTERANCES (speaker-separated):
+UTTERANCES (speaker-separated, use these for speaker labels):
 ${utteranceDump}
 
-Return ONLY a JSON array, no markdown, no explanation. Each element: {"start": number, "end": number, "text": string}
-Ensure all cues follow the 32-char/line, 2-line max rules. Split long utterances into multiple cues.`;
+Return ONLY a valid JSON array. No markdown, no explanation, no code fences. Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
+Ensure all cues follow the 32-char/line, 2-line max rules. Split long utterances into multiple cues. CRITICALLY: fix all grammar, punctuation, and homophone errors.`;
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
