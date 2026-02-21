@@ -287,9 +287,15 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
     },
     body: JSON.stringify({
       model: 'gpt-4o',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 8000,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert broadcast closed caption editor. You output ONLY valid JSON arrays. Never output markdown, explanations, or code fences. Follow every instruction precisely.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.05,
+      max_tokens: 16000,
     }),
   });
 
