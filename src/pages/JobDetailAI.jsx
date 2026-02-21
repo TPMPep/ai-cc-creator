@@ -53,6 +53,74 @@ export default function JobDetailAI() {
 
   const isPollingRef = useRef(false);
 
+  const processingBatchRef = useRef(false);
+
+  const runBatchProcessing = useCallback(async (currentJob) => {
+    if (processingBatchRef.current) return;
+    processingBatchRef.current = true;
+    if (pollingRef.current) clearTimeout(pollingRef.current); // stop AssemblyAI polling loop
+
+    let batchIndex = 0;
+    let totalBatches = null;
+
+    try {
+      while (true) {
+        const res = await base44.functions.invoke("processAICaption", {
+          transcript_id: currentJob.railwayJobId,
+          job_db_id: currentJob.id,
+          batch_index: batchIndex,
+        });
+        const data = res.data;
+
+        if (data.error) throw new Error(data.error);
+
+        if (data.status === "completed") {
+          // All batches done — reload from DB
+          const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+          if (jobs.length > 0 && jobs[0].status === "done") {
+            setJob(jobs[0]);
+            setCues(jobs[0].result?.cues || []);
+            toast.success("Captions ready!");
+          }
+          break;
+        }
+
+        if (data.status === "batch_done") {
+          totalBatches = data.total_batches;
+          batchIndex = data.next_batch;
+
+          // Brief pause between batches to respect rate limits
+          if (batchIndex < totalBatches) {
+            await new Promise(r => setTimeout(r, 3000));
+          } else {
+            // Trigger finalization
+            const finalRes = await base44.functions.invoke("processAICaption", {
+              transcript_id: currentJob.railwayJobId,
+              job_db_id: currentJob.id,
+              batch_index: totalBatches, // signals finalization
+            });
+            if (finalRes.data?.status === "completed") {
+              const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+              if (jobs.length > 0 && jobs[0].status === "done") {
+                setJob(jobs[0]);
+                setCues(jobs[0].result?.cues || []);
+                toast.success("Captions ready!");
+              }
+            }
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Batch processing error:", err);
+      const updates = { status: "error", error: err.message };
+      await base44.entities.Job.update(currentJob.id, updates);
+      setJob(prev => ({ ...prev, ...updates }));
+    } finally {
+      processingBatchRef.current = false;
+    }
+  }, []);
+
   const doPoll = useCallback(async () => {
     const currentJob = jobRef.current;
     if (!jobId || !currentJob) return;
@@ -61,10 +129,9 @@ export default function JobDetailAI() {
     isPollingRef.current = true;
 
     try {
-      // Step 1: Fast check — is AssemblyAI done yet?
+      // Fast check — is AssemblyAI done?
       const checkRes = await base44.functions.invoke("pollAICaption", {
         transcript_id: currentJob.railwayJobId,
-        mode: "check",
       });
       const checkData = checkRes.data;
 
@@ -79,48 +146,15 @@ export default function JobDetailAI() {
       }
 
       if (checkData.status === "completed") {
-        // Step 2: AssemblyAI is done — kick off GPT processing.
-        // This saves directly to DB, so even if frontend disconnects, result is preserved.
-        // We fire and check the DB for the result instead of waiting on the response.
-        base44.functions.invoke("pollAICaption", {
-          transcript_id: currentJob.railwayJobId,
-          mode: "process",
-          job_db_id: currentJob.id,
-        }).then(async (processRes) => {
-          if (processRes.data?.status === "completed") {
-            // Reload from DB (backend already saved it)
-            const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
-            if (jobs.length > 0 && jobs[0].status === "done") {
-              setJob(jobs[0]);
-              setCues(jobs[0].result?.cues || []);
-              toast.success("Captions ready!");
-            }
-          }
-        }).catch(err => console.error("Process error:", err));
-
-        // While GPT is processing, poll the DB every 15s to detect when backend saved the result
-        const dbPollInterval = setInterval(async () => {
-          const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
-          if (jobs.length > 0 && jobs[0].status === "done") {
-            clearInterval(dbPollInterval);
-            setJob(jobs[0]);
-            setCues(jobs[0].result?.cues || []);
-            toast.success("Captions ready!");
-          } else if (jobs.length > 0 && jobs[0].status === "error") {
-            clearInterval(dbPollInterval);
-            setJob(jobs[0]);
-          }
-        }, 15000);
-
-        // Stop the AssemblyAI polling loop — GPT is now running
-        if (pollingRef.current) clearTimeout(pollingRef.current);
+        // AssemblyAI done — start batch-by-batch GPT processing
+        runBatchProcessing(currentJob);
       }
     } catch (err) {
       console.error("Poll error:", err);
     } finally {
       isPollingRef.current = false;
     }
-  }, [jobId]);
+  }, [jobId, runBatchProcessing]);
 
   // Elapsed time counter — based on job.created_date so navigating away and back doesn't reset it
   useEffect(() => {
