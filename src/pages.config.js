@@ -59,6 +59,7 @@ import NewJob from './pages/NewJob';
 import NewJobAI from './pages/NewJobAI';
 import Pricing from './pages/Pricing';
 import Security from './pages/Security';
+import DiagnosticAI from './pages/DiagnosticAI';
 import __Layout from './Layout.jsx';
 
 
@@ -75,6 +76,7 @@ export const PAGES = {
     "NewJobAI": NewJobAI,
     "Pricing": Pricing,
     "Security": Security,
+    "DiagnosticAI": DiagnosticAI,
 }
 
 export const pagesConfig = {
