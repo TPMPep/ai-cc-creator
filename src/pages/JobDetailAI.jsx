@@ -11,7 +11,7 @@ import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles } from "lucide-react";
+import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles, FlaskConical } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
 
