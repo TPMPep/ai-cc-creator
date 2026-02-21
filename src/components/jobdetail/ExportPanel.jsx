@@ -35,6 +35,16 @@ export default function ExportPanel({ result, title, jobId }) {
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Exports</h3>
+      {result.scc && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => downloadBlob(result.scc, `${safeName}_${jobId}.scc`, "text/plain")}
+          className="w-full bg-blue-600/10 border-blue-500/40 text-blue-300 hover:bg-blue-600/20 hover:text-blue-200 text-xs h-9 justify-start font-semibold"
+        >
+          <Download className="w-3.5 h-3.5 mr-2" /> SCC (Broadcast / CEA-608)
+        </Button>
+      )}
       <div className="grid grid-cols-2 gap-2">
         {result.srt && (
           <Button variant="outline" size="sm" onClick={() => downloadBlob(result.srt, `${safeName}_${jobId}.srt`, "text/plain")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
