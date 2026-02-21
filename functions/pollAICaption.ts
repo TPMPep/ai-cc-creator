@@ -146,12 +146,54 @@ function findGaps(utterances, totalDurationMs) {
 }
 
 // ─── STEP 2: GPT POLISH ──────────────────────────────────────────────────────
-// GPT receives pre-segmented chunks with locked start/end timecodes.
-// Its job: fix grammar, choose the best 1-2 line split within 32 chars,
-// handle speaker dashes for multi-speaker cues, add sound cues into gaps.
+// Process segments in ~5-minute batches to handle 90-min feature-length videos
+// without hitting token limits or timeouts. Each batch is independent.
+
+const BATCH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes per GPT batch
+const BATCH_COOLDOWN_MS = 3000;         // 3s pause between batches to respect rate limits
 
 async function polishWithGPT(segments, gaps, language, highlights, apiKey) {
-  // Format segments for GPT — timecodes are LOCKED, text and line-breaks are GPT's job
+  // Split segments into 5-minute windows
+  if (segments.length === 0) return [];
+
+  const batches = [];
+  let batchStart = 0;
+  const firstStart = segments[0].start;
+
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i].start - firstStart >= (batches.length + 1) * BATCH_WINDOW_MS || i === segments.length - 1) {
+      batches.push(segments.slice(batchStart, i === segments.length - 1 ? segments.length : i));
+      batchStart = i;
+    }
+  }
+  if (batchStart < segments.length && (batches.length === 0 || batches[batches.length - 1][0] !== segments[batchStart])) {
+    batches.push(segments.slice(batchStart));
+  }
+
+  // Process each batch sequentially
+  const allResults = [];
+  for (let bi = 0; bi < batches.length; bi++) {
+    const batch = batches[bi];
+    if (batch.length === 0) continue;
+
+    // Find gaps relevant to this batch's time window
+    const batchWindowStart = batch[0].start;
+    const batchWindowEnd = batch[batch.length - 1].end;
+    const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+
+    const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlights, apiKey, bi, batches.length);
+    allResults.push(...batchResult);
+
+    // Cooldown between batches to avoid rate limit hammering
+    if (bi < batches.length - 1) {
+      await new Promise(r => setTimeout(r, BATCH_COOLDOWN_MS));
+    }
+  }
+
+  return allResults;
+}
+
+async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, batchIndex, totalBatches) {
   const segmentInput = segments.map((s, i) =>
     `[${i}] START=${s.start}ms END=${s.end}ms SPEAKER=${s.speaker || 'null'}\nTEXT: ${s.text}`
   ).join('\n\n');
@@ -163,6 +205,10 @@ async function polishWithGPT(segments, gaps, language, highlights, apiKey) {
 
   const highlightDump = highlights && highlights.length > 0
     ? 'KEY AUDIO TERMS: ' + highlights.slice(0, 20).map(h => `"${h.text}"`).join(', ')
+    : '';
+
+  const batchNote = totalBatches > 1
+    ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided — do not reference or invent content from outside this batch.\n\n`
     : '';
 
   const prompt = `You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
