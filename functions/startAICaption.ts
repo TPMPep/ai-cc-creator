@@ -24,8 +24,6 @@ Deno.serve(async (req) => {
         language_detection: true,
         punctuate: true,
         format_text: true,
-        content_safety: true,
-        auto_highlights: true,
       }),
     });
 
