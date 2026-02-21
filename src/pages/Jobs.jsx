@@ -177,7 +177,7 @@ export default function Jobs() {
                   <TableRow key={job.id} className="border-zinc-800/40 hover:bg-zinc-800/20">
                     <TableCell>
                       <Link
-                        to={createPageUrl("JobDetail") + `?jobId=${job.railwayJobId || job.jobId}`}
+                        to={createPageUrl(job.pipeline === "ai" ? "JobDetailAI" : "JobDetail") + `?jobId=${job.pipeline === "ai" ? job.railwayJobId : (job.railwayJobId || job.jobId)}`}
                         className="text-sm font-medium text-zinc-200 hover:text-blue-400 transition-colors"
                       >
                         {job.title || "Untitled"}
