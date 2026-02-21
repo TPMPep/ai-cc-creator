@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 
+const API_BASE = "https://web-production-eba27.up.railway.app";
+
 export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, captionSettings }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [activeCue, setActiveCue] = useState(null);
@@ -63,7 +65,7 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
     <div className="relative rounded-lg overflow-hidden bg-black group">
       <video
         ref={videoRef}
-        src={mediaUrl}
+        src={`${API_BASE}/v1/proxy?url=${encodeURIComponent(mediaUrl)}`}
         controls
         className="w-full aspect-video bg-black"
         onTimeUpdate={handleTimeUpdate}
