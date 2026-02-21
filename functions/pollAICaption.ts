@@ -432,11 +432,8 @@ function runQC(cues) {
 }
 
 // ─── MAIN HANDLER ────────────────────────────────────────────────────────────
-// 
-// TWO MODES:
-//   mode=check  → fast poll: returns AssemblyAI status only, no GPT. Never times out.
-//   mode=process → full GPT pipeline. Called once AssemblyAI is confirmed complete.
-//                  Saves result directly to DB and returns status.
+// Fast check only — returns AssemblyAI transcription status. Never times out.
+// GPT processing is handled by processAICaption function.
 
 Deno.serve(async (req) => {
   try {
@@ -444,66 +441,16 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id, mode = 'check', job_db_id } = await req.json();
+    const { transcript_id } = await req.json();
     if (!transcript_id) return Response.json({ error: 'transcript_id is required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
 
-    // ── MODE: check ── fast, never times out
-    if (mode === 'check') {
-      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-      return Response.json({ 
-        status: transcript.status,  // queued | processing | completed | error
-        error: transcript.error || null,
-      });
-    }
-
-    // ── MODE: process ── run full GPT pipeline, save to DB
-    if (mode === 'process') {
-      if (!job_db_id) return Response.json({ error: 'job_db_id required for process mode' }, { status: 400 });
-
-      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-
-      if (transcript.status !== 'completed') {
-        return Response.json({ status: transcript.status });
-      }
-
-      const utterances = transcript.utterances || [];
-      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
-      const rawSegments = buildRawSegments(utterances);
-      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-      const highlights = transcript.auto_highlights_result?.results || [];
-
-      const openaiRaw = await polishWithGPT(rawSegments, gaps, transcript.language_code, highlights, OPENAI_API_KEY);
-      const cues = finalEnforce(openaiRaw);
-
-      const srt = buildSRT(cues);
-      const vtt = buildVTT(cues);
-      const scc = buildSCC(cues);
-      const qc = runQC(cues);
-
-      const result = {
-        cues,
-        exports: { srt, vtt, scc },
-        qc,
-        language: transcript.language_code,
-        diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw },
-      };
-
-      // Save directly to DB so even if the frontend disconnects, the work is preserved
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        status: 'done',
-        result,
-        durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
-        issuesCount: qc.issuesCount || 0,
-        lastPolledAt: new Date().toISOString(),
-      });
-
-      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc, language: transcript.language_code, diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw } });
-    }
-
-    return Response.json({ error: 'Invalid mode' }, { status: 400 });
+    return Response.json({
+      status: transcript.status, // queued | processing | completed | error
+      error: transcript.error || null,
+    });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
