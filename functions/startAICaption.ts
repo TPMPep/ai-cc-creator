@@ -27,7 +27,6 @@ Deno.serve(async (req) => {
         disfluencies: false,
         auto_highlights: true,
         content_safety: true,
-        speech_model: "best",
         speech_models: { best: {} },
       }),
     });
