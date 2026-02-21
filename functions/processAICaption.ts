@@ -365,8 +365,8 @@ Deno.serve(async (req) => {
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
       const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-      // Build 2-minute batches
-      const BATCH_WINDOW_MS = 2 * 60 * 1000;
+      // Build 1-minute batches — keeps each GPT call under 60s
+      const BATCH_WINDOW_MS = 1 * 60 * 1000;
       const firstStart = rawSegments.length > 0 ? rawSegments[0].start : 0;
       const batches = [];
       let batchStart = 0;
