@@ -237,11 +237,52 @@ export default function JobDetailAI() {
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-8 text-center mb-6">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-white mb-1">Transcribing & applying NBCU rules…</h2>
-            <p className="text-sm text-zinc-500 mb-1">AssemblyAI is processing your media, then GPT-4o will apply broadcast formatting.</p>
-            <p className="text-xs text-zinc-600 mb-4">Typically 1–5 minutes depending on length.</p>
-            <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-800 text-zinc-400 hover:text-white">
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check now
-            </Button>
+            <p className="text-sm text-zinc-500 mb-2">AssemblyAI is processing your media, then GPT‑4o mini will apply broadcast formatting.</p>
+
+            {/* Elapsed + estimated time */}
+            <div className="flex items-center justify-center gap-6 my-4">
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-mono font-bold text-blue-400">
+                  {String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:{String(elapsedSec % 60).padStart(2, "0")}
+                </span>
+                <span className="text-xs text-zinc-600 mt-0.5">elapsed</span>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-mono font-bold text-zinc-500">~2–5 min</span>
+                <span className="text-xs text-zinc-600 mt-0.5">estimated</span>
+              </div>
+            </div>
+
+            {/* Stage hints */}
+            <div className="flex items-center justify-center gap-2 mb-5">
+              {elapsedSec < 60 ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-full px-3 py-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
+                  Stage 1 of 2 — transcribing audio
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-blue-400/80 bg-blue-400/10 border border-blue-400/20 rounded-full px-3 py-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                  Stage 2 of 2 — applying NBCU caption rules
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-600 mb-4">This page auto-updates — no need to refresh.</p>
+
+            {/* Actions */}
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-800 text-zinc-400 hover:text-white">
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check now
+              </Button>
+              <Link to={createPageUrl("NewJobAI")}>
+                <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10">
+                  <Plus className="w-3.5 h-3.5 mr-1.5" /> Start another job
+                </Button>
+              </Link>
+            </div>
+            <p className="text-xs text-zinc-600 mt-3">You can submit another job while this one finishes — they run in parallel.</p>
           </div>
         )}
 
