@@ -41,7 +41,7 @@ export default function CueList({ cues, currentTimeMs, onSeek }) {
             <div
               key={i}
               ref={isActive ? activeRef : null}
-              onClick={() => onSeek(cue.start / 1000)}
+              onClick={() => { onSeek(cue.start / 1000); }}
               className={`px-4 py-2.5 border-b border-zinc-800/30 cursor-pointer transition-colors ${
                 isActive
                   ? "bg-blue-600/10 border-l-2 border-l-blue-500"

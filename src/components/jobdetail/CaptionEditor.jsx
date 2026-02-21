@@ -264,8 +264,11 @@ export default function CaptionEditor({
                     ${hasViolations ? "border-l-4 border-l-red-500/50" : ""}
                     ${isSDH ? "bg-blue-950/20" : ""}
                   `}
-                  onClick={() => {
-                    if (videoRef.current) videoRef.current.currentTime = cue.start / 1000;
+                  onClick={(e) => {
+                    // Don't steal focus from the page / scroll the window
+                    if (videoRef.current) {
+                      videoRef.current.currentTime = cue.start / 1000;
+                    }
                   }}
                 >
                   {/* Cue # */}
