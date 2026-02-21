@@ -56,11 +56,7 @@ export default function ExportPanel({ result, title, jobId }) {
             <Download className="w-3 h-3 mr-1.5" /> VTT
           </Button>
         )}
-        {result.scc && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.scc, `${safeName}_${jobId}.scc`, "text/plain")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
-            <Download className="w-3 h-3 mr-1.5" /> SCC
-          </Button>
-        )}
+
         <Button variant="outline" size="sm" onClick={() => downloadBlob(JSON.stringify(result, null, 2), `${safeName}_${jobId}.json`, "application/json")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
           <Download className="w-3 h-3 mr-1.5" /> JSON
         </Button>
