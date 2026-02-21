@@ -271,9 +271,9 @@ export default function JobDetailAI() {
               </div>
             </div>
 
-            {/* Stage hints */}
+            {/* Stage hints — based on real elapsed time from job creation, not page load */}
             <div className="flex items-center justify-center gap-2 mb-5">
-              {elapsedSec < 60 ? (
+              {elapsedSec < 90 ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-full px-3 py-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
                   Stage 1 of 2 — transcribing audio
