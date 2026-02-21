@@ -139,7 +139,7 @@ NBCU CAPTION RULES:
 - No translation of foreign language — just mark it as [Speaking (Language)]
 - If non-English speech is detected, create a cue: [Speaking Spanish] (or whichever language)
 - Include music cues where appropriate as [ ♪ MUSIC ♪ ] or [ ♪ song description ♪ ]
-- Speaker identification: if multiple speakers use >> before new speaker lines
+- Speaker identification: when two speakers appear in the same cue, prefix each speaker's line with "- " (a dash and a space). Example:\n  - Hello, how are you?\n  - I'm doing great.\n  Do NOT use ">>" — use only "- " dashes for speaker changes within a single cue.
 - Round timecodes to nearest frame at 29.97fps
 - Start all timecodes at 00:00:00:00 (hour 0, for test purposes)
 - Format output as a JSON array of cues with: start (ms from 0), end (ms from 0), text (string, use \\n for line break within 2-line cues)
