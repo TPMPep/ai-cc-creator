@@ -29,6 +29,7 @@ export default function JobDetailAI() {
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
+  const [elapsedSec, setElapsedSec] = useState(0);
   const jobId = searchParams.get("jobId"); // This is the AssemblyAI transcript_id
 
   // Load job from DB
