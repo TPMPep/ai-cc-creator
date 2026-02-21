@@ -392,11 +392,22 @@ Deno.serve(async (req) => {
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
-      // Store only cues and QC; exports are generated on-demand via download endpoints
+      // Fetch original transcript to get assemblyRawCues for diagnostic
+      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+      const assemblyRawCues = (transcript.utterances || []).map(u => ({ 
+        start: u.start, 
+        end: u.end, 
+        text: u.text, 
+        speaker: u.speaker 
+      }));
+
+      // Store cues, intermediate data for diagnostics, and QC; exports are generated on-demand
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues,
+          assemblyRawCues,  // For diagnostic comparison
+          openaiReformattedCues: polished_cues,  // For diagnostic comparison
           exports: { 
             srt: null,  // Generated on-demand
             vtt: null,  // Generated on-demand
