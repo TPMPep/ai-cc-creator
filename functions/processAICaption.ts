@@ -392,11 +392,26 @@ Deno.serve(async (req) => {
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
+      // Upload large exports as files instead of storing inline
+      const srtFile = await base44.asServiceRole.integrations.Core.UploadFile({
+        file: new Blob([srt], { type: 'text/plain' }),
+      });
+      const vttFile = await base44.asServiceRole.integrations.Core.UploadFile({
+        file: new Blob([vtt], { type: 'text/plain' }),
+      });
+      const sccFile = await base44.asServiceRole.integrations.Core.UploadFile({
+        file: new Blob([scc], { type: 'text/plain' }),
+      });
+
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues,
-          exports: { srt, vtt, scc },
+          exports: { 
+            srt: srtFile.file_url, 
+            vtt: vttFile.file_url, 
+            scc: sccFile.file_url 
+          },
           qc,
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
@@ -404,7 +419,7 @@ Deno.serve(async (req) => {
         lastPolledAt: new Date().toISOString(),
       });
 
-      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
+      return Response.json({ status: 'completed', cues, exports: { srt: srtFile.file_url, vtt: vttFile.file_url, scc: sccFile.file_url }, qc });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
