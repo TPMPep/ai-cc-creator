@@ -46,22 +46,31 @@ export default function JobDetailAI() {
     loadJob();
   }, [jobId]);
 
-  // Poll AssemblyAI via our backend function
+  // Use a ref to always have fresh job data without re-creating the poll loop
+  const jobRef = useRef(null);
+  useEffect(() => { jobRef.current = job; }, [job]);
+
+  const isPollingRef = useRef(false);
+
   const doPoll = useCallback(async () => {
-    if (!jobId || !job) return;
-    if (job.status === "done" || job.status === "error") return;
+    const currentJob = jobRef.current;
+    if (!jobId || !currentJob) return;
+    if (currentJob.status === "done" || currentJob.status === "error") return;
+    // Prevent concurrent polls — GPT-4o can take 30-60s
+    if (isPollingRef.current) return;
+    isPollingRef.current = true;
 
     try {
-      const res = await base44.functions.invoke("pollAICaption", { transcript_id: jobId });
+      const res = await base44.functions.invoke("pollAICaption", { transcript_id: currentJob.railwayJobId });
       const data = res.data;
 
       if (data.status === "queued" || data.status === "processing") return;
 
       if (data.status === "error") {
         const updates = { status: "error", error: data.error || "Transcription failed" };
-        await base44.entities.Job.update(job.id, updates);
+        await base44.entities.Job.update(currentJob.id, updates);
         setJob(prev => ({ ...prev, ...updates }));
-        clearInterval(pollingRef.current);
+        if (pollingRef.current) clearTimeout(pollingRef.current);
         return;
       }
 
@@ -81,34 +90,40 @@ export default function JobDetailAI() {
           issuesCount: data.qc?.issuesCount || 0,
           lastPolledAt: new Date().toISOString(),
         };
-        await base44.entities.Job.update(job.id, updates);
+        await base44.entities.Job.update(currentJob.id, updates);
         setJob(prev => ({ ...prev, ...updates }));
         setCues(data.cues || []);
-        clearInterval(pollingRef.current);
+        if (pollingRef.current) clearTimeout(pollingRef.current);
         toast.success("Captions ready!");
       }
     } catch (err) {
       console.error("Poll error:", err);
+    } finally {
+      isPollingRef.current = false;
     }
-  }, [jobId, job]);
+  }, [jobId]);
 
   useEffect(() => {
     if (!job) return;
     if (job.status === "done" || job.status === "error") return;
 
     pollStartRef.current = Date.now();
+
     const tick = () => {
       const elapsed = Date.now() - pollStartRef.current;
-      const interval = elapsed < 30000 ? 5000 : 10000;
+      // Use longer intervals since GPT-4o takes 30-60s — no point polling faster than that
+      const interval = elapsed < 60000 ? 15000 : 20000;
       pollingRef.current = setTimeout(async () => {
         await doPoll();
-        tick();
+        if (jobRef.current?.status !== "done" && jobRef.current?.status !== "error") {
+          tick();
+        }
       }, interval);
     };
     tick();
 
     return () => { if (pollingRef.current) clearTimeout(pollingRef.current); };
-  }, [job?.status, job?.id, doPoll]);
+  }, [job?.id]);
 
   const handleSaveTitle = async () => {
     if (!titleDraft.trim()) return;
