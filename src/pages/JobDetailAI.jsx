@@ -58,58 +58,48 @@ export default function JobDetailAI() {
   const runBatchProcessing = useCallback(async (currentJob) => {
     if (processingBatchRef.current) return;
     processingBatchRef.current = true;
-    if (pollingRef.current) clearTimeout(pollingRef.current); // stop AssemblyAI polling loop
-
-    let batchIndex = 0;
-    let totalBatches = null;
+    if (pollingRef.current) clearTimeout(pollingRef.current);
 
     try {
-      while (true) {
-        const res = await base44.functions.invoke("processAICaption", {
+      // Step 1: Prepare — fetch transcript, build batch plan, save to DB
+      const prepRes = await base44.functions.invoke("processAICaption", {
+        transcript_id: currentJob.railwayJobId,
+        job_db_id: currentJob.id,
+        action: "prepare",
+      });
+      if (prepRes.data?.error) throw new Error(prepRes.data.error);
+      const totalBatches = prepRes.data?.total_batches || 1;
+
+      // Step 2: Process each batch sequentially
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const batchRes = await base44.functions.invoke("processAICaption", {
           transcript_id: currentJob.railwayJobId,
           job_db_id: currentJob.id,
+          action: "batch",
           batch_index: batchIndex,
         });
-        const data = res.data;
+        if (batchRes.data?.error) throw new Error(batchRes.data.error);
 
-        if (data.error) throw new Error(data.error);
-
-        if (data.status === "completed") {
-          // All batches done — reload from DB
-          const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
-          if (jobs.length > 0 && jobs[0].status === "done") {
-            setJob(jobs[0]);
-            setCues(jobs[0].result?.cues || []);
-            toast.success("Captions ready!");
-          }
-          break;
+        // Small pause between batches
+        if (batchIndex < totalBatches - 1) {
+          await new Promise(r => setTimeout(r, 2000));
         }
+      }
 
-        if (data.status === "batch_done") {
-          totalBatches = data.total_batches;
-          batchIndex = data.next_batch;
+      // Step 3: Finalize — enforce rules, build exports, QC, mark done
+      const finalRes = await base44.functions.invoke("processAICaption", {
+        transcript_id: currentJob.railwayJobId,
+        job_db_id: currentJob.id,
+        action: "finalize",
+      });
+      if (finalRes.data?.error) throw new Error(finalRes.data.error);
 
-          // Brief pause between batches to respect rate limits
-          if (batchIndex < totalBatches) {
-            await new Promise(r => setTimeout(r, 3000));
-          } else {
-            // Trigger finalization
-            const finalRes = await base44.functions.invoke("processAICaption", {
-              transcript_id: currentJob.railwayJobId,
-              job_db_id: currentJob.id,
-              batch_index: totalBatches, // signals finalization
-            });
-            if (finalRes.data?.status === "completed") {
-              const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
-              if (jobs.length > 0 && jobs[0].status === "done") {
-                setJob(jobs[0]);
-                setCues(jobs[0].result?.cues || []);
-                toast.success("Captions ready!");
-              }
-            }
-            break;
-          }
-        }
+      // Reload from DB
+      const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+      if (jobs.length > 0 && jobs[0].status === "done") {
+        setJob(jobs[0]);
+        setCues(jobs[0].result?.cues || []);
+        toast.success("Captions ready!");
       }
     } catch (err) {
       console.error("Batch processing error:", err);
