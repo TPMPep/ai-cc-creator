@@ -279,25 +279,36 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
 - CRITICALLY: Fix ALL grammar errors, homophone errors, and missing punctuation.
 - CRITICALLY: Every dialogue sentence must end with terminal punctuation.`;
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert broadcast closed caption editor. You output ONLY valid JSON arrays. Never output markdown, explanations, or code fences. Follow every instruction precisely.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.05,
-      max_tokens: 16000,
-    }),
-  });
+  // Retry up to 3 times on rate limit errors (OpenAI TPM)
+  let res;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert broadcast closed caption editor. You output ONLY valid JSON arrays. Never output markdown, explanations, or code fences. Follow every instruction precisely.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.05,
+        max_tokens: 16000,
+      }),
+    });
+
+    if (res.status === 429) {
+      // Rate limited — wait 35s and retry
+      await new Promise(r => setTimeout(r, 35000));
+      continue;
+    }
+    break;
+  }
 
   if (!res.ok) {
     const err = await res.text();
