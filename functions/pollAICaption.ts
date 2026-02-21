@@ -284,7 +284,7 @@ ${gapInput}
 ${highlightDump}`;
 
   let res;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -306,7 +306,9 @@ ${highlightDump}`;
     });
 
     if (res.status === 429) {
-      await new Promise(r => setTimeout(r, 35000));
+      // Exponential backoff: 30s, 60s, 90s, 120s
+      const wait = 30000 * (attempt + 1);
+      await new Promise(r => setTimeout(r, wait));
       continue;
     }
     break;
@@ -314,13 +316,13 @@ ${highlightDump}`;
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`OpenAI error: ${err}`);
+    throw new Error(`OpenAI error (batch ${batchIndex + 1}): ${err}`);
   }
 
   const data = await res.json();
   const content = data.choices[0].message.content.trim();
   const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) throw new Error('OpenAI did not return valid JSON array');
+  if (!jsonMatch) throw new Error(`OpenAI did not return valid JSON (batch ${batchIndex + 1})`);
 
   return JSON.parse(jsonMatch[0]);
 }
