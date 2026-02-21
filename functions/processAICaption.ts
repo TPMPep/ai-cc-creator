@@ -365,18 +365,11 @@ Deno.serve(async (req) => {
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
       const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-      // Build 1-minute batches — keeps each GPT call under 60s
-      const BATCH_WINDOW_MS = 1 * 60 * 1000;
-      const firstStart = rawSegments.length > 0 ? rawSegments[0].start : 0;
+      // Batch by segment count: 10 segments per batch keeps GPT calls well under 60s
+      const BATCH_SIZE = 10;
       const batches = [];
-      let batchStart = 0;
-      for (let i = 1; i <= rawSegments.length; i++) {
-        const isLast = i === rawSegments.length;
-        const crossedWindow = !isLast && (rawSegments[i].start - firstStart) >= (batches.length + 1) * BATCH_WINDOW_MS;
-        if (crossedWindow || isLast) {
-          batches.push(rawSegments.slice(batchStart, i));
-          batchStart = i;
-        }
+      for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
+        batches.push(rawSegments.slice(i, i + BATCH_SIZE));
       }
 
       // Strip word-level detail from batches before saving — only need start/end/text/speaker for GPT
