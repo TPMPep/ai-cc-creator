@@ -243,8 +243,16 @@ Deno.serve(async (req) => {
       return Response.json({ status: 'error', error: transcript.error || 'Transcription failed' });
     }
 
+    // Build AssemblyAI raw cues (utterance-level, for diagnostic)
+    const assemblyRawCues = (transcript.utterances || []).map(u => ({
+      start: u.start,
+      end: u.end,
+      text: u.text,
+      speaker: u.speaker,
+    }));
+
     // Completed — apply NBCU rules via OpenAI
-    const cues = await applyNBCURules(
+    const { cues, openaiRaw } = await applyNBCURules(
       transcript.words || [],
       transcript.utterances || [],
       transcript.language_code,
@@ -262,6 +270,10 @@ Deno.serve(async (req) => {
       exports: { srt, vtt, scc },
       qc,
       language: transcript.language_code,
+      diagnostic: {
+        assemblyRawCues,
+        openaiRawCues: openaiRaw,
+      },
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
