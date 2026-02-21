@@ -52,13 +52,13 @@ import Admin from './pages/Admin';
 import Contact from './pages/Contact';
 import Debug from './pages/Debug';
 import JobDetail from './pages/JobDetail';
+import JobDetailAI from './pages/JobDetailAI';
 import Jobs from './pages/Jobs';
 import Landing from './pages/Landing';
 import NewJob from './pages/NewJob';
+import NewJobAI from './pages/NewJobAI';
 import Pricing from './pages/Pricing';
 import Security from './pages/Security';
-import NewJobAI from './pages/NewJobAI';
-import JobDetailAI from './pages/JobDetailAI';
 import __Layout from './Layout.jsx';
 
 
@@ -68,13 +68,13 @@ export const PAGES = {
     "Contact": Contact,
     "Debug": Debug,
     "JobDetail": JobDetail,
+    "JobDetailAI": JobDetailAI,
     "Jobs": Jobs,
     "Landing": Landing,
     "NewJob": NewJob,
+    "NewJobAI": NewJobAI,
     "Pricing": Pricing,
     "Security": Security,
-    "NewJobAI": NewJobAI,
-    "JobDetailAI": JobDetailAI,
 }
 
 export const pagesConfig = {
