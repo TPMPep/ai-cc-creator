@@ -215,7 +215,7 @@ ${highlightDump}`;
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every text line must be ≤32 characters. Every cue must have ≤2 lines.' },
           { role: 'user', content: prompt },
