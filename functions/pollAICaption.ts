@@ -308,31 +308,81 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
   return { cues, openaiRaw: cues }; // openaiRaw is the direct OpenAI output before any post-processing
 }
 
-// Simple QC check
+// Comprehensive QC check
 function runQC(cues) {
   const issues = [];
+
+  // Check if we have any sound/music cues at all for SDH compliance
+  const hasSoundCues = cues.some(c => c.text.startsWith('[') || c.text.includes('♪'));
+
   for (let i = 0; i < cues.length; i++) {
     const c = cues[i];
     const lines = c.text.split('\n');
-    for (const line of lines) {
-      if (line.length > 32) {
-        issues.push({ cue: i + 1, type: 'line_too_long', value: `${line.length} chars: "${line}"` });
+    const dur = c.end - c.start;
+    const charCount = c.text.replace(/\n/g, '').length;
+    const wordsInCue = c.text.split(/\s+/).filter(w => w.length > 0).length;
+    const cps = charCount / (dur / 1000);
+
+    // Line length check
+    for (let li = 0; li < lines.length; li++) {
+      if (lines[li].length > 32) {
+        issues.push({ cue: i, type: 'line_too_long', value: `Line ${li + 1}: ${lines[li].length} chars` });
       }
     }
+
+    // Line count check
     if (lines.length > 2) {
-      issues.push({ cue: i + 1, type: 'too_many_lines', value: `${lines.length} lines` });
+      issues.push({ cue: i, type: 'too_many_lines', value: `${lines.length} lines` });
     }
-    const dur = c.end - c.start;
+
+    // Duration checks
     if (dur < 500) {
-      issues.push({ cue: i + 1, type: 'cue_too_short', value: `${dur}ms` });
+      issues.push({ cue: i, type: 'cue_too_short', value: `${dur}ms (min 500ms)` });
     }
+    if (dur > 8000) {
+      issues.push({ cue: i, type: 'cue_too_long', value: `${(dur/1000).toFixed(1)}s (max 8s)` });
+    }
+
+    // Reading speed: characters per second (target max ~17 CPS for 32-char lines)
+    if (cps > 25 && !c.text.startsWith('[')) {
+      issues.push({ cue: i, type: 'reading_speed', value: `${cps.toFixed(1)} CPS (too fast)` });
+    }
+
+    // Gap / overlap check
     if (i > 0) {
       const gap = c.start - cues[i - 1].end;
       if (gap < 0) {
-        issues.push({ cue: i + 1, type: 'overlap', value: `${gap}ms gap` });
+        issues.push({ cue: i, type: 'overlap', value: `${Math.abs(gap)}ms overlap with cue ${i}` });
+      } else if (gap < 67) {
+        issues.push({ cue: i, type: 'gap_too_small', value: `${gap}ms (min 67ms / 2 frames)` });
       }
     }
+
+    // Missing terminal punctuation on dialogue cues
+    const isDialogue = !c.text.startsWith('[') && !c.text.includes('♪') && c.text.trim().length > 0;
+    if (isDialogue) {
+      const trimmed = c.text.trim();
+      const lastChar = trimmed[trimmed.length - 1];
+      if (!['.', '?', '!', '…', '"', "'"].includes(lastChar) && !trimmed.endsWith('--') && !trimmed.endsWith('—')) {
+        issues.push({ cue: i, type: 'missing_punctuation', value: `Ends with "${lastChar}"` });
+      }
+    }
+
+    // Multi-speaker cue without dash prefix
+    if (c.speaker === null && lines.length === 2 && !c.text.includes('♪') && !c.text.startsWith('[')) {
+      // Might be a two-speaker cue missing dashes — flag for review
+      const hasDash = lines.every(l => l.startsWith('- '));
+      if (!hasDash) {
+        issues.push({ cue: i, type: 'possible_missing_speaker_dash', value: 'Two lines, no speaker dashes' });
+      }
+    }
+
+    // Empty cue
+    if (!c.text || c.text.trim().length === 0) {
+      issues.push({ cue: i, type: 'empty_cue', value: 'No text content' });
+    }
   }
+
   return { issuesCount: issues.length, issues };
 }
 
@@ -372,6 +422,8 @@ Deno.serve(async (req) => {
       transcript.words || [],
       transcript.utterances || [],
       transcript.language_code,
+      transcript.auto_highlights_result?.results || [],
+      transcript.content_safety_labels || null,
       OPENAI_API_KEY
     );
 
