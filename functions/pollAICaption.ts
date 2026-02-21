@@ -15,40 +15,31 @@ function msToSCCTimecode(ms) {
   const totalFrames = Math.floor(ms / (1000 / 29.97));
   const fps = 30;
   const dropFrames = 2;
-
-  let framesPerMin = fps * 60;
-  let framesPerTenMin = framesPerMin * 10 - dropFrames * 9;
-
-  let d = Math.floor(totalFrames / framesPerTenMin);
-  let m = totalFrames % framesPerTenMin;
-
+  const framesPerMin = fps * 60;
+  const framesPerTenMin = framesPerMin * 10 - dropFrames * 9;
+  const d = Math.floor(totalFrames / framesPerTenMin);
+  const m = totalFrames % framesPerTenMin;
   let frames;
   if (m < dropFrames) {
     frames = m + d * framesPerTenMin;
   } else {
     frames = totalFrames + dropFrames * 9 * d + dropFrames * (Math.floor((m - dropFrames) / (framesPerMin - dropFrames)));
   }
-
   const ff = frames % fps;
   const secs = Math.floor(frames / fps);
   const ss = secs % 60;
   const mins = Math.floor(secs / 60);
   const mm = mins % 60;
   const hh = Math.floor(mins / 60);
-
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}:${String(ff).padStart(2, '0')}`;
 }
 
-// Encode text to SCC (CEA-608) byte pairs
 function textToSCCBytes(text) {
-  // CEA-608 character encoding (simplified ASCII printable range)
   const bytes = [];
   const clean = text.replace(/\r/g, '').substring(0, 64);
-
   for (let i = 0; i < clean.length; i++) {
     const code = clean.charCodeAt(i);
     if (code >= 0x20 && code <= 0x7e) {
-      // Pair consecutive characters
       if (i + 1 < clean.length && clean.charCodeAt(i + 1) >= 0x20 && clean.charCodeAt(i + 1) <= 0x7e) {
         bytes.push(`${code.toString(16).padStart(2, '0')}${clean.charCodeAt(i + 1).toString(16).padStart(2, '0')}`);
         i++;
@@ -62,17 +53,11 @@ function textToSCCBytes(text) {
 
 function buildSCCLine(ms, text) {
   const tc = msToSCCTimecode(ms);
-  // Erase Non-Displayed Memory (ENM): 942c
-  // Resume Caption Loading (RCL): 9420
-  // End of Caption (EOC / flip): 942f
-  // Erase Displayed Memory (EDM): 942e
-
   const bytePairs = textToSCCBytes(text);
   const data = ['942c', '9420', ...bytePairs, '942f'].join(' ');
   return `${tc}\t${data}`;
 }
 
-// Build SRT from cues
 function buildSRT(cues) {
   return cues.map((c, i) => {
     const fmt = (ms) => {
@@ -86,7 +71,6 @@ function buildSRT(cues) {
   }).join('\n');
 }
 
-// Build VTT from cues
 function buildVTT(cues) {
   const fmt = (ms) => {
     const h = Math.floor(ms / 3600000);
@@ -99,44 +83,53 @@ function buildVTT(cues) {
   return `WEBVTT\n\n${body}`;
 }
 
-// Build SCC from cues
 function buildSCC(cues) {
   const lines = ['Scenarist_SCC V1.0', ''];
   for (const cue of cues) {
-    // Erase displayed at cue start
     lines.push(`${msToSCCTimecode(cue.start)}\t942e`);
-    // Write text
     const textLines = cue.text.split('\n');
     for (const line of textLines) {
-      if (line.trim()) {
-        lines.push(buildSCCLine(cue.start, line.trim()));
-      }
+      if (line.trim()) lines.push(buildSCCLine(cue.start, line.trim()));
     }
-    // Clear at end
     lines.push(`${msToSCCTimecode(cue.end)}\t942e`);
     lines.push('');
   }
   return lines.join('\n');
 }
 
-// Hard-enforce 32-char line limit and 2-line/8s cue limit on GPT output
-// This is a safety net — GPT doesn't always follow formatting rules precisely
-function enforceLineLimits(cues) {
+// ─────────────────────────────────────────────────────────────────────────────
+// POST-PROCESSOR: Hard guardrail enforcement
+// GPT is responsible for intelligent splitting/timing. This layer only fixes
+// cases GPT still gets wrong: lines over 32 chars, cues over 2 lines, or
+// overlapping timecodes. It uses the word index to find accurate retime points.
+// ─────────────────────────────────────────────────────────────────────────────
+function postProcess(cues, wordIndex) {
   const MAX_CHARS = 32;
-  const MAX_LINES = 2;
-  const MAX_DUR = 8000;
   const MIN_DUR = 500;
+  const MIN_GAP = 67;
   const result = [];
 
   for (const cue of cues) {
-    // Split text into words, respecting existing \n as soft hints
+    // Sound / music cues — pass through unchanged, just validate length
+    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
+    if (isSoundCue) {
+      // Truncate if over 32 chars but don't re-flow (they're short by design)
+      result.push(cue);
+      continue;
+    }
+
     const rawLines = cue.text.split('\n');
-    // Re-flow all words respecting 32-char max
-    const words = rawLines.join(' ').split(/\s+/).filter(Boolean);
+    const allOk = rawLines.length <= 2 && rawLines.every(l => l.length <= MAX_CHARS);
+    if (allOk) {
+      result.push(cue);
+      continue;
+    }
 
-    if (words.length === 0) { result.push(cue); continue; }
+    // Need to re-flow this cue — pack words into 32-char lines
+    // Preserve dash prefixes (speaker indicators)
+    const hasDashes = rawLines.every(l => l.startsWith('- '));
+    const words = rawLines.map(l => l.replace(/^- /, '')).join(' ').split(/\s+/).filter(Boolean);
 
-    // Pack words into lines of max 32 chars
     const packedLines = [];
     let currentLine = '';
     for (const word of words) {
@@ -145,24 +138,42 @@ function enforceLineLimits(cues) {
         currentLine = candidate;
       } else {
         if (currentLine) packedLines.push(currentLine);
-        // If a single word is longer than 32 chars, truncate it (edge case)
         currentLine = word.length > MAX_CHARS ? word.substring(0, MAX_CHARS) : word;
       }
     }
     if (currentLine) packedLines.push(currentLine);
 
-    // Now chunk packedLines into cues of max 2 lines
-    const totalDur = cue.end - cue.start;
-    const chunkCount = Math.ceil(packedLines.length / MAX_LINES);
-    const durPerChunk = Math.max(MIN_DUR, Math.floor(totalDur / chunkCount));
+    // Restore dashes only if original was a 2-speaker cue and we still have 2 lines
+    if (hasDashes && packedLines.length === 2) {
+      packedLines[0] = '- ' + packedLines[0];
+      packedLines[1] = '- ' + packedLines[1];
+      // Re-check 32 chars with dashes
+      if (packedLines[0].length > MAX_CHARS) packedLines[0] = packedLines[0].substring(0, MAX_CHARS);
+      if (packedLines[1].length > MAX_CHARS) packedLines[1] = packedLines[1].substring(0, MAX_CHARS);
+    }
 
-    for (let i = 0; i < packedLines.length; i += MAX_LINES) {
-      const chunk = packedLines.slice(i, i + MAX_LINES);
-      const chunkIndex = Math.floor(i / MAX_LINES);
-      const chunkStart = cue.start + chunkIndex * durPerChunk;
-      const chunkEnd = (chunkIndex === chunkCount - 1)
+    // Split into groups of 2 lines, retiming using word index
+    const totalDur = cue.end - cue.start;
+    const chunkCount = Math.ceil(packedLines.length / 2);
+
+    for (let i = 0; i < packedLines.length; i += 2) {
+      const chunk = packedLines.slice(i, i + 2);
+      const chunkIndex = Math.floor(i / 2);
+
+      // Try to find word-accurate start/end from word index
+      let chunkStart = cue.start + Math.floor((chunkIndex / chunkCount) * totalDur);
+      let chunkEnd = chunkIndex === chunkCount - 1
         ? cue.end
-        : Math.min(cue.start + (chunkIndex + 1) * durPerChunk, cue.end);
+        : cue.start + Math.floor(((chunkIndex + 1) / chunkCount) * totalDur);
+
+      // Look up actual word timings for the first word in this chunk
+      const chunkText = chunk.join(' ').replace(/^- /, '').toLowerCase().replace(/[^a-z0-9 ]/g, '');
+      const firstWord = chunkText.split(' ')[0];
+      if (firstWord && wordIndex[firstWord]) {
+        // Find word timing within cue's range
+        const match = wordIndex[firstWord].find(w => w.start >= cue.start - 500 && w.start <= cue.end + 500);
+        if (match) chunkStart = match.start;
+      }
 
       result.push({
         start: chunkStart,
@@ -173,180 +184,173 @@ function enforceLineLimits(cues) {
     }
   }
 
-  // Fix any overlaps introduced by min duration expansion
+  // Fix overlaps and gaps
   for (let i = 1; i < result.length; i++) {
-    if (result[i].start < result[i - 1].end) {
-      result[i].start = result[i - 1].end + 67;
+    const gap = result[i].start - result[i - 1].end;
+    if (gap < 0) {
+      // Overlap — push this cue's start forward
+      result[i].start = result[i - 1].end + MIN_GAP;
       if (result[i].end <= result[i].start) {
         result[i].end = result[i].start + MIN_DUR;
       }
+    } else if (gap < MIN_GAP && gap > 0) {
+      result[i].start = result[i - 1].end + MIN_GAP;
     }
   }
 
   return result;
 }
 
-// Apply NBCU rules via OpenAI
-async function applyNBCURules(rawWords, utterances, language, highlights, contentSafety, apiKey) {
-  // Build raw transcript text with timing info — send more words for longer videos
-  const wordDump = rawWords.slice(0, 2500).map(w => `[${w.start}-${w.end}ms] ${w.text}`).join(' ');
+// Build a word index: { normalizedWord -> [{start, end}] } for fast lookup
+function buildWordIndex(words) {
+  const index = {};
+  for (const w of words) {
+    const key = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!key) continue;
+    if (!index[key]) index[key] = [];
+    index[key].push({ start: w.start, end: w.end });
+  }
+  return index;
+}
 
-  const utteranceDump = utterances ? utterances.slice(0, 120).map(u =>
-    `[${u.start}-${u.end}ms] (Speaker ${u.speaker}): ${u.text}`
+// ─────────────────────────────────────────────────────────────────────────────
+// GPT PROMPT — The core intelligence layer
+// ─────────────────────────────────────────────────────────────────────────────
+async function applyNBCURules(rawWords, utterances, language, highlights, contentSafety, apiKey) {
+  // Send word-level timings — this is the key data for GPT to make accurate splits
+  // Format: each word with its exact start/end so GPT can anchor cue boundaries to real word times
+  const wordDump = rawWords.slice(0, 3000).map(w =>
+    `${w.start}|${w.end}|${w.text}`
+  ).join('\n');
+
+  // Utterances with speaker labels — GPT uses these for speaker attribution and sentence context
+  const utteranceDump = utterances ? utterances.slice(0, 150).map(u =>
+    `[${u.start}-${u.end}ms] Speaker ${u.speaker}: ${u.text}`
   ).join('\n') : '';
 
-  // Auto highlights give GPT hints about music/key terms
   const highlightDump = highlights && highlights.length > 0
     ? highlights.slice(0, 30).map(h => `"${h.text}" (${h.timestamps.map(t => `${t.start}-${t.end}ms`).join(', ')})`).join('\n')
     : '';
 
-  // Content safety labels help identify non-speech segments
   const safetySummary = contentSafety && contentSafety.results && contentSafety.results.length > 0
     ? contentSafety.results.slice(0, 10).map(r => `[${r.timestamp?.start}-${r.timestamp?.end}ms] ${r.labels?.map(l => l.label).join(', ')}`).join('\n')
     : '';
 
-  const prompt = `You are a professional broadcast closed caption editor with 20+ years of experience following NBCU spec CM-051 and FCC closed caption standards. Your job is to produce BROADCAST-QUALITY, NATURAL-READING captions from a raw speech-to-text transcript. These captions will go directly to a human QC editor before broadcast — make them as close to final as possible.
+  const prompt = `You are a professional broadcast closed caption editor (20+ years, NBCU CM-051 / FCC standards). Your output will go to a human QC editor before air — make it broadcast-ready.
+
+You have been given WORD-LEVEL timing data (format: startMs|endMs|word). Use these exact timestamps to anchor your cue start/end times to real spoken words. NEVER fabricate or approximate a timecode — always base it on the actual word timing data provided.
 
 ════════════════════════════════════════
-SECTION 1: GRAMMAR & PUNCTUATION (MANDATORY)
+TIMING RULES (MOST IMPORTANT)
 ════════════════════════════════════════
-- Every sentence MUST end with a period (.), question mark (?), or exclamation point (!). NEVER leave a sentence without terminal punctuation.
-- Detect and CORRECT all homophones and speech-to-text errors:
-  • "to" used as "also/as well" → "too"
-  • "there/their/they're" — use correct form based on context
-  • "its/it's", "your/you're", "were/we're", "then/than", "affect/effect"
-  • "gonna" → "gonna" (keep contractions as spoken)
-  • "wanna" → "wanna", "kinda" → "kinda" (preserve natural speech)
-- PRESERVE contractions exactly as spoken: don't, can't, I'm, you're, we're, I'll, that's, it's, etc.
-- Use commas to reflect natural speech pauses within sentences.
-- Use em-dashes (—) for abrupt interruptions or strong pauses mid-thought.
-- Use ellipsis (...) ONLY when a speaker trails off and the thought is incomplete.
-- Do NOT use ALL CAPS unless the speaker is clearly shouting or emphasizing a word dramatically.
-- Capitalize proper nouns, names, titles, and places correctly.
+- A cue's "start" MUST equal the start time of the first spoken word in that cue.
+- A cue's "end" MUST equal the end time of the last spoken word in that cue (or the start of the next cue minus 67ms — whichever is earlier).
+- NEVER show text before the word is spoken. NEVER keep text on screen after the last word has been said.
+- For gaps between utterances (silence, music, ambient sound), create a sound/music cue that fills the gap — or leave a natural gap with NO caption if it is brief silence.
+- If a gap between two speech segments is longer than 2 seconds, insert an appropriate sound cue (music, ambient, etc.) for SDH compliance.
 
 ════════════════════════════════════════
-SECTION 2: SOUND & MUSIC CUES (CRITICAL — DO NOT SKIP)
+LINE & CUE FORMATTING (STRICT HARD LIMITS)
 ════════════════════════════════════════
-Sound cues and music notation are MANDATORY for broadcast compliance. You MUST include them whenever applicable.
-
-MUSIC RULES:
-- When music or a song is playing (with or without lyrics), insert a music cue.
-- Format: [ ♪ DESCRIPTION ♪ ] — use ALL CAPS for the description inside brackets.
-- Examples:
-  • [ ♪ UPBEAT MUSIC ♪ ]
-  • [ ♪ TENSE ORCHESTRAL MUSIC ♪ ]
-  • [ ♪ HIP HOP MUSIC ♪ ]
-  • [ ♪ "SONG TITLE" BY ARTIST ♪ ] (if identifiable)
-  • [ ♪ MUSIC PLAYING ♪ ] (if genre is unclear)
-- If lyrics are sung: transcribe them with ♪ prefix and suffix on EACH LINE.
-  • ♪ I can see clearly now ♪
-  • ♪ The rain is gone ♪
-- Place music cue cues at the correct timecode where music starts/ends.
-- Music cues that last more than ~5 seconds should have an opening AND closing cue.
-
-SOUND EFFECT (SDH) RULES:
-- Bracket ALL significant non-speech audio that a deaf viewer needs to know about:
-  • [DOOR SLAMS]
-  • [PHONE RINGING]
-  • [CROWD CHEERING]
-  • [GUNSHOT]
-  • [EXPLOSION]
-  • [SIREN WAILING]
-  • [LAUGHING]
-  • [CRYING]
-  • [APPLAUSE]
-  • [INDISTINCT CHATTER]
-  • [SPEAKING FOREIGN LANGUAGE] — for non-English speech
-- Use ALL CAPS inside brackets for sound effects.
-- Duration indicators: [SIGHS], [SCREAMS], [LAUGHS] for short sounds.
-- Infer sound events from CONTEXT and GAPS in speech. If there's a long gap with no words, consider whether music, ambient sound, or a sound effect should be noted.
+- MAXIMUM 32 characters per line. Count EVERY character: letters, spaces, punctuation, brackets, dashes.
+- MAXIMUM 2 lines per cue.
+- MINIMUM cue duration: 500ms.
+- MAXIMUM cue duration: 8 seconds. Split any utterance longer than 8s into multiple cues.
+- Minimum gap between cues: 67ms (2 frames at 29.97fps).
+- When splitting a long utterance, break at natural sentence or clause boundaries (comma, period, conjunction). NEVER split mid-word or mid-phrase awkwardly.
+- Fill lines efficiently — aim for both lines to be close to 32 chars when a 2-line cue makes sense. Do not leave 4-word lines when 6 words would fit and still be ≤32 chars.
+- Two-line cues are preferred over many short single-line cues when the speech is continuous.
 
 ════════════════════════════════════════
-SECTION 3: SPEAKER IDENTIFICATION RULES
+SPEAKER IDENTIFICATION
 ════════════════════════════════════════
-- Use speaker labels from utterance data (A, B, C, etc.).
-- Single-speaker cues: NO dash prefix. Just the text.
-- Two different speakers in the SAME cue: prefix EACH line with "- " (dash + space):
-  CORRECT:
-  - Are you sure about that?
-  - Absolutely certain.
-  WRONG: >> Are you sure? or >Are you sure?
-- NEVER use ">>" or ">" for speaker changes.
-- If speaker changes mid-sentence, split into separate cues at the changeover point.
-- [OFF CAMERA] or [V.O.] — add these tags when a speaker is clearly off-camera or voiceover.
+- Single speaker in a cue: NO dash prefix. Just the text.
+- Two DIFFERENT speakers sharing one cue (allowed when their speech is brief and adjacent): prefix EACH line with "- " (dash space). This uses 2 chars of your 32-char budget per line.
+  CORRECT: "- Are you sure?\n- Absolutely."
+  WRONG: ">> Are you sure?" or ">Are you sure?"
+- NEVER use >> or > for speaker changes.
+- When speakers overlap in timing and can be combined into one 2-line cue without exceeding 32 chars per line, combine them with "- " dashes.
+- If a speaker change happens mid-utterance, split cues at the exact word boundary where the speaker changes (use word timing data to find the exact ms).
 
 ════════════════════════════════════════
-SECTION 4: NBCU FORMATTING RULES (STRICT)
+GRAMMAR & PUNCTUATION
 ════════════════════════════════════════
-- MAXIMUM 32 characters per line (count every character including spaces and brackets)
-- MAXIMUM 2 lines per cue
-- MINIMUM cue duration: 500ms
-- MAXIMUM cue duration: 8 seconds
-- Reading speed: target ~160-180 words per minute. If a cue is too long to read in the allotted time, split it.
-- Minimum gap between cues: 2 frames (~67ms at 29.97fps)
-- Foreign language speech: do NOT translate. Mark as [SPEAKING FRENCH] or appropriate language.
-- Segment long utterances into multiple cues at natural sentence or clause breaks.
-- Never cut a word mid-cue — always break at word boundaries.
-- Prefer breaking at punctuation (comma, period, em-dash) when splitting.
+- Every sentence MUST end with . ? or ! — no exceptions.
+- Fix homophones contextually: to/too/two, there/their/they're, its/it's, your/you're, etc.
+- Preserve natural contractions: gonna, wanna, kinda, don't, can't, I'm, etc.
+- Use commas for natural speech pauses within a sentence.
+- Use em-dash (—) for abrupt cut-offs or strong mid-thought pauses.
+- Use ellipsis (...) ONLY when a speaker trails off and the thought is genuinely incomplete.
+- Capitalize proper nouns, brand names, place names correctly.
+- Do NOT use ALL CAPS for regular dialogue (only for sound/music cues inside brackets).
 
 ════════════════════════════════════════
-SECTION 5: FEW-SHOT EXAMPLES
+SOUND & MUSIC CUES (SDH — MANDATORY)
 ════════════════════════════════════════
-EXAMPLE 1 — Music + Dialogue:
-Input utterance: "[0-3000ms] (no speech, music playing)" + "[3000-8000ms] Speaker A: welcome to the show"
-Output cues:
-{"start":0,"end":3000,"text":"[ ♪ UPBEAT INTRO MUSIC ♪ ]","speaker":null}
-{"start":3000,"end":5500,"text":"Welcome to the show.","speaker":"A"}
+- Detect gaps in speech from the word timing data. If a gap > 2 seconds has no dialogue, insert a sound/music cue.
+- Music: [ ♪ DESCRIPTION ♪ ] — description in ALL CAPS.
+  Examples: [ ♪ UPBEAT MUSIC ♪ ] / [ ♪ ROCK MUSIC ♪ ] / [ ♪ DRAMATIC STING ♪ ]
+- If lyrics: ♪ lyric line ♪ (one line per sung line)
+- Sound effects: [DESCRIPTION IN CAPS] — e.g., [ENGINE REVVING], [DOOR SLAMS], [CROWD CHEERING], [TIRES SCREECHING], [LAUGHS]
+- For long music segments: open cue at music start, close cue at music end.
+- Infer sounds from context: car video → [ENGINE REVVING], interview → [AMBIENT NOISE], etc.
+- Keep sound cues ≤ 32 characters per line.
 
-EXAMPLE 2 — Two speakers in one cue:
-Input: "[5500-7500ms] Speaker A: Are you ready? Speaker B: I was born ready."
-Output cues:
-{"start":5500,"end":7500,"text":"- Are you ready?\\n- I was born ready.","speaker":null}
-
-EXAMPLE 3 — Homophone correction:
-Input: "I went to the store to, and I got there to."
-Output: "I went to the store, too, and I got there, too."
-
-EXAMPLE 4 — Sound effect:
-Input: "[10000-10500ms] (gap in speech, loud bang sound context)"
-Output: {"start":10000,"end":10500,"text":"[GUN FIRES]","speaker":null}
-
-EXAMPLE 5 — Long utterance split:
-Input: "[12000-20000ms] Speaker A: I really think that we need to take a look at what's been happening over the last few months and determine if the direction we're heading is actually the right one for the company."
+════════════════════════════════════════
+EXAMPLES
+════════════════════════════════════════
+EXAMPLE A — Correct timing-anchored split of a long utterance:
+Word data: 12000|12300|I  12350|12500|really  12550|12900|think  12950|13200|that  13250|13600|we  13650|13900|need  ...
+Utterance [12000-20000ms] Speaker A: "I really think that we need to take a look at what's been happening over the last few months."
 Output:
-{"start":12000,"end":15000,"text":"I really think that we need to\ntake a look at what's been happening","speaker":"A"}
-{"start":15000,"end":18000,"text":"over the last few months and determine\nif the direction we're heading","speaker":"A"}
-{"start":18000,"end":20000,"text":"is actually the right one\nfor the company.","speaker":"A"}
+{"start":12000,"end":15200,"text":"I really think that we need\nto take a look at what's been","speaker":"A"}
+{"start":15267,"end":18000,"text":"happening over the last\nfew months.","speaker":"A"}
 
-EXAMPLE 6 — Trailing off / ellipsis:
-Input: Speaker says "I just... I don't know..."
-Output: {"start":X,"end":Y,"text":"I just... I don't know...","speaker":"A"}
+EXAMPLE B — Two speakers combined with dashes:
+Word data: 5500|5800|Are  5850|6000|you  6050|6300|ready  6800|7000|I  7050|7200|was  7250|7500|born  7550|7800|ready
+Utterance [5500-6300ms] Speaker A: "Are you ready?"
+Utterance [6800-7800ms] Speaker B: "I was born ready."
+Output:
+{"start":5500,"end":7800,"text":"- Are you ready?\n- I was born ready.","speaker":null}
+
+EXAMPLE C — Music gap fill:
+Word data shows no words from 27000ms to 32000ms (5-second gap):
+{"start":27000,"end":32000,"text":"[ ♪ UPBEAT MUSIC ♪ ]","speaker":null}
+
+EXAMPLE D — Sound effect:
+Context suggests car engine noise during driving segment with no speech:
+{"start":45000,"end":48000,"text":"[ENGINE REVVING]","speaker":null}
+
+EXAMPLE E — Homophone correction:
+Raw: "I went to the store to and I got there to."
+Corrected: "I went to the store, too,\nand I got there, too."
 
 ════════════════════════════════════════
-SECTION 6: INPUT DATA
+INPUT DATA
 ════════════════════════════════════════
 Detected language: ${language || 'en'}
 
-RAW WORD-LEVEL TRANSCRIPT (with timings in ms):
+WORD-LEVEL TIMING (startMs|endMs|word) — USE THESE FOR ALL TIMECODES:
 ${wordDump}
 
-UTTERANCES WITH SPEAKER LABELS:
+UTTERANCES WITH SPEAKER LABELS (for context and speaker attribution):
 ${utteranceDump}
-${highlightDump ? `\nKEY TERMS/HIGHLIGHTS DETECTED BY AUDIO ANALYSIS (use for context):\n${highlightDump}` : ''}
-${safetySummary ? `\nCONTENT ANALYSIS (may indicate music/sensitive content segments):\n${safetySummary}` : ''}
+${highlightDump ? `\nKEY TERMS FROM AUDIO ANALYSIS:\n${highlightDump}` : ''}
+${safetySummary ? `\nCONTENT SAFETY ANALYSIS (helps identify music/noise segments):\n${safetySummary}` : ''}
 
 ════════════════════════════════════════
-SECTION 7: OUTPUT FORMAT
+OUTPUT FORMAT
 ════════════════════════════════════════
-Return ONLY a valid JSON array. No markdown, no explanation, no code fences, no comments.
-Each element MUST have: {"start": number, "end": number, "text": string, "speaker": string|null}
-- Use \\n (literal backslash-n) for line breaks within 2-line cues.
-- "speaker" should be "A", "B", "C" etc. from utterances, or null for sound/music cues.
-- CRITICALLY: Include ALL sound cues, music cues, and SDH annotations. Do not omit them.
-- CRITICALLY: Fix ALL grammar errors, homophone errors, and missing punctuation.
-- CRITICALLY: Every dialogue sentence must end with terminal punctuation.`;
+Return ONLY a valid JSON array. Zero markdown. Zero explanation. Zero code fences.
+Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
+- \\n for line breaks within 2-line cues (literal backslash-n in JSON)
+- speaker: "A"/"B"/"C" for single-speaker cues, null for multi-speaker or sound cues
+- EVERY line of text ≤ 32 characters — verify before outputting
+- EVERY cue ≤ 2 lines — verify before outputting
+- Start/end MUST be real word timestamps from the data above
+- Include ALL sound cues, music cues, SDH annotations
+- Fix ALL grammar and punctuation`;
 
-  // Retry up to 3 times on rate limit errors (OpenAI TPM)
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -356,21 +360,20 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'You are an expert broadcast closed caption editor. You output ONLY valid JSON arrays. Never output markdown, explanations, or code fences. Follow every instruction precisely.'
+            content: 'You are an expert broadcast closed caption editor. Output ONLY a valid JSON array. No markdown, no explanations, no code fences. Every line of text must be ≤32 characters. Every cue must have ≤2 lines. Every timecode must be anchored to the actual word timing data provided. These are hard constraints — verify each cue before including it.',
           },
           { role: 'user', content: prompt }
         ],
-        temperature: 0.05,
+        temperature: 0.1,
         max_tokens: 16000,
       }),
     });
 
     if (res.status === 429) {
-      // Rate limited — wait 35s and retry
       await new Promise(r => setTimeout(r, 35000));
       continue;
     }
@@ -385,41 +388,33 @@ Each element MUST have: {"start": number, "end": number, "text": string, "speake
   const data = await res.json();
   const content = data.choices[0].message.content.trim();
 
-  // Parse JSON from response
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('OpenAI did not return valid JSON array');
   const cues = JSON.parse(jsonMatch[0]);
-  return { cues, openaiRaw: cues }; // openaiRaw is the direct OpenAI output before any post-processing
+  return { cues, openaiRaw: JSON.parse(JSON.stringify(cues)) };
 }
 
 // Comprehensive QC check
 function runQC(cues) {
   const issues = [];
 
-  // Check if we have any sound/music cues at all for SDH compliance
-  const hasSoundCues = cues.some(c => c.text.startsWith('[') || c.text.includes('♪'));
-
   for (let i = 0; i < cues.length; i++) {
     const c = cues[i];
     const lines = c.text.split('\n');
     const dur = c.end - c.start;
     const charCount = c.text.replace(/\n/g, '').length;
-    const wordsInCue = c.text.split(/\s+/).filter(w => w.length > 0).length;
     const cps = charCount / (dur / 1000);
 
-    // Line length check
     for (let li = 0; li < lines.length; li++) {
       if (lines[li].length > 32) {
         issues.push({ cue: i, type: 'line_too_long', value: `Line ${li + 1}: ${lines[li].length} chars` });
       }
     }
 
-    // Line count check
     if (lines.length > 2) {
       issues.push({ cue: i, type: 'too_many_lines', value: `${lines.length} lines` });
     }
 
-    // Duration checks
     if (dur < 500) {
       issues.push({ cue: i, type: 'cue_too_short', value: `${dur}ms (min 500ms)` });
     }
@@ -427,41 +422,28 @@ function runQC(cues) {
       issues.push({ cue: i, type: 'cue_too_long', value: `${(dur/1000).toFixed(1)}s (max 8s)` });
     }
 
-    // Reading speed: characters per second (target max ~17 CPS for 32-char lines)
-    if (cps > 25 && !c.text.startsWith('[')) {
+    if (cps > 25 && !c.text.startsWith('[') && !c.text.includes('♪')) {
       issues.push({ cue: i, type: 'reading_speed', value: `${cps.toFixed(1)} CPS (too fast)` });
     }
 
-    // Gap / overlap check
     if (i > 0) {
       const gap = c.start - cues[i - 1].end;
       if (gap < 0) {
         issues.push({ cue: i, type: 'overlap', value: `${Math.abs(gap)}ms overlap with cue ${i}` });
       } else if (gap < 67) {
-        issues.push({ cue: i, type: 'gap_too_small', value: `${gap}ms (min 67ms / 2 frames)` });
+        issues.push({ cue: i, type: 'gap_too_small', value: `${gap}ms (min 67ms)` });
       }
     }
 
-    // Missing terminal punctuation on dialogue cues
     const isDialogue = !c.text.startsWith('[') && !c.text.includes('♪') && c.text.trim().length > 0;
     if (isDialogue) {
-      const trimmed = c.text.trim();
-      const lastChar = trimmed[trimmed.length - 1];
-      if (!['.', '?', '!', '…', '"', "'"].includes(lastChar) && !trimmed.endsWith('--') && !trimmed.endsWith('—')) {
+      const lastLine = lines[lines.length - 1].replace(/^- /, '').trim();
+      const lastChar = lastLine[lastLine.length - 1];
+      if (!['.', '?', '!', '…', '"', "'"].includes(lastChar) && !lastLine.endsWith('--') && !lastLine.endsWith('—')) {
         issues.push({ cue: i, type: 'missing_punctuation', value: `Ends with "${lastChar}"` });
       }
     }
 
-    // Multi-speaker cue without dash prefix
-    if (c.speaker === null && lines.length === 2 && !c.text.includes('♪') && !c.text.startsWith('[')) {
-      // Might be a two-speaker cue missing dashes — flag for review
-      const hasDash = lines.every(l => l.startsWith('- '));
-      if (!hasDash) {
-        issues.push({ cue: i, type: 'possible_missing_speaker_dash', value: 'Two lines, no speaker dashes' });
-      }
-    }
-
-    // Empty cue
     if (!c.text || c.text.trim().length === 0) {
       issues.push({ cue: i, type: 'empty_cue', value: 'No text content' });
     }
@@ -484,7 +466,6 @@ Deno.serve(async (req) => {
 
     const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
 
-    // Still processing
     if (transcript.status === 'queued' || transcript.status === 'processing') {
       return Response.json({ status: transcript.status });
     }
@@ -493,17 +474,15 @@ Deno.serve(async (req) => {
       return Response.json({ status: 'error', error: transcript.error || 'Transcription failed' });
     }
 
-    // Build AssemblyAI raw cues (utterance-level, for diagnostic)
     const assemblyRawCues = (transcript.utterances || []).map(u => ({
-      start: u.start,
-      end: u.end,
-      text: u.text,
-      speaker: u.speaker,
+      start: u.start, end: u.end, text: u.text, speaker: u.speaker,
     }));
 
-    // Completed — apply NBCU rules via OpenAI
+    const words = transcript.words || [];
+    const wordIndex = buildWordIndex(words);
+
     const { cues: rawCues, openaiRaw } = await applyNBCURules(
-      transcript.words || [],
+      words,
       transcript.utterances || [],
       transcript.language_code,
       transcript.auto_highlights_result?.results || [],
@@ -511,8 +490,8 @@ Deno.serve(async (req) => {
       OPENAI_API_KEY
     );
 
-    // Hard-enforce formatting constraints GPT may have missed
-    const cues = enforceLineLimits(rawCues);
+    // Post-process: enforce hard limits, fix any remaining violations GPT missed
+    const cues = postProcess(rawCues, wordIndex);
 
     const srt = buildSRT(cues);
     const vtt = buildVTT(cues);
@@ -525,10 +504,7 @@ Deno.serve(async (req) => {
       exports: { srt, vtt, scc },
       qc,
       language: transcript.language_code,
-      diagnostic: {
-        assemblyRawCues,
-        openaiRawCues: openaiRaw,
-      },
+      diagnostic: { assemblyRawCues, openaiRawCues: openaiRaw },
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
