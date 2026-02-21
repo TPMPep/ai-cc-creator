@@ -502,7 +502,7 @@ Deno.serve(async (req) => {
     }));
 
     // Completed — apply NBCU rules via OpenAI
-    const { cues, openaiRaw } = await applyNBCURules(
+    const { cues: rawCues, openaiRaw } = await applyNBCURules(
       transcript.words || [],
       transcript.utterances || [],
       transcript.language_code,
@@ -510,6 +510,9 @@ Deno.serve(async (req) => {
       transcript.content_safety_labels || null,
       OPENAI_API_KEY
     );
+
+    // Hard-enforce formatting constraints GPT may have missed
+    const cues = enforceLineLimits(rawCues);
 
     const srt = buildSRT(cues);
     const vtt = buildVTT(cues);
