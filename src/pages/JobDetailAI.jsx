@@ -57,45 +57,63 @@ export default function JobDetailAI() {
     const currentJob = jobRef.current;
     if (!jobId || !currentJob) return;
     if (currentJob.status === "done" || currentJob.status === "error") return;
-    // Prevent concurrent polls — GPT-4o can take 30-60s
     if (isPollingRef.current) return;
     isPollingRef.current = true;
 
     try {
-      const res = await base44.functions.invoke("pollAICaption", { transcript_id: currentJob.railwayJobId });
-      const data = res.data;
+      // Step 1: Fast check — is AssemblyAI done yet?
+      const checkRes = await base44.functions.invoke("pollAICaption", {
+        transcript_id: currentJob.railwayJobId,
+        mode: "check",
+      });
+      const checkData = checkRes.data;
 
-      if (data.status === "queued" || data.status === "processing") return;
+      if (checkData.status === "queued" || checkData.status === "processing") return;
 
-      if (data.status === "error") {
-        const updates = { status: "error", error: data.error || "Transcription failed" };
+      if (checkData.status === "error") {
+        const updates = { status: "error", error: checkData.error || "Transcription failed" };
         await base44.entities.Job.update(currentJob.id, updates);
         setJob(prev => ({ ...prev, ...updates }));
         if (pollingRef.current) clearTimeout(pollingRef.current);
         return;
       }
 
-      if (data.status === "completed") {
-        const updates = {
-          status: "done",
-          result: {
-            cues: data.cues,
-            srt: data.exports?.srt,
-            vtt: data.exports?.vtt,
-            scc: data.exports?.scc,
-            qc: data.qc,
-            language: data.language,
-            diagnostic: data.diagnostic || null,
-          },
-          durationMs: data.cues?.length > 0 ? data.cues[data.cues.length - 1].end : 0,
-          issuesCount: data.qc?.issuesCount || 0,
-          lastPolledAt: new Date().toISOString(),
-        };
-        await base44.entities.Job.update(currentJob.id, updates);
-        setJob(prev => ({ ...prev, ...updates }));
-        setCues(data.cues || []);
+      if (checkData.status === "completed") {
+        // Step 2: AssemblyAI is done — kick off GPT processing.
+        // This saves directly to DB, so even if frontend disconnects, result is preserved.
+        // We fire and check the DB for the result instead of waiting on the response.
+        base44.functions.invoke("pollAICaption", {
+          transcript_id: currentJob.railwayJobId,
+          mode: "process",
+          job_db_id: currentJob.id,
+        }).then(async (processRes) => {
+          if (processRes.data?.status === "completed") {
+            // Reload from DB (backend already saved it)
+            const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+            if (jobs.length > 0 && jobs[0].status === "done") {
+              setJob(jobs[0]);
+              setCues(jobs[0].result?.cues || []);
+              toast.success("Captions ready!");
+            }
+          }
+        }).catch(err => console.error("Process error:", err));
+
+        // While GPT is processing, poll the DB every 15s to detect when backend saved the result
+        const dbPollInterval = setInterval(async () => {
+          const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+          if (jobs.length > 0 && jobs[0].status === "done") {
+            clearInterval(dbPollInterval);
+            setJob(jobs[0]);
+            setCues(jobs[0].result?.cues || []);
+            toast.success("Captions ready!");
+          } else if (jobs.length > 0 && jobs[0].status === "error") {
+            clearInterval(dbPollInterval);
+            setJob(jobs[0]);
+          }
+        }, 15000);
+
+        // Stop the AssemblyAI polling loop — GPT is now running
         if (pollingRef.current) clearTimeout(pollingRef.current);
-        toast.success("Captions ready!");
       }
     } catch (err) {
       console.error("Poll error:", err);
