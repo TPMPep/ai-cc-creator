@@ -90,7 +90,10 @@ ${highlightDump}`;
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('OpenAI did not return valid JSON');
 
-    return Response.json({ cues: JSON.parse(jsonMatch[0]) });
+    const cues = JSON.parse(jsonMatch[0]);
+    console.log(`[BATCH ${batch_index}] GPT OUTPUT:`, JSON.stringify(cues, null, 2));
+    
+    return Response.json({ cues });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
