@@ -119,6 +119,73 @@ function buildSCC(cues) {
   return lines.join('\n');
 }
 
+// Hard-enforce 32-char line limit and 2-line/8s cue limit on GPT output
+// This is a safety net — GPT doesn't always follow formatting rules precisely
+function enforceLineLimits(cues) {
+  const MAX_CHARS = 32;
+  const MAX_LINES = 2;
+  const MAX_DUR = 8000;
+  const MIN_DUR = 500;
+  const result = [];
+
+  for (const cue of cues) {
+    // Split text into words, respecting existing \n as soft hints
+    const rawLines = cue.text.split('\n');
+    // Re-flow all words respecting 32-char max
+    const words = rawLines.join(' ').split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) { result.push(cue); continue; }
+
+    // Pack words into lines of max 32 chars
+    const packedLines = [];
+    let currentLine = '';
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (candidate.length <= MAX_CHARS) {
+        currentLine = candidate;
+      } else {
+        if (currentLine) packedLines.push(currentLine);
+        // If a single word is longer than 32 chars, truncate it (edge case)
+        currentLine = word.length > MAX_CHARS ? word.substring(0, MAX_CHARS) : word;
+      }
+    }
+    if (currentLine) packedLines.push(currentLine);
+
+    // Now chunk packedLines into cues of max 2 lines
+    const totalDur = cue.end - cue.start;
+    const chunkCount = Math.ceil(packedLines.length / MAX_LINES);
+    const durPerChunk = Math.max(MIN_DUR, Math.floor(totalDur / chunkCount));
+
+    for (let i = 0; i < packedLines.length; i += MAX_LINES) {
+      const chunk = packedLines.slice(i, i + MAX_LINES);
+      const chunkIndex = Math.floor(i / MAX_LINES);
+      const chunkStart = cue.start + chunkIndex * durPerChunk;
+      const chunkEnd = (chunkIndex === chunkCount - 1)
+        ? cue.end
+        : Math.min(cue.start + (chunkIndex + 1) * durPerChunk, cue.end);
+
+      result.push({
+        start: chunkStart,
+        end: Math.max(chunkStart + MIN_DUR, chunkEnd),
+        text: chunk.join('\n'),
+        speaker: cue.speaker,
+      });
+    }
+  }
+
+  // Fix any overlaps introduced by min duration expansion
+  for (let i = 1; i < result.length; i++) {
+    if (result[i].start < result[i - 1].end) {
+      result[i].start = result[i - 1].end + 67;
+      if (result[i].end <= result[i].start) {
+        result[i].end = result[i].start + MIN_DUR;
+      }
+    }
+  }
+
+  return result;
+}
+
 // Apply NBCU rules via OpenAI
 async function applyNBCURules(rawWords, utterances, language, highlights, contentSafety, apiKey) {
   // Build raw transcript text with timing info — send more words for longer videos
