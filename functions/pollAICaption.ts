@@ -189,7 +189,8 @@ Ensure all cues follow the 32-char/line, 2-line max rules. Split long utterances
   // Parse JSON from response
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('OpenAI did not return valid JSON array');
-  return JSON.parse(jsonMatch[0]);
+  const cues = JSON.parse(jsonMatch[0]);
+  return { cues, openaiRaw: cues }; // openaiRaw is the direct OpenAI output before any post-processing
 }
 
 // Simple QC check
