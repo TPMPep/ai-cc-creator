@@ -163,7 +163,7 @@ export default function JobDetailAI() {
     if (job.status === "done" || job.status === "error") { setElapsedSec(0); return; }
 
     const startTime = new Date(job.created_date).getTime();
-    const tick = () => setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
+    const tick = () => setElapsedSec(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
