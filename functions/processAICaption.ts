@@ -379,10 +379,16 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Save the plan to DB (segments + gaps + highlights + raw cues)
+      // Strip word-level detail from batches before saving — only need start/end/text/speaker for GPT
+      const slimBatches = batches.map(batch =>
+        batch.map(({ start, end, text, speaker }) => ({ start, end, text, speaker }))
+      );
+      const slimAssemblyRawCues = assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker }));
+
+      // Save the plan to DB
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         result: {
-          _plan: { batches, gaps, highlights, language: transcript.language_code, assemblyRawCues },
+          _plan: { batches: slimBatches, gaps, highlights, language: transcript.language_code, assemblyRawCues: slimAssemblyRawCues },
           partial_cues: [],
         },
         lastPolledAt: new Date().toISOString(),
