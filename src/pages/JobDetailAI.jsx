@@ -41,6 +41,10 @@ export default function JobDetailAI() {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
         setCues(jobs[0].result?.cues || []);
+        // Kick off polling if job is still processing
+        if (jobs[0].status === "processing" || jobs[0].status === "queued") {
+          jobRef.current = jobs[0];
+        }
       }
       setLoading(false);
     };
