@@ -366,8 +366,8 @@ Deno.serve(async (req) => {
     const highlights = transcript.auto_highlights_result?.results || [];
     const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-    // Build all batches (just the structure, not processing them all now)
-    const BATCH_WINDOW_MS = 5 * 60 * 1000;
+    // Build all batches — use 2-minute windows to stay well under function time limits
+    const BATCH_WINDOW_MS = 2 * 60 * 1000;
     const firstStart = rawSegments.length > 0 ? rawSegments[0].start : 0;
     const batches = [];
     let batchStart = 0;
