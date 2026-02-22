@@ -375,6 +375,11 @@ export default function JobDetailAI() {
         {/* Done */}
         {isDone && (
           <>
+            {/* Pipeline health summary */}
+            <div className="mb-4">
+              <PipelineLog pipelineLog={job?.pipelineLog} jobStatus={job?.status} />
+            </div>
+
             {/* Sticky top section: video + sidebar — never scrolls away */}
             <div className="sticky top-14 z-20 bg-zinc-950 pb-2">
               <div className="grid grid-cols-10 gap-6">
