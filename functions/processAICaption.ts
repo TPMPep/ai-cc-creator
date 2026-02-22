@@ -142,6 +142,20 @@ function findGaps(utterances, totalDurationMs) {
   return gaps;
 }
 
+// ─── EXTRACT AUDIO EVENTS ────────────────────────────────────────────────────
+// AssemblyAI audio_events returns detected non-speech sounds with timestamps.
+function extractAudioEvents(transcript) {
+  const events = [];
+  const raw = transcript.audio_events_result?.results || [];
+  for (const ev of raw) {
+    // Each event: { label, confidence, start, end }
+    if (ev.confidence >= 0.6) {
+      events.push({ start: ev.start, end: ev.end, label: ev.label, confidence: ev.confidence });
+    }
+  }
+  return events;
+}
+
 // ─── GPT POLISH (single batch, server-side) ──────────────────────────────────
 
 async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, batchIndex, totalBatches) {
