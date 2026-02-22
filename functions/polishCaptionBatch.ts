@@ -66,13 +66,13 @@ ${highlightDump}`;
         method: 'POST',
         headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue.' },
             { role: 'user', content: prompt },
           ],
           temperature: 0.1,
-          max_tokens: 8000,
+          max_tokens: 4000,
         }),
       });
 
@@ -91,7 +91,7 @@ ${highlightDump}`;
     if (!jsonMatch) throw new Error('OpenAI did not return valid JSON');
 
     const cues = JSON.parse(jsonMatch[0]);
-    console.log(`[BATCH ${batch_index}] GPT OUTPUT:`, JSON.stringify(cues, null, 2));
+    console.log(`[BATCH ${batch_index + 1}/${total_batches}] OK — ${cues.length} cues returned`);
     
     return Response.json({ cues });
 
