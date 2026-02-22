@@ -153,7 +153,22 @@ export default function DiagnosticAI() {
                       <span className="text-zinc-700 text-[10px]">↓</span>
                       <span className={`block ${isActive ? "text-blue-400" : "text-zinc-500"}`}>{msToTimecode(row.final.end)}</span>
                     </td>
-                    {/* AssemblyAI */}
+                    {/* Utterances (word-level from AssemblyAI) */}
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="bg-amber-950/20 border border-amber-800/20 rounded p-2 min-h-[36px]">
+                        {row.utterances.length === 0 ? (
+                          <span className="text-zinc-700 italic">—</span>
+                        ) : (
+                          row.utterances.map((c, j) => (
+                            <p key={j} className="text-amber-200 leading-relaxed mb-1 last:mb-0">
+                              {c.speaker && <span className="text-amber-600 mr-1">[{c.speaker}]</span>}
+                              {c.text}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                    {/* AssemblyAI SRT */}
                     <td className="px-3 py-2.5 align-top">
                       <div className="bg-zinc-800/40 rounded p-2 min-h-[36px]">
                         {row.assembly.length === 0 ? (
