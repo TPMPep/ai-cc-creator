@@ -268,10 +268,16 @@ MERGING CUES (IMPORTANT):
 19. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
 
 ═══════════════════════════════════════
-SPEAKER FORMATTING:
+SPEAKER FORMATTING (CRITICAL — WATCH FOR SPEAKER CHANGES MID-CUE):
 ═══════════════════════════════════════
 15. Single-speaker cue: no dash prefix. Set speaker field to "A", "B", or "C".
-16. Two-speaker cue: prefix EACH speaker's line with "- " (counts as 2 of your 32 chars). Set speaker to null.
+16. Two-speaker cue (WHEN TWO DIFFERENT SPEAKERS APPEAR IN THE SAME CUE):
+    - This happens when the input segments assigned to this timecode window have DIFFERENT speaker labels (e.g., one segment is SPEAKER=B and the next is SPEAKER=A).
+    - You MUST prefix EACH speaker's line with "- " (counts as 2 of your 32 chars).
+    - Set speaker field to null.
+    - Example: If segment has speaker B saying "off on us." and next segment has speaker A saying "Has it done? Well," and they overlap into one cue, output:
+      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done? Well,", "speaker": null}
+    - NEVER output a cue where two different speakers' words appear WITHOUT the "- " dash prefix on each line.
 
 ═══════════════════════════════════════
 FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
