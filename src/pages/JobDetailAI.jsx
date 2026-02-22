@@ -121,7 +121,7 @@ export default function JobDetailAI() {
       if (jobs.length > 0 && jobs[0].status === "done") {
         setJob(jobs[0]);
         setCues(jobs[0].result?.cues || []);
-        toast.success("Captions ready!");
+        toast.success("Captions ready! All pipeline steps completed.");
       }
     } catch (err) {
       console.error("Batch processing error:", err);
