@@ -289,19 +289,27 @@ export default function JobDetailAI() {
               </div>
             </div>
 
-            {/* Stage hints — based on real elapsed time from job creation, not page load */}
+            {/* Stage hints — based on pipeline log, not elapsed time */}
             <div className="flex items-center justify-center gap-2 mb-5">
-              {elapsedSec < 90 ? (
-                <span className="inline-flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-full px-3 py-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
-                  Stage 1 of 2 — transcribing audio
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 text-xs text-blue-400/80 bg-blue-400/10 border border-blue-400/20 rounded-full px-3 py-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
-                  Stage 2 of 2 — applying NBCU caption rules
-                </span>
-              )}
+              {(() => {
+                const log = job?.pipelineLog || [];
+                const hasTranscribeStep = log.some(l => l.step === '1_transcribe');
+                const isReprocess = log.some(l => l.detail?.includes('Reprocess'));
+                if (!hasTranscribeStep) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-full px-3 py-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
+                      Stage 1 of 2 — transcribing audio
+                    </span>
+                  );
+                }
+                return (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-blue-400/80 bg-blue-400/10 border border-blue-400/20 rounded-full px-3 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                    {isReprocess ? 'Re-running GPT caption formatting (no new transcription charge)' : 'Stage 2 of 2 — applying NBCU caption rules'}
+                  </span>
+                );
+              })()}
             </div>
 
             <p className="text-xs text-zinc-600 mb-4">This page auto-updates — no need to refresh.</p>
