@@ -170,7 +170,7 @@ export default function JobDetailAI() {
     tick();
 
     return () => { if (pollingRef.current) clearTimeout(pollingRef.current); };
-  }, [job?.id, doPoll]);
+  }, [job?.id, job?.status, doPoll]);
 
   const handleSaveTitle = async () => {
     if (!titleDraft.trim()) return;
