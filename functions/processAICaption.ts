@@ -225,12 +225,26 @@ SPEAKER FORMATTING:
 16. Two-speaker cue: prefix EACH speaker's line with "- " (counts as 2 of your 32 chars). Set speaker to null.
 
 ═══════════════════════════════════════
+FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
+═══════════════════════════════════════
+19. If a cue contains speech in a language OTHER than the primary language (${language || 'en'}), you MUST:
+    a. REPLACE the spoken text entirely — do NOT transcribe or transliterate the foreign words.
+    b. Output ONLY the descriptor: [SPEAKING FOREIGN LANGUAGE]
+    c. Keep the original start/end timecodes.
+    d. Set speaker to the appropriate letter (A/B/C) as normal.
+    e. Examples:
+       - Spanish in an English show → [SPEAKING FOREIGN LANGUAGE]
+       - Brief foreign phrase mid-sentence → split into separate cue: [SPEAKING FOREIGN LANGUAGE]
+    f. EXCEPTION: If the entire program IS in a foreign language (i.e., language detected = non-English and consistent throughout), transcribe normally — do NOT apply this rule.
+20. If a speaker switches back and forth between English and a foreign language, apply rule 19 to each foreign-language segment individually.
+
+═══════════════════════════════════════
 SOUND/MUSIC CUES:
 ═══════════════════════════════════════
-18. Music: [♪ DESCRIPTION ♪] — description in ALL CAPS, total cue ≤32 chars
-19. Sound effects: [SOUND EFFECT IN CAPS] — total ≤32 chars
-20. ONLY insert into silence gaps provided. NEVER displace dialogue.
-21. Only add sound cues when context strongly implies sound. Do NOT guess.
+21. Music: [♪ DESCRIPTION ♪] — description in ALL CAPS, total cue ≤32 chars
+22. Sound effects: [SOUND EFFECT IN CAPS] — total ≤32 chars
+23. ONLY insert into silence gaps provided. NEVER displace dialogue.
+24. Only add sound cues when context strongly implies sound. Do NOT guess.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT — STRICT JSON:
