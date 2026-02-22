@@ -87,22 +87,56 @@ function buildSCC(cues) {
 // ─── PRE-SEGMENT ─────────────────────────────────────────────────────────────
 
 function buildRawSegments(utterances) {
-  const MAX_DUR = 7500;
+  const MAX_DUR = 7500;      // hard cap: never exceed 7.5 seconds per segment
+  const SILENCE_BREAK = 800; // break at silences ≥ 800ms within an utterance
+  const MIN_WORDS = 3;       // don't create a segment with fewer than 3 words unless it's the only option
+
   const segments = [];
+
   for (const utt of utterances) {
     const words = utt.words || [];
     if (!words.length) {
       segments.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker, words });
       continue;
     }
+
+    // Find natural break points: large silence gaps between consecutive words
+    const breakPoints = new Set(); // indices AFTER which to break
+    for (let i = 0; i < words.length - 1; i++) {
+      const gap = words[i + 1].start - words[i].end;
+      if (gap >= SILENCE_BREAK) {
+        breakPoints.add(i);
+      }
+    }
+
+    // Build chunks, respecting both silence breaks and MAX_DUR
     let chunkStart = 0;
     while (chunkStart < words.length) {
       let chunkEnd = chunkStart;
       const firstWordStart = words[chunkStart].start;
+
+      // Find the furthest word we can include without exceeding MAX_DUR
+      let maxByTime = chunkStart;
       for (let j = chunkStart; j < words.length; j++) {
-        if (words[j].end - firstWordStart <= MAX_DUR) chunkEnd = j;
+        if (words[j].end - firstWordStart <= MAX_DUR) maxByTime = j;
         else break;
       }
+
+      // Prefer to break at a silence boundary within the allowed time range
+      // Find the LAST silence break point that falls within [chunkStart, maxByTime)
+      let breakAt = -1;
+      for (let j = chunkStart; j < maxByTime; j++) {
+        if (breakPoints.has(j)) breakAt = j;
+      }
+
+      if (breakAt >= chunkStart && (breakAt - chunkStart + 1) >= MIN_WORDS) {
+        // Break at the natural silence
+        chunkEnd = breakAt;
+      } else {
+        // No natural break found — use time-based limit
+        chunkEnd = maxByTime;
+      }
+
       const chunkWords = words.slice(chunkStart, chunkEnd + 1);
       segments.push({
         start: chunkWords[0].start,
