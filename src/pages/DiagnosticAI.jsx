@@ -113,8 +113,9 @@ export default function DiagnosticAI() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-6 mb-4 text-xs">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-zinc-700 inline-block" /> AssemblyAI Raw</span>
+      <div className="flex items-center gap-6 mb-4 text-xs flex-wrap">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-900/40 inline-block border border-amber-700/40" /> AssemblyAI Utterances</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-zinc-700 inline-block" /> AssemblyAI SRT (GPT input)</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-900/60 inline-block border border-indigo-700/40" /> OpenAI Reformatted</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-900/40 inline-block border border-emerald-700/40" /> Final Output</span>
         {assemblyCues.length === 0 && (
