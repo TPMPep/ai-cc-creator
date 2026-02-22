@@ -446,7 +446,8 @@ Deno.serve(async (req) => {
       const rawSegments = buildRawSegments(utterances);
       const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
-      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
+      // Store full utterances including words array so we can reprocess without re-calling AssemblyAI
+      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words || [] }));
 
       const BATCH_SIZE = 20;
       const batches = [];
