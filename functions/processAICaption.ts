@@ -405,9 +405,11 @@ Deno.serve(async (req) => {
         speaker: u.speaker 
       }));
 
+      // Fetch existing pipelineLog to append
+      const existingJob = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1).catch(() => []);
+      const existingLog = (existingJob[0]?.pipelineLog) || [];
       const finalLog = { step: '3_finalize', status: 'ok', detail: `Final enforce done. ${cues.length} cues. QC issues: ${qc.issuesCount}.`, ts: new Date().toISOString() };
 
-      // Store cues, intermediate data for diagnostics, and QC; exports are generated on-demand
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
@@ -420,7 +422,7 @@ Deno.serve(async (req) => {
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
         issuesCount: qc.issuesCount || 0,
         lastPolledAt: new Date().toISOString(),
-        pipelineLog: [finalLog],
+        pipelineLog: [...existingLog, finalLog],
       });
 
       return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
