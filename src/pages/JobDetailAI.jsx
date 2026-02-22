@@ -99,10 +99,12 @@ export default function JobDetailAI() {
           const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
           const batchResult = await callGPTBatch(batch, batchGaps, language, highlights, i, totalBatches);
           allPolishedCues.push(...batchResult);
-          // Log GPT batch progress to DB so it's visible in pipeline log
-          await base44.entities.Job.update(currentJob.id, {
-            pipelineLog: [{ step: `2_gpt_batch_${i + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${i + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() }],
-          }).catch(() => {});
+          // Refresh job to get latest pipelineLog, then append this batch's entry
+            const freshJobs = await base44.entities.Job.filter({ id: currentJob.id }, "-created_date", 1).catch(() => []);
+            const existingLog = freshJobs[0]?.pipelineLog || [];
+            await base44.entities.Job.update(currentJob.id, {
+              pipelineLog: [...existingLog, { step: `2_gpt_batch_${i + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${i + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() }],
+            }).catch(() => {});
           if (i < totalBatches - 1) await new Promise(r => setTimeout(r, 1500));
         }
 
