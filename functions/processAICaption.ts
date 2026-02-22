@@ -209,8 +209,20 @@ CHARACTER/LINE RULES (BROADCAST CRITICAL):
 9. Longer segments: use 2 lines, breaking at a natural syntactic boundary.
 
 ═══════════════════════════════════════
-LINE BREAK STRATEGY (readability):
+SEGMENTATION STRATEGY (sentence-first):
 ═══════════════════════════════════════
+PRIMARY RULE: Each cue should contain ONE COMPLETE SENTENCE when possible.
+- A sentence ends with . ? ! … or — (terminal punctuation)
+- If a sentence is short (≤4 words, ≤500ms), place it alone in its own cue. Do NOT combine it with the next sentence.
+- Only merge two sentences into one cue if BOTH are very short AND they are continuations of the same idea AND combined duration ≤7s AND fits 2 lines ≤32 chars.
+- ONLY split a sentence across two cues if that one sentence exceeds 7000ms OR won't fit in 2 lines ≤32 chars each. When you split, break at a clause or phrase boundary, never mid-phrase.
+- WRONG: "Come on over, guys. Good to\nsee you. Thank you for letting me try out" (splits "try out" from its sentence) — should be: cue 1 = "Come on over, guys." cue 2 = "Good to see you." cue 3 = "Thank you for letting me try out" (complete sentence)
+- WRONG: Putting just "Chris and George" in one cue if earlier cue says "This is Chris and George" — keep the sentence together
+
+═══════════════════════════════════════
+LINE BREAK STRATEGY WITHIN A CUE (2-line formatting):
+═══════════════════════════════════════
+When a single sentence must span 2 lines within one cue:
 - Break AFTER: comma, conjunction (and/but/or/so/because), or at clause boundary
 - Break BEFORE: verb phrase, prepositional phrase when it's a natural pause point
 - Keep subject + verb together on same line when possible
