@@ -396,15 +396,20 @@ Deno.serve(async (req) => {
 
     // ── START: fetch transcript, build plan, save to DB, kick off batch 0 ──
     if (action === 'start') {
-      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+      const [transcript, srtText] = await Promise.all([
+        getTranscript(transcript_id, ASSEMBLYAI_API_KEY),
+        getAssemblyAISRT(transcript_id, ASSEMBLYAI_API_KEY),
+      ]);
       if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
 
       const utterances = transcript.utterances || [];
-      const rawSegments = buildRawSegments(utterances);
+      const srtCues = parseSRT(srtText);
+      const rawSegments = mapSpeakers(srtCues, utterances);
       const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
-      // Store full utterances including words array so we can reprocess without re-calling AssemblyAI
+      // Store utterances (with words) for reprocessing, and raw SRT cues for diagnostic
       const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words || [] }));
+      const assemblySRTCues = rawSegments; // SRT cues with speakers mapped
 
       const BATCH_SIZE = 20;
       const batches = [];
@@ -412,9 +417,8 @@ Deno.serve(async (req) => {
         batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+      const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. SRT: ${srtCues.length} cues, ${utterances.length} utterances for speakers → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
 
-      // Save the full processing plan to DB so server can resume without re-fetching transcript
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         pipelineLog: [prepareLog],
         processingPlan: {
@@ -423,12 +427,12 @@ Deno.serve(async (req) => {
           highlights,
           language: transcript.language_code,
           assemblyRawCues,
-          polishedCues: [],  // accumulates as batches complete
+          assemblySRTCues,
+          polishedCues: [],
           totalBatches: batches.length,
         },
       });
 
-      // Kick off batch 0 asynchronously (fire and forget — server carries it forward)
       base44.functions.invoke('processAICaption', {
         transcript_id,
         job_db_id,
