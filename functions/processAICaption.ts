@@ -158,14 +158,23 @@ function extractAudioEvents(transcript) {
 
 // ─── GPT POLISH (single batch, server-side) ──────────────────────────────────
 
-async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, batchIndex, totalBatches) {
+async function polishBatchWithGPT(segments, gaps, language, highlights, audioEvents, apiKey, batchIndex, totalBatches) {
   const segmentInput = segments.map((s, i) =>
     `[${i}] START=${s.start}ms END=${s.end}ms SPEAKER=${s.speaker || 'null'}\nTEXT: ${s.text}`
   ).join('\n\n');
 
   const gapInput = gaps.length > 0
-    ? 'SILENCE GAPS (insert sound/music cues here if applicable):\n' +
+    ? 'SILENCE GAPS:\n' +
       gaps.map(g => `${g.start}ms → ${g.end}ms (${Math.round((g.end - g.start)/1000)}s gap)`).join('\n')
+    : '';
+
+  // Filter audio events relevant to this batch window
+  const batchStart = segments[0]?.start ?? 0;
+  const batchEnd = segments[segments.length - 1]?.end ?? 0;
+  const batchEvents = (audioEvents || []).filter(e => e.start >= batchStart - 5000 && e.start <= batchEnd + 5000);
+  const audioEventInput = batchEvents.length > 0
+    ? 'DETECTED AUDIO EVENTS (from audio analysis — these are REAL, not guesses):\n' +
+      batchEvents.map(e => `${e.start}ms → ${e.end}ms: ${e.label} (confidence: ${Math.round(e.confidence * 100)}%)`).join('\n')
     : '';
 
   const highlightDump = highlights && highlights.length > 0
