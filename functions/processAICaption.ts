@@ -245,6 +245,15 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
   return JSON.parse(jsonMatch[0]);
 }
 
+// ─── STRIP SPEAKER LABELS FROM TEXT ─────────────────────────────────────────
+// GPT sometimes leaks [A], [B], [C] into the text field — strip them out
+function cleanCueText(text) {
+  // Remove leading [A], [B], [C], [SPEAKER_A] etc. from each line
+  return text.split('\n').map(line =>
+    line.replace(/^\s*\[[A-Z](?:PEAKER_[A-Z])?\]\s*/g, '').trimStart()
+  ).join('\n');
+}
+
 // ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
 
 function finalEnforce(cues) {
