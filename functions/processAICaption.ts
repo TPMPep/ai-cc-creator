@@ -580,7 +580,7 @@ Deno.serve(async (req) => {
       const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
 
       // Call GPT for this batch
-      const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlights, OPENAI_API_KEY, batchIndex, totalBatches);
+      const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlights, audioEvents, OPENAI_API_KEY, batchIndex, totalBatches);
 
       // Append results and update log
       const newPolishedCues = [...polishedCues, ...batchResult];
