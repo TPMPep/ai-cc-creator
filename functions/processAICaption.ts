@@ -430,7 +430,7 @@ Deno.serve(async (req) => {
       // Append results and update log
       const newPolishedCues = [...polishedCues, ...batchResult];
       const existingLog = job.pipelineLog || [];
-      const batchLog = { step: `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${batchIndex + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() };
+      const batchLog = { step: `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, status: 'ok', detail: `gpt-4o batch ${batchIndex + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         pipelineLog: [...existingLog, batchLog],
