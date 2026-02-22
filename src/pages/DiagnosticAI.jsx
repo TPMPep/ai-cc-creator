@@ -17,8 +17,7 @@ function msToTimecode(ms) {
 }
 
 // Align rows: assign each assembly/openai cue to the final cue it overlaps MOST with (no duplicates)
-function alignRows(assemblyCues, openaiCues, finalCues) {
-  // For each source cue, find the final cue with maximum overlap and assign it there only
+function alignRows(assemblyCues, openaiCues, finalCues, utterances) {
   function assignBestMatch(sourceCues) {
     const assignments = new Array(finalCues.length).fill(null).map(() => []);
     for (const src of sourceCues) {
@@ -34,11 +33,13 @@ function alignRows(assemblyCues, openaiCues, finalCues) {
     return assignments;
   }
 
+  const utteranceAssigned = assignBestMatch(utterances || []);
   const assemblyAssigned = assignBestMatch(assemblyCues);
   const openaiAssigned = assignBestMatch(openaiCues);
 
   return finalCues.map((final, i) => ({
     final,
+    utterances: utteranceAssigned[i],
     assembly: assemblyAssigned[i],
     openai: openaiAssigned[i],
   }));
