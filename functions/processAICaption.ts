@@ -84,107 +84,51 @@ function buildSCC(cues) {
   return lines.join('\n');
 }
 
-// ─── PRE-SEGMENT ─────────────────────────────────────────────────────────────
-// Build caption-sized segments directly from the flat word list.
-// This avoids the problem of AssemblyAI returning one giant utterance block.
-//
-// Break rules (in priority order):
-//   1. Speaker change (from utterance map)
-//   2. Silence gap ≥ 500ms between consecutive words
-//   3. Sentence-ending punctuation (., ?, !, …) — excluding abbreviations
-//   4. Max 10 words OR max 5 seconds — whichever comes first
-//   5. Minimum 2 words before any break (no orphan single words)
+// ─── FETCH ASSEMBLYAI SRT ────────────────────────────────────────────────────
+async function getAssemblyAISRT(transcriptId, apiKey) {
+  const res = await fetch(`${ASSEMBLYAI_BASE}/transcript/${transcriptId}/srt`, {
+    headers: { 'authorization': apiKey },
+  });
+  if (!res.ok) throw new Error(`AssemblyAI SRT fetch failed: ${res.status}`);
+  return res.text();
+}
 
-function buildRawSegments(utterances) {
-  const MAX_DUR = 5000;
-  const SILENCE_BREAK = 500;
-  const MAX_WORDS = 10;
-  const MIN_WORDS = 2;
+// ─── PARSE SRT INTO CUE OBJECTS ──────────────────────────────────────────────
+function parseSRT(srtText) {
+  const cues = [];
+  const blocks = srtText.trim().split(/\n\n+/);
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 3) continue;
+    // lines[0] = index, lines[1] = timecode, lines[2+] = text
+    const tcMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+    if (!tcMatch) continue;
+    const toMs = (h, m, s, ms) => (+h * 3600 + +m * 60 + +s) * 1000 + +ms;
+    const start = toMs(tcMatch[1], tcMatch[2], tcMatch[3], tcMatch[4]);
+    const end = toMs(tcMatch[5], tcMatch[6], tcMatch[7], tcMatch[8]);
+    const text = lines.slice(2).join(' ').trim();
+    if (text) cues.push({ start, end, text, speaker: null });
+  }
+  return cues;
+}
 
-  // Flatten all words from all utterances into one list, tagging each with speaker
-  const allWords = [];
-  for (const utt of utterances) {
-    const words = utt.words || [];
-    if (!words.length) {
-      // No word-level data — treat utterance as a single pseudo-word
-      allWords.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker });
-    } else {
-      for (const w of words) {
-        allWords.push({ ...w, speaker: utt.speaker });
+// ─── MAP SPEAKERS ONTO SRT CUES ──────────────────────────────────────────────
+// For each SRT cue, find the utterance with the most overlap and assign its speaker.
+function mapSpeakers(srtCues, utterances) {
+  return srtCues.map(cue => {
+    let bestSpeaker = null;
+    let bestOverlap = 0;
+    for (const utt of utterances) {
+      const overlapStart = Math.max(cue.start, utt.start);
+      const overlapEnd = Math.min(cue.end, utt.end);
+      const overlap = overlapEnd - overlapStart;
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestSpeaker = utt.speaker || null;
       }
     }
-  }
-
-  if (!allWords.length) return [];
-
-  const segments = [];
-
-  // Determine forced break points AFTER word index i
-  const forceBreak = new Set();
-  for (let i = 0; i < allWords.length - 1; i++) {
-    const w = allWords[i];
-    const next = allWords[i + 1];
-
-    // Speaker change
-    if (next.speaker !== w.speaker) { forceBreak.add(i); continue; }
-
-    // Silence gap
-    const gap = next.start - w.end;
-    if (gap >= SILENCE_BREAK) { forceBreak.add(i); continue; }
-
-    // Sentence-ending punctuation (not abbreviations)
-    const txt = w.text;
-    if (/[.?!…]$/.test(txt) && !/^(Mr|Mrs|Ms|Dr|Sr|Jr|vs|etc|St|Ave|Blvd)\.$/.test(txt)) {
-      forceBreak.add(i);
-    }
-  }
-
-  let chunkStart = 0;
-  while (chunkStart < allWords.length) {
-    const firstWord = allWords[chunkStart];
-    let chunkEnd = chunkStart;
-
-    for (let j = chunkStart; j < allWords.length; j++) {
-      const dur = allWords[j].end - firstWord.start;
-      const wordCount = j - chunkStart + 1;
-      chunkEnd = j;
-
-      const isNaturalBreak = forceBreak.has(j);
-      const mustBreak = dur > MAX_DUR || wordCount >= MAX_WORDS;
-
-      if (isNaturalBreak && wordCount >= MIN_WORDS) {
-        break; // clean natural break
-      }
-
-      if (mustBreak) {
-        // Try to find a nearby earlier natural break point
-        let bestBreak = -1;
-        for (let k = j - 1; k >= chunkStart + MIN_WORDS - 1; k--) {
-          if (forceBreak.has(k)) { bestBreak = k; break; }
-        }
-        chunkEnd = bestBreak >= chunkStart + MIN_WORDS - 1 ? bestBreak : j;
-        break;
-      }
-
-      if (j === allWords.length - 1) {
-        chunkEnd = j;
-        break;
-      }
-    }
-
-    const chunk = allWords.slice(chunkStart, chunkEnd + 1);
-    // Speaker: use the speaker of the first word; if mixed, null
-    const speakers = [...new Set(chunk.map(w => w.speaker))];
-    segments.push({
-      start: chunk[0].start,
-      end: chunk[chunk.length - 1].end,
-      text: chunk.map(w => w.text).join(' '),
-      speaker: speakers.length === 1 ? speakers[0] : null,
-    });
-    chunkStart = chunkEnd + 1;
-  }
-
-  return segments;
+    return { ...cue, speaker: bestSpeaker };
+  });
 }
 
 function findGaps(utterances, totalDurationMs) {
