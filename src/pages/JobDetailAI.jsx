@@ -249,6 +249,9 @@ export default function JobDetailAI() {
           <div className="flex items-center gap-2">
             {isDone && (
               <>
+                <Button size="sm" variant="outline" onClick={handleReprocess} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reprocess
+                </Button>
                 <Link to={createPageUrl("DiagnosticAI") + `?jobId=${job.id}`}>
                   <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
                     <FlaskConical className="w-3.5 h-3.5 mr-1.5" /> Diagnostic
