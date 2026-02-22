@@ -451,70 +451,20 @@ Deno.serve(async (req) => {
       const savedCues = job.result?.assemblyRawCues || [];
       if (!savedCues.length) return Response.json({ error: 'No saved AssemblyAI data found. You must reprocess from AssemblyAI.' }, { status: 400 });
 
-      // Check if we have word-level data saved
-      const hasWordData = savedCues.some(c => c.words && c.words.length > 0);
-      
-      // If no word-level data saved, we need to re-fetch from AssemblyAI to get it
-      if (!hasWordData) {
-        // Re-fetch the transcript to get word-level timestamps
-        const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-        if (transcript.status !== 'completed') return Response.json({ error: 'Transcript not ready' }, { status: 400 });
-        
-        const utterances = transcript.utterances || [];
-        const rawSegments = buildRawSegments(utterances);
-        const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-        const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
-        const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words || [] }));
+      // Always re-fetch SRT + utterances from AssemblyAI (cached, no new charge)
+      const [transcript, srtText] = await Promise.all([
+        getTranscript(transcript_id, ASSEMBLYAI_API_KEY),
+        getAssemblyAISRT(transcript_id, ASSEMBLYAI_API_KEY),
+      ]);
+      if (transcript.status !== 'completed') return Response.json({ error: 'Transcript not ready' }, { status: 400 });
 
-        const BATCH_SIZE = 20;
-        const batches = [];
-        for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
-          batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
-        }
-
-        const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess (fetched word data from AssemblyAI cache — no new charge). ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
-
-        await base44.asServiceRole.entities.Job.update(job_db_id, {
-          status: 'processing',
-          pipelineLog: [reprocessLog],
-          processingPlan: {
-            batches,
-            gaps,
-            highlights,
-            language: transcript.language_code,
-            assemblyRawCues,
-            polishedCues: [],
-            totalBatches: batches.length,
-          },
-        });
-
-        base44.functions.invoke('processAICaption', {
-          transcript_id,
-          job_db_id,
-          action: 'process_batch',
-          batch_index: 0,
-        }).catch(() => {});
-
-        return Response.json({ status: 'reprocess_started', totalBatches: batches.length });
-      }
-
-      // We have word-level data — use it directly, no AssemblyAI call needed
-      const utterances = [];
-      for (const cue of savedCues) {
-        const last = utterances[utterances.length - 1];
-        if (last && last.speaker === cue.speaker && cue.start - last.end < 2000) {
-          last.end = cue.end;
-          last.text += ' ' + cue.text;
-          if (cue.words) last.words.push(...cue.words);
-        } else {
-          utterances.push({ start: cue.start, end: cue.end, text: cue.text, speaker: cue.speaker, words: cue.words || [] });
-        }
-      }
-
-      const rawSegments = buildRawSegments(utterances);
-      const gaps = findGaps(utterances, savedCues[savedCues.length - 1]?.end || null);
-      const highlights = job.result?.highlights || [];
-      const language = job.result?.language || 'en';
+      const utterances = transcript.utterances || [];
+      const srtCues = parseSRT(srtText);
+      const rawSegments = mapSpeakers(srtCues, utterances);
+      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
+      const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
+      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words || [] }));
+      const assemblySRTCues = rawSegments;
 
       const BATCH_SIZE = 20;
       const batches = [];
@@ -522,7 +472,7 @@ Deno.serve(async (req) => {
         batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess (no new AssemblyAI charge). ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+      const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess using AssemblyAI SRT base (cached — no new charge). SRT: ${srtCues.length} cues → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'processing',
@@ -531,8 +481,9 @@ Deno.serve(async (req) => {
           batches,
           gaps,
           highlights,
-          language,
-          assemblyRawCues: savedCues, // preserve original
+          language: transcript.language_code,
+          assemblyRawCues,
+          assemblySRTCues,
           polishedCues: [],
           totalBatches: batches.length,
         },
