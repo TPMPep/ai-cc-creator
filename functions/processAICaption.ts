@@ -272,7 +272,7 @@ function finalEnforce(cues) {
       if (isSoundCue && lines.some(l => l.length > MAX_CHARS)) {
         result.push({ ...cue, text: lines.map(l => l.substring(0, MAX_CHARS)).join('\n') });
       } else {
-        result.push(cue);
+        result.push({ ...cue, text: cleanedText });
       }
       continue;
     }
