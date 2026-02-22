@@ -332,7 +332,12 @@ export default function JobDetailAI() {
 
             <p className="text-xs text-zinc-600 mb-4">This page auto-updates — no need to refresh.</p>
 
-            {/* Actions */}
+                {/* Pipeline log */}
+                <div className="max-w-lg mx-auto mb-4">
+                  <PipelineLog pipelineLog={job?.pipelineLog} jobStatus={job?.status} />
+                </div>
+
+                {/* Actions */}
             <div className="flex items-center justify-center gap-3">
               <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-800 text-zinc-400 hover:text-white">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check now
