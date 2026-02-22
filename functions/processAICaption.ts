@@ -292,7 +292,9 @@ ${highlightDump}
 
 ${segmentInput}
 
-${gapInput}`;
+${gapInput}
+
+${audioEventInput}`;
 
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
