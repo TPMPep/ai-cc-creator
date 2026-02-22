@@ -85,56 +85,80 @@ function buildSCC(cues) {
 }
 
 // ─── PRE-SEGMENT ─────────────────────────────────────────────────────────────
+// Goal: produce caption-sized raw segments that GPT can directly reformat.
+// Each segment should represent ~1 caption cue worth of speech.
+// Rules:
+//   - Hard cap: 5 seconds per segment (GPT will merge short ones if needed)
+//   - Break ALWAYS at speaker changes (utterance boundaries handle this)
+//   - Break at silences ≥ 500ms within an utterance
+//   - Break at sentence-ending punctuation (., ?, !)
+//   - Target ≤ 12 words per segment (fits ~2 lines × 32 chars)
+//   - Minimum 2 words per segment (avoid orphan words unless sentence boundary)
 
 function buildRawSegments(utterances) {
-  const MAX_DUR = 7500;      // hard cap: never exceed 7.5 seconds per segment
-  const SILENCE_BREAK = 800; // break at silences ≥ 800ms within an utterance
-  const MIN_WORDS = 3;       // don't create a segment with fewer than 3 words unless it's the only option
+  const MAX_DUR = 5000;       // hard cap: 5 seconds per segment
+  const SILENCE_BREAK = 500;  // break at silences ≥ 500ms within an utterance
+  const MAX_WORDS = 12;       // target max words per segment
+  const MIN_WORDS = 2;        // minimum words before we allow a break
 
   const segments = [];
 
   for (const utt of utterances) {
     const words = utt.words || [];
     if (!words.length) {
-      segments.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker, words });
+      segments.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker });
       continue;
     }
 
-    // Find natural break points: large silence gaps between consecutive words
-    const breakPoints = new Set(); // indices AFTER which to break
+    // Mark forced break points (AFTER word index i)
+    // Priority: silence gaps, then sentence-ending punctuation, then word count
+    const forceBreak = new Set();
     for (let i = 0; i < words.length - 1; i++) {
       const gap = words[i + 1].start - words[i].end;
-      if (gap >= SILENCE_BREAK) {
-        breakPoints.add(i);
-      }
+      if (gap >= SILENCE_BREAK) forceBreak.add(i);
+      // Sentence-ending punctuation
+      const txt = words[i].text;
+      if (/[.?!…]$/.test(txt) && !txt.match(/^(Mr|Mrs|Ms|Dr|Sr|Jr|vs|etc)\.$/) ) forceBreak.add(i);
     }
 
-    // Build chunks, respecting both silence breaks and MAX_DUR
     let chunkStart = 0;
     while (chunkStart < words.length) {
-      let chunkEnd = chunkStart;
       const firstWordStart = words[chunkStart].start;
+      let chunkEnd = chunkStart; // will advance
 
-      // Find the furthest word we can include without exceeding MAX_DUR
-      let maxByTime = chunkStart;
+      // Walk forward finding where to break
       for (let j = chunkStart; j < words.length; j++) {
-        if (words[j].end - firstWordStart <= MAX_DUR) maxByTime = j;
-        else break;
-      }
+        const dur = words[j].end - firstWordStart;
+        const wordCount = j - chunkStart + 1;
 
-      // Prefer to break at a silence boundary within the allowed time range
-      // Find the LAST silence break point that falls within [chunkStart, maxByTime)
-      let breakAt = -1;
-      for (let j = chunkStart; j < maxByTime; j++) {
-        if (breakPoints.has(j)) breakAt = j;
-      }
+        chunkEnd = j;
 
-      if (breakAt >= chunkStart && (breakAt - chunkStart + 1) >= MIN_WORDS) {
-        // Break at the natural silence
-        chunkEnd = breakAt;
-      } else {
-        // No natural break found — use time-based limit
-        chunkEnd = maxByTime;
+        // Must break if we hit hard limits
+        const mustBreak = dur > MAX_DUR || wordCount >= MAX_WORDS;
+
+        // Natural break point
+        const isNaturalBreak = forceBreak.has(j);
+
+        if (isNaturalBreak && wordCount >= MIN_WORDS) {
+          // Break here — good natural boundary
+          break;
+        }
+
+        if (mustBreak) {
+          // We must break — try to find nearest earlier natural break
+          let bestBreak = -1;
+          for (let k = j - 1; k >= chunkStart + MIN_WORDS - 1; k--) {
+            if (forceBreak.has(k)) { bestBreak = k; break; }
+          }
+          chunkEnd = bestBreak >= chunkStart + MIN_WORDS - 1 ? bestBreak : j;
+          break;
+        }
+
+        // If this is the last word, include it
+        if (j === words.length - 1) {
+          chunkEnd = j;
+          break;
+        }
       }
 
       const chunkWords = words.slice(chunkStart, chunkEnd + 1);
@@ -143,7 +167,6 @@ function buildRawSegments(utterances) {
         end: chunkWords[chunkWords.length - 1].end,
         text: chunkWords.map(w => w.text).join(' '),
         speaker: utt.speaker,
-        words: chunkWords,
       });
       chunkStart = chunkEnd + 1;
     }
