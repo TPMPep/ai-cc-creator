@@ -474,17 +474,6 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error) {
-    // Mark job as error if we have job_db_id
-    try {
-      const body = await req.clone().json().catch(() => ({}));
-      if (body.job_db_id) {
-        const base44 = createClientFromRequest(req);
-        await base44.asServiceRole.entities.Job.update(body.job_db_id, {
-          status: 'error',
-          error: error.message,
-        });
-      }
-    } catch (_) { /* ignore */ }
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
