@@ -375,47 +375,80 @@ function finalEnforce(cues) {
     const lines = cleanedText.split('\n');
     const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
 
-    if (allOk || isSoundCue) {
-      if (isSoundCue && lines.some(l => l.length > MAX_CHARS)) {
-        result.push({ ...cue, text: lines.map(l => l.substring(0, MAX_CHARS)).join('\n') });
-      } else {
-        result.push({ ...cue, text: cleanedText });
-      }
+    // Pass through if already valid
+    if (allOk) {
+      result.push({ ...cue, text: cleanedText });
       continue;
     }
 
+    // Sound cues: truncate lines if needed, never split
+    if (isSoundCue) {
+      result.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
+      continue;
+    }
+
+    // Text doesn't fit in 2 lines ≤32 chars — reflow into 2 lines.
+    // CRITICAL: NEVER split a single cue into multiple cues. Keep all text on the
+    // original timecode. If it overflows 32 chars, QC will flag it, but timing stays correct.
     const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
-    const packed = [];
-    let cur = '';
-    for (const word of words) {
-      const candidate = cur ? `${cur} ${word}` : word;
-      if (candidate.length <= limit) { cur = candidate; }
-      else { if (cur) packed.push(cur); cur = word.length > limit ? word.substring(0, limit) : word; }
-    }
-    if (cur) packed.push(cur);
 
-    const totalDur = cue.end - cue.start;
-    const chunkCount = Math.ceil(packed.length / 2);
-    for (let i = 0; i < packed.length; i += 2) {
-      const chunk = packed.slice(i, i + 2);
-      const ci = Math.floor(i / 2);
-      const chunkStart = cue.start + Math.round((ci / chunkCount) * totalDur);
-      const chunkEnd = ci === chunkCount - 1 ? cue.end : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
-      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.map(l => prefix + l).join('\n'), speaker: cue.speaker });
+    // Try to find a balanced 2-line split where both lines fit ≤ limit
+    let bestSplit = -1;
+    let bestBalance = Infinity;
+    for (let split = 1; split < words.length; split++) {
+      const l1 = words.slice(0, split).join(' ');
+      const l2 = words.slice(split).join(' ');
+      if (l1.length <= limit && l2.length <= limit) {
+        const balance = Math.abs(l1.length - l2.length);
+        if (balance < bestBalance) {
+          bestBalance = balance;
+          bestSplit = split;
+        }
+      }
     }
+
+    let line1, line2;
+    if (bestSplit >= 0) {
+      // Found a valid balanced split
+      line1 = words.slice(0, bestSplit).join(' ');
+      line2 = words.slice(bestSplit).join(' ');
+    } else {
+      // Can't fit in 2×32 — pack line 1 to limit, put rest on line 2 (may overflow)
+      line1 = '';
+      let wordIdx = 0;
+      while (wordIdx < words.length) {
+        const candidate = line1 ? `${line1} ${words[wordIdx]}` : words[wordIdx];
+        if (candidate.length <= limit) { line1 = candidate; wordIdx++; }
+        else break;
+      }
+      if (!line1 && wordIdx < words.length) { line1 = words[wordIdx]; wordIdx++; }
+      line2 = words.slice(wordIdx).join(' ');
+    }
+
+    const finalText = line2
+      ? `${prefix}${line1}\n${prefix}${line2}`
+      : `${prefix}${line1}`;
+
+    result.push({ ...cue, text: finalText });
   }
 
+  // Fix timing: minimum duration and gaps
   result.sort((a, b) => a.start - b.start);
-  for (let i = 1; i < result.length; i++) {
-    if (result[i].start < result[i - 1].end) {
-      result[i].start = result[i - 1].end + MIN_GAP;
-      if (result[i].end <= result[i].start) result[i].end = result[i].start + MIN_DUR;
-    } else if (result[i].start - result[i - 1].end < MIN_GAP) {
-      result[i].start = result[i - 1].end + MIN_GAP;
+  for (let i = 0; i < result.length; i++) {
+    if (result[i].end - result[i].start < MIN_DUR) {
+      result[i].end = result[i].start + MIN_DUR;
+    }
+    if (i > 0) {
+      if (result[i].start < result[i - 1].end) {
+        result[i].start = result[i - 1].end + MIN_GAP;
+        if (result[i].end <= result[i].start) result[i].end = result[i].start + MIN_DUR;
+      } else if (result[i].start - result[i - 1].end < MIN_GAP) {
+        result[i].start = result[i - 1].end + MIN_GAP;
+      }
     }
   }
   return result.filter(c => c.text && c.text.trim().length > 0);
