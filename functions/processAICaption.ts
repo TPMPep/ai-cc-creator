@@ -292,10 +292,10 @@ ${gapInput}`;
       body: JSON.stringify({
               model: 'gpt-4o',
               messages: [
-                { role: 'system', content: 'You are a professional broadcast closed caption editor specializing in NBCU CM-051 / FCC standards. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — never alter them. Every text line must be ≤32 characters. Every cue must have ≤2 lines. Speaker changes use "- " prefix on each line.' },
+                { role: 'system', content: 'You are a professional broadcast closed caption editor for NBCU/FCC standards. Output ONLY a valid JSON array — no markdown, no explanation. Rules: (1) TIMECODES LOCKED — never change start/end ms. (2) Every line ≤32 chars — count every character. (3) Max 2 lines per cue. (4) Short cues (≤4 words) use 1 line. (5) Never put [A]/[B]/[C] in text field — speaker label goes in speaker field only. (6) Mid-sentence cues get no terminal punctuation. (7) Complete sentences end with . ? ! … or —' },
                 { role: 'user', content: prompt },
               ],
-              temperature: 0.1,
+              temperature: 0.05,
               max_tokens: 8000,
             }),
     });
