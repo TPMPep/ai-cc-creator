@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
       const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
       const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 15;
       const batches = [];
       for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
         batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
