@@ -263,8 +263,9 @@ function finalEnforce(cues) {
   const result = [];
 
   for (const cue of cues) {
-    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
-    const lines = cue.text.split('\n');
+    const cleanedText = cleanCueText(cue.text || '');
+    const isSoundCue = cleanedText.startsWith('[') || cleanedText.includes('♪');
+    const lines = cleanedText.split('\n');
     const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
 
     if (allOk || isSoundCue) {
