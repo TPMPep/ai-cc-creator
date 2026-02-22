@@ -131,7 +131,8 @@ export default function DiagnosticAI() {
               <tr className="border-b border-zinc-800">
                 <th className="px-3 py-2.5 text-left text-zinc-500 font-medium w-10">#</th>
                 <th className="px-3 py-2.5 text-left text-zinc-500 font-medium w-28">TC In → Out</th>
-                <th className="px-3 py-2.5 text-left text-zinc-500 font-medium">AssemblyAI Raw</th>
+                <th className="px-3 py-2.5 text-left text-zinc-500 font-medium">Utterances</th>
+                <th className="px-3 py-2.5 text-left text-zinc-500 font-medium">SRT (GPT input)</th>
                 <th className="px-3 py-2.5 text-left text-zinc-500 font-medium">OpenAI Reformatted</th>
                 <th className="px-3 py-2.5 text-left text-zinc-500 font-medium">Final Output</th>
               </tr>
