@@ -345,7 +345,8 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id, job_db_id, action = 'start' } = await req.json();
+    const body = await req.json();
+    const { transcript_id, job_db_id, action = 'start', batch_index } = body;
     if (!transcript_id || !job_db_id) return Response.json({ error: 'transcript_id and job_db_id required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
