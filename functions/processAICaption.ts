@@ -406,8 +406,8 @@ Deno.serve(async (req) => {
       }));
 
       // Fetch existing pipelineLog to append
-      const existingJob = await base44.asServiceRole.entities.Job.filter({ id: job_db_id }, '-created_date', 1).catch(() => []);
-      const existingLog = (existingJob[0]?.pipelineLog) || [];
+      const existingJob = await base44.asServiceRole.entities.Job.get(job_db_id).catch(() => null);
+      const existingLog = existingJob?.pipelineLog || [];
       const finalLog = { step: '3_finalize', status: 'ok', detail: `Final enforce done. ${cues.length} cues. QC issues: ${qc.issuesCount}.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
