@@ -76,6 +76,7 @@ export default function DiagnosticAI() {
 
   const finalCues = job.result?.cues || [];
   const assemblyCues = job.result?.assemblyRawCues || job.result?.diagnostic?.assemblyRawCues || [];
+  const assemblyUtterances = job.result?.assemblyUtterances || [];
   const openaiCues = job.result?.openaiReformattedCues || job.result?.diagnostic?.openaiRawCues || [];
   const rows = alignRows(assemblyCues, openaiCues, finalCues);
 
