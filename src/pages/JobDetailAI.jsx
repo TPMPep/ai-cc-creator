@@ -76,27 +76,43 @@ export default function JobDetailAI() {
     isPollingRef.current = true;
 
     try {
-      // Fast check — is AssemblyAI done?
-      const checkRes = await base44.functions.invoke("pollAICaption", {
-        transcript_id: currentJob.railwayJobId,
-      });
-      const checkData = checkRes.data;
+      // Poll the DB record directly — all processing is server-side
+      const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
+      if (!jobs.length) return;
+      const latestJob = jobs[0];
 
-      if (checkData.status === "queued" || checkData.status === "processing") return;
+      // Always sync pipeline log for live progress display
+      setJob(prev => ({ ...prev, pipelineLog: latestJob.pipelineLog, status: latestJob.status, error: latestJob.error }));
 
-      if (checkData.status === "error") {
-        const updates = { status: "error", error: checkData.error || "Transcription failed" };
-        await base44.entities.Job.update(currentJob.id, updates);
-        setJob(prev => ({ ...prev, ...updates }));
+      if (latestJob.status === "done") {
+        setJob(latestJob);
+        setCues(latestJob.result?.cues || []);
+        toast.success("Captions ready!");
         if (pollingRef.current) clearTimeout(pollingRef.current);
         return;
       }
 
-      if (checkData.status === "completed") {
-        // AssemblyAI done — kick off server-side GPT processing
-        startServerProcessing(currentJob).catch(err => {
-          console.error("Failed to start server processing:", err);
+      if (latestJob.status === "error") {
+        if (pollingRef.current) clearTimeout(pollingRef.current);
+        return;
+      }
+
+      // Still processing — check if AssemblyAI is done and server-side GPT hasn't started yet
+      const hasProcessingPlan = !!latestJob.processingPlan;
+      const hasPipelineLog = latestJob.pipelineLog && latestJob.pipelineLog.length > 0;
+      if (!hasProcessingPlan && !hasPipelineLog) {
+        // AssemblyAI might be done but we haven't kicked off GPT yet — check
+        const checkRes = await base44.functions.invoke("pollAICaption", {
+          transcript_id: currentJob.railwayJobId,
         });
+        const checkData = checkRes.data;
+        if (checkData.status === "completed") {
+          startServerProcessing(currentJob).catch(() => {});
+        } else if (checkData.status === "error") {
+          const updates = { status: "error", error: checkData.error || "Transcription failed" };
+          await base44.entities.Job.update(currentJob.id, updates);
+          setJob(prev => ({ ...prev, ...updates }));
+        }
       }
     } catch (err) {
       console.error("Poll error:", err);
