@@ -262,12 +262,17 @@ FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
 20. If a speaker switches back and forth between English and a foreign language, apply rule 19 to each foreign-language segment individually.
 
 ═══════════════════════════════════════
-SOUND/MUSIC CUES:
+SOUND/MUSIC CUES (FROM AUDIO EVENTS):
 ═══════════════════════════════════════
-21. Music: [♪ DESCRIPTION ♪] — description in ALL CAPS, total cue ≤32 chars
-22. Sound effects: [SOUND EFFECT IN CAPS] — total ≤32 chars
-23. ONLY insert into silence gaps provided. NEVER displace dialogue.
-24. Only add sound cues when context strongly implies sound. Do NOT guess.
+21. You are provided DETECTED AUDIO EVENTS from actual audio analysis — these are REAL detected sounds.
+22. For each detected audio event, insert a sound cue at that timestamp:
+    - Music/singing → [♪ MUSIC ♪] or [♪ UPBEAT MUSIC ♪] etc. (≤32 chars including brackets and ♪)
+    - Laughter → [LAUGHTER]
+    - Applause → [APPLAUSE]
+    - Any other sound → [SOUND DESCRIPTION IN CAPS] (≤32 chars)
+23. Place the sound cue at the start time of the audio event. Use the event's end time as the cue end.
+24. ONLY insert sound cues for events in the DETECTED AUDIO EVENTS list. NEVER guess or invent sounds.
+25. Sound cues that overlap with dialogue: place them in any gap immediately before or after the dialogue. NEVER displace dialogue.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT — STRICT JSON:
