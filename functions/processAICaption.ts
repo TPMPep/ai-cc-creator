@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
       const plan = job.processingPlan;
       if (!plan) return Response.json({ error: 'No processing plan found' }, { status: 400 });
 
-      const { batches, gaps, highlights, language, assemblyRawCues, assemblySRTCues, totalBatches } = plan;
+      const { batches, gaps, highlights, audioEvents, language, assemblyRawCues, assemblySRTCues, totalBatches } = plan;
       const polishedCues = plan.polishedCues || [];
       const batch = batches[batchIndex];
 
