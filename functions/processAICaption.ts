@@ -150,6 +150,8 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
 
   const prompt = `${batchNote}You are a professional broadcast closed caption editor working to NBCU CM-051 and FCC standards. You will receive pre-timed caption segments and must return broadcast-ready captions.
 
+CRITICAL — DO NOT put speaker labels like [A], [B], [SPEAKER A] in the "text" field. Speaker identity goes ONLY in the "speaker" field ("A", "B", "C", or null). The "text" field must contain ONLY the spoken words (plus dashes for multi-speaker cues).
+
   ═══════════════════════════════════════
   HARD RULES — NEVER VIOLATE:
   ═══════════════════════════════════════
