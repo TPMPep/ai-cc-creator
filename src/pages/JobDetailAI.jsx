@@ -69,17 +69,20 @@ export default function JobDetailAI() {
     if (res.data?.error) throw new Error(res.data.error);
     }, []);
 
+    const reprocessStartRef = useRef(null);
+
     const handleReprocess = useCallback(async () => {
-    if (!job) return;
-    const res = await base44.functions.invoke("processAICaption", {
-      transcript_id: job.railwayJobId,
-      job_db_id: job.id,
-      action: "reprocess",
-    });
-    if (res.data?.error) throw new Error(res.data.error);
-    // Reset local state to show processing UI
-    setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [] }));
-    setCues([]);
+      if (!job) return;
+      reprocessStartRef.current = Date.now();
+      const res = await base44.functions.invoke("processAICaption", {
+        transcript_id: job.railwayJobId,
+        job_db_id: job.id,
+        action: "reprocess",
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      // Reset local state to show processing UI, use reprocess start time
+      setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], created_date: new Date(reprocessStartRef.current).toISOString() }));
+      setCues([]);
     }, [job]);
 
   const doPoll = useCallback(async () => {
