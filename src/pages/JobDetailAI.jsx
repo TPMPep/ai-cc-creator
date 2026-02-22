@@ -90,16 +90,20 @@ export default function JobDetailAI() {
       const totalBatches = batches.length;
 
       // Step 2: Call GPT from the frontend batch by batch (no server timeout)
-      const allPolishedCues = [];
-      for (let i = 0; i < totalBatches; i++) {
-        const batch = batches[i];
-        const batchWindowStart = batch[0].start;
-        const batchWindowEnd = batch[batch.length - 1].end;
-        const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-        const batchResult = await callGPTBatch(batch, batchGaps, language, highlights, i, totalBatches);
-        allPolishedCues.push(...batchResult);
-        if (i < totalBatches - 1) await new Promise(r => setTimeout(r, 2000));
-      }
+        const allPolishedCues = [];
+        for (let i = 0; i < totalBatches; i++) {
+          const batch = batches[i];
+          const batchWindowStart = batch[0].start;
+          const batchWindowEnd = batch[batch.length - 1].end;
+          const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+          const batchResult = await callGPTBatch(batch, batchGaps, language, highlights, i, totalBatches);
+          allPolishedCues.push(...batchResult);
+          // Log GPT batch progress to DB so it's visible in pipeline log
+          await base44.entities.Job.update(currentJob.id, {
+            pipelineLog: [{ step: `2_gpt_batch_${i + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${i + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() }],
+          }).catch(() => {});
+          if (i < totalBatches - 1) await new Promise(r => setTimeout(r, 1500));
+        }
 
       // Step 3: Send polished cues to backend to enforce, QC, export, save
       const finalRes = await base44.functions.invoke("processAICaption", {
