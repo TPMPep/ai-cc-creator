@@ -67,7 +67,20 @@ export default function JobDetailAI() {
       action: "start",
     });
     if (res.data?.error) throw new Error(res.data.error);
-  }, []);
+    }, []);
+
+    const handleReprocess = useCallback(async () => {
+    if (!job) return;
+    const res = await base44.functions.invoke("processAICaption", {
+      transcript_id: job.railwayJobId,
+      job_db_id: job.id,
+      action: "reprocess",
+    });
+    if (res.data?.error) throw new Error(res.data.error);
+    // Reset local state to show processing UI
+    setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [] }));
+    setCues([]);
+    }, [job]);
 
   const doPoll = useCallback(async () => {
     const currentJob = jobRef.current;
