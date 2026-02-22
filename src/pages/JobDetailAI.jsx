@@ -271,8 +271,12 @@ export default function JobDetailAI() {
         {isProcessing && (
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-8 text-center mb-6">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-white mb-1">Transcribing & applying NBCU rules…</h2>
-            <p className="text-sm text-zinc-500 mb-2">AssemblyAI is processing your media, then GPT‑4o mini will apply broadcast formatting.</p>
+            <h2 className="text-lg font-semibold text-white mb-1">
+              {job?.pipelineLog?.some(l => l.detail?.includes('Reprocess')) ? 'Re-applying NBCU caption rules…' : 'Transcribing & applying NBCU rules…'}
+            </h2>
+            <p className="text-sm text-zinc-500 mb-2">
+              {job?.pipelineLog?.some(l => l.detail?.includes('Reprocess')) ? 'Using saved transcript — GPT‑4o is reformatting captions. No new AssemblyAI charge.' : 'AssemblyAI is processing your media, then GPT‑4o will apply broadcast formatting.'}
+            </p>
 
             {/* Elapsed + estimated time */}
             <div className="flex items-center justify-center gap-6 my-4">
