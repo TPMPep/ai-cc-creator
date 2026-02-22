@@ -230,16 +230,27 @@ GRAMMAR & ACCURACY:
 14. Proper nouns and brand names must be correctly capitalized.
 
 ═══════════════════════════════════════
+TEXT INTEGRITY (CRITICAL — READ CAREFULLY):
+═══════════════════════════════════════
+17. THE WORDS IN EACH CUE ARE LOCKED TO THAT CUE'S TIMECODE. You MUST NOT move words from one input cue into another. The text belongs to those timestamps because that is literally when it was spoken.
+    - You may REFORMAT (line breaks, punctuation, capitalization) within a cue.
+    - You may MERGE two adjacent cues into one (combining their text + using first.start/last.end) — ONLY under rule 18.
+    - You may SPLIT one cue into two — ONLY to fix duration or line length violations.
+    - You MUST NEVER take words from cue [N] and put them in cue [N+1] or [N-1] unless you are merging those two cues per rule 18.
+    - WRONG: Moving "Now we've got" from cue 5 to the start of cue 6's text.
+    - RIGHT: Keep "Now we've got" in cue 5 where it was spoken, reformat within its timecode.
+
+═══════════════════════════════════════
 MERGING CUES (IMPORTANT):
 ═══════════════════════════════════════
-17. You MUST merge adjacent cues when ALL of these are true:
+18. You MUST merge adjacent cues when ALL of these are true:
     a. Same speaker
     b. Gap between them is ≤300ms (they are continuous speech, no real pause)
     c. It is clearly one continuing sentence (no sentence-ending punctuation between them)
     d. Combined text fits in 2 lines ≤32 chars each
     e. Combined duration is ≤7000ms
-    When merging: use first cue's start and last cue's end.
-18. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
+    When merging: use first cue's start and last cue's end. The merged cue contains ONLY the words from both input cues — no words from any other cue.
+19. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
 
 ═══════════════════════════════════════
 SPEAKER FORMATTING:
