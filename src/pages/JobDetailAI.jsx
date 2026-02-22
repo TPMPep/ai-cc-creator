@@ -11,7 +11,7 @@ import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles, FlaskConical } from "lucide-react";
+import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles, FlaskConical, RotateCcw } from "lucide-react";
 
 import PipelineLog from "../components/jobdetail/PipelineLog";
 import moment from "moment";
