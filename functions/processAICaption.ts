@@ -85,92 +85,105 @@ function buildSCC(cues) {
 }
 
 // ─── PRE-SEGMENT ─────────────────────────────────────────────────────────────
-// Goal: produce caption-sized raw segments that GPT can directly reformat.
-// Each segment should represent ~1 caption cue worth of speech.
-// Rules:
-//   - Hard cap: 5 seconds per segment (GPT will merge short ones if needed)
-//   - Break ALWAYS at speaker changes (utterance boundaries handle this)
-//   - Break at silences ≥ 500ms within an utterance
-//   - Break at sentence-ending punctuation (., ?, !)
-//   - Target ≤ 12 words per segment (fits ~2 lines × 32 chars)
-//   - Minimum 2 words per segment (avoid orphan words unless sentence boundary)
+// Build caption-sized segments directly from the flat word list.
+// This avoids the problem of AssemblyAI returning one giant utterance block.
+//
+// Break rules (in priority order):
+//   1. Speaker change (from utterance map)
+//   2. Silence gap ≥ 500ms between consecutive words
+//   3. Sentence-ending punctuation (., ?, !, …) — excluding abbreviations
+//   4. Max 10 words OR max 5 seconds — whichever comes first
+//   5. Minimum 2 words before any break (no orphan single words)
 
 function buildRawSegments(utterances) {
-  const MAX_DUR = 5000;       // hard cap: 5 seconds per segment
-  const SILENCE_BREAK = 500;  // break at silences ≥ 500ms within an utterance
-  const MAX_WORDS = 12;       // target max words per segment
-  const MIN_WORDS = 2;        // minimum words before we allow a break
+  const MAX_DUR = 5000;
+  const SILENCE_BREAK = 500;
+  const MAX_WORDS = 10;
+  const MIN_WORDS = 2;
 
-  const segments = [];
-
+  // Flatten all words from all utterances into one list, tagging each with speaker
+  const allWords = [];
   for (const utt of utterances) {
     const words = utt.words || [];
     if (!words.length) {
-      segments.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker });
-      continue;
-    }
-
-    // Mark forced break points (AFTER word index i)
-    // Priority: silence gaps, then sentence-ending punctuation, then word count
-    const forceBreak = new Set();
-    for (let i = 0; i < words.length - 1; i++) {
-      const gap = words[i + 1].start - words[i].end;
-      if (gap >= SILENCE_BREAK) forceBreak.add(i);
-      // Sentence-ending punctuation
-      const txt = words[i].text;
-      if (/[.?!…]$/.test(txt) && !txt.match(/^(Mr|Mrs|Ms|Dr|Sr|Jr|vs|etc)\.$/) ) forceBreak.add(i);
-    }
-
-    let chunkStart = 0;
-    while (chunkStart < words.length) {
-      const firstWordStart = words[chunkStart].start;
-      let chunkEnd = chunkStart; // will advance
-
-      // Walk forward finding where to break
-      for (let j = chunkStart; j < words.length; j++) {
-        const dur = words[j].end - firstWordStart;
-        const wordCount = j - chunkStart + 1;
-
-        chunkEnd = j;
-
-        // Must break if we hit hard limits
-        const mustBreak = dur > MAX_DUR || wordCount >= MAX_WORDS;
-
-        // Natural break point
-        const isNaturalBreak = forceBreak.has(j);
-
-        if (isNaturalBreak && wordCount >= MIN_WORDS) {
-          // Break here — good natural boundary
-          break;
-        }
-
-        if (mustBreak) {
-          // We must break — try to find nearest earlier natural break
-          let bestBreak = -1;
-          for (let k = j - 1; k >= chunkStart + MIN_WORDS - 1; k--) {
-            if (forceBreak.has(k)) { bestBreak = k; break; }
-          }
-          chunkEnd = bestBreak >= chunkStart + MIN_WORDS - 1 ? bestBreak : j;
-          break;
-        }
-
-        // If this is the last word, include it
-        if (j === words.length - 1) {
-          chunkEnd = j;
-          break;
-        }
+      // No word-level data — treat utterance as a single pseudo-word
+      allWords.push({ start: utt.start, end: utt.end, text: utt.text, speaker: utt.speaker });
+    } else {
+      for (const w of words) {
+        allWords.push({ ...w, speaker: utt.speaker });
       }
-
-      const chunkWords = words.slice(chunkStart, chunkEnd + 1);
-      segments.push({
-        start: chunkWords[0].start,
-        end: chunkWords[chunkWords.length - 1].end,
-        text: chunkWords.map(w => w.text).join(' '),
-        speaker: utt.speaker,
-      });
-      chunkStart = chunkEnd + 1;
     }
   }
+
+  if (!allWords.length) return [];
+
+  const segments = [];
+
+  // Determine forced break points AFTER word index i
+  const forceBreak = new Set();
+  for (let i = 0; i < allWords.length - 1; i++) {
+    const w = allWords[i];
+    const next = allWords[i + 1];
+
+    // Speaker change
+    if (next.speaker !== w.speaker) { forceBreak.add(i); continue; }
+
+    // Silence gap
+    const gap = next.start - w.end;
+    if (gap >= SILENCE_BREAK) { forceBreak.add(i); continue; }
+
+    // Sentence-ending punctuation (not abbreviations)
+    const txt = w.text;
+    if (/[.?!…]$/.test(txt) && !/^(Mr|Mrs|Ms|Dr|Sr|Jr|vs|etc|St|Ave|Blvd)\.$/.test(txt)) {
+      forceBreak.add(i);
+    }
+  }
+
+  let chunkStart = 0;
+  while (chunkStart < allWords.length) {
+    const firstWord = allWords[chunkStart];
+    let chunkEnd = chunkStart;
+
+    for (let j = chunkStart; j < allWords.length; j++) {
+      const dur = allWords[j].end - firstWord.start;
+      const wordCount = j - chunkStart + 1;
+      chunkEnd = j;
+
+      const isNaturalBreak = forceBreak.has(j);
+      const mustBreak = dur > MAX_DUR || wordCount >= MAX_WORDS;
+
+      if (isNaturalBreak && wordCount >= MIN_WORDS) {
+        break; // clean natural break
+      }
+
+      if (mustBreak) {
+        // Try to find a nearby earlier natural break point
+        let bestBreak = -1;
+        for (let k = j - 1; k >= chunkStart + MIN_WORDS - 1; k--) {
+          if (forceBreak.has(k)) { bestBreak = k; break; }
+        }
+        chunkEnd = bestBreak >= chunkStart + MIN_WORDS - 1 ? bestBreak : j;
+        break;
+      }
+
+      if (j === allWords.length - 1) {
+        chunkEnd = j;
+        break;
+      }
+    }
+
+    const chunk = allWords.slice(chunkStart, chunkEnd + 1);
+    // Speaker: use the speaker of the first word; if mixed, null
+    const speakers = [...new Set(chunk.map(w => w.speaker))];
+    segments.push({
+      start: chunk[0].start,
+      end: chunk[chunk.length - 1].end,
+      text: chunk.map(w => w.text).join(' '),
+      speaker: speakers.length === 1 ? speakers[0] : null,
+    });
+    chunkStart = chunkEnd + 1;
+  }
+
   return segments;
 }
 
