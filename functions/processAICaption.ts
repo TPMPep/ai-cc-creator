@@ -210,15 +210,17 @@ CHARACTER/LINE RULES (BROADCAST CRITICAL):
 9. Longer segments: use 2 lines, breaking at a natural syntactic boundary.
 
 ═══════════════════════════════════════
-SEGMENTATION STRATEGY (sentence-first):
+SEGMENTATION STRATEGY (NO FRAGMENTATION):
 ═══════════════════════════════════════
-PRIMARY RULE: Each cue should contain ONE COMPLETE SENTENCE when possible.
-- A sentence ends with . ? ! … or — (terminal punctuation)
-- If a sentence is short (≤4 words, ≤500ms), place it alone in its own cue. Do NOT combine it with the next sentence.
-- Only merge two sentences into one cue if BOTH are very short AND they are continuations of the same idea AND combined duration ≤7s AND fits 2 lines ≤32 chars.
-- ONLY split a sentence across two cues if that one sentence exceeds 7000ms OR won't fit in 2 lines ≤32 chars each. When you split, break at a clause or phrase boundary, never mid-phrase.
-- WRONG: "Come on over, guys. Good to\nsee you. Thank you for letting me try out" (splits "try out" from its sentence) — should be: cue 1 = "Come on over, guys." cue 2 = "Good to see you." cue 3 = "Thank you for letting me try out" (complete sentence)
-- WRONG: Putting just "Chris and George" in one cue if earlier cue says "This is Chris and George" — keep the sentence together
+PRIMARY RULE: Do NOT split an input segment's text across multiple output cues.
+- Each input segment [N]'s complete text MUST stay together as one cue, using that segment's start/end ms.
+- EXCEPTION 1: Merge — If segment [N] and [N+1] are same speaker with gap ≤300ms and form one continuous sentence, merge them into one cue (first.start, last.end), containing ALL text from both.
+- EXCEPTION 2: Reformat within a cue — if a single input segment's text won't fit in 2 lines ≤32 chars, reformat the line breaks and punctuation WITHIN that text. Do NOT move any words to another cue.
+- EXCEPTION 3: Line overflow — if text is truly too long for 2 lines, truncate the text to fit (last resort), but NEVER move words to a different segment's timecode.
+- WRONG: Input segment [5] has "Thank you for letting me try out". Splitting it to put "try out" in cue [6] — this moves words out of segment 5.
+- RIGHT: Keep "Thank you for letting me try out" in segment [5]'s timecode. Reformat as "Thank you for letting me\ntry out" if needed, but DO NOT move to another cue.
+- WRONG: Merging "This is Chris and" from segment [8] with "George." from segment [9] if they're not adjacent or have a gap >300ms.
+- RIGHT: If segments are same speaker, gap ≤300ms, and one sentence: "This is Chris and\nGeorge." all at the merged timecode.
 
 ═══════════════════════════════════════
 LINE BREAK STRATEGY WITHIN A CUE (2-line formatting):
