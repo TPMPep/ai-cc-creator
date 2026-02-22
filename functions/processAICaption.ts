@@ -351,34 +351,38 @@ Deno.serve(async (req) => {
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
     // ── PREPARE: fetch transcript, build and return the segment plan ──
-    if (action === 'prepare') {
-      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-      if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
+            if (action === 'prepare') {
+              const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+              if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
 
-      const utterances = transcript.utterances || [];
-      const rawSegments = buildRawSegments(utterances);
-      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-      const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
-      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
+              const utterances = transcript.utterances || [];
+              const rawSegments = buildRawSegments(utterances);
+              const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
+              const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
+              const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-      // Batch by segment count: 15 segments per batch
-      const BATCH_SIZE = 15;
-      const batches = [];
-      for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
-        // Strip word arrays — frontend only needs start/end/text/speaker
-        batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
-      }
+              // Batch by segment count: 10 segments per batch (smaller = less CPU per call)
+              const BATCH_SIZE = 10;
+              const batches = [];
+              for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
+                batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
+              }
 
-      // Return plan to frontend — frontend will call GPT, then call finalize
-      return Response.json({
-        status: 'ready',
-        batches,
-        gaps,
-        highlights,
-        language: transcript.language_code,
-        assemblyRawCues: assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker })),
-      });
-    }
+              // Log the prepare step
+              const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+              await base44.asServiceRole.entities.Job.update(job_db_id, {
+                pipelineLog: [prepareLog],
+              });
+
+              return Response.json({
+                status: 'ready',
+                batches,
+                gaps,
+                highlights,
+                language: transcript.language_code,
+                assemblyRawCues: assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker })),
+              });
+            }
 
     // ── FINALIZE: receive polished cues, enforce, QC, export, save ──
     if (action === 'finalize') {
