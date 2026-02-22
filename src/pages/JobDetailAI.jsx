@@ -93,8 +93,10 @@ export default function JobDetailAI() {
       }
 
       if (checkData.status === "completed") {
-        // AssemblyAI done — start batch-by-batch GPT processing
-        runBatchProcessing(currentJob);
+        // AssemblyAI done — kick off server-side GPT processing
+        startServerProcessing(currentJob).catch(err => {
+          console.error("Failed to start server processing:", err);
+        });
       }
     } catch (err) {
       console.error("Poll error:", err);
