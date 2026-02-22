@@ -58,79 +58,14 @@ export default function JobDetailAI() {
 
   const isPollingRef = useRef(false);
 
-  const processingBatchRef = useRef(false);
-
-  // Call GPT via backend function (keeps API key secure on the server)
-  const callGPTBatch = async (batch, batchGaps, language, highlights, batchIndex, totalBatches) => {
-    const res = await base44.functions.invoke("polishCaptionBatch", {
-      batch,
-      gaps: batchGaps,
-      highlights: highlights || [],
-      language,
-      batch_index: batchIndex,
-      total_batches: totalBatches,
+  // Trigger server-side processing when AssemblyAI is done
+  const startServerProcessing = useCallback(async (currentJob) => {
+    const res = await base44.functions.invoke("processAICaption", {
+      transcript_id: currentJob.railwayJobId,
+      job_db_id: currentJob.id,
+      action: "start",
     });
     if (res.data?.error) throw new Error(res.data.error);
-    return res.data.cues;
-  };
-
-  const runBatchProcessing = useCallback(async (currentJob) => {
-    if (processingBatchRef.current) return;
-    processingBatchRef.current = true;
-    if (pollingRef.current) clearTimeout(pollingRef.current);
-
-    try {
-      // Step 1: Get segment plan from backend (fast, no GPT)
-      const prepRes = await base44.functions.invoke("processAICaption", {
-        transcript_id: currentJob.railwayJobId,
-        job_db_id: currentJob.id,
-        action: "prepare",
-      });
-      if (prepRes.data?.error) throw new Error(prepRes.data.error);
-      const { batches, gaps, highlights, language } = prepRes.data;
-      const totalBatches = batches.length;
-
-      // Step 2: Call GPT from the frontend batch by batch (no server timeout)
-        const allPolishedCues = [];
-        for (let i = 0; i < totalBatches; i++) {
-          const batch = batches[i];
-          const batchWindowStart = batch[0].start;
-          const batchWindowEnd = batch[batch.length - 1].end;
-          const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-          const batchResult = await callGPTBatch(batch, batchGaps, language, highlights, i, totalBatches);
-          allPolishedCues.push(...batchResult);
-          // Refresh job to get latest pipelineLog, then append this batch's entry
-            const freshJobs = await base44.entities.Job.filter({ id: currentJob.id }, "-created_date", 1).catch(() => []);
-            const existingLog = freshJobs[0]?.pipelineLog || [];
-            await base44.entities.Job.update(currentJob.id, {
-              pipelineLog: [...existingLog, { step: `2_gpt_batch_${i + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${i + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() }],
-            }).catch(() => {});
-          if (i < totalBatches - 1) await new Promise(r => setTimeout(r, 1500));
-        }
-
-      // Step 3: Send polished cues to backend to enforce, QC, export, save
-      const finalRes = await base44.functions.invoke("processAICaption", {
-        transcript_id: currentJob.railwayJobId,
-        job_db_id: currentJob.id,
-        action: "finalize",
-        polished_cues: allPolishedCues,
-      });
-      if (finalRes.data?.error) throw new Error(finalRes.data.error);
-
-      const jobs = await base44.entities.Job.filter({ railwayJobId: currentJob.railwayJobId }, "-created_date", 1);
-      if (jobs.length > 0 && jobs[0].status === "done") {
-        setJob(jobs[0]);
-        setCues(jobs[0].result?.cues || []);
-        toast.success("Captions ready! All pipeline steps completed.");
-      }
-    } catch (err) {
-      console.error("Batch processing error:", err);
-      const updates = { status: "error", error: err.message };
-      await base44.entities.Job.update(currentJob.id, updates);
-      setJob(prev => ({ ...prev, ...updates }));
-    } finally {
-      processingBatchRef.current = false;
-    }
   }, []);
 
   const doPoll = useCallback(async () => {
