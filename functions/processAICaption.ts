@@ -215,14 +215,14 @@ ${highlightDump}`;
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every text line must be ≤32 characters. Every cue must have ≤2 lines.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 4000,
-      }),
+              model: 'gpt-4o',
+              messages: [
+                { role: 'system', content: 'You are a professional broadcast closed caption editor specializing in NBCU CM-051 / FCC standards. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — never alter them. Every text line must be ≤32 characters. Every cue must have ≤2 lines. Speaker changes use "- " prefix on each line.' },
+                { role: 'user', content: prompt },
+              ],
+              temperature: 0.1,
+              max_tokens: 8000,
+            }),
     });
     if (res.status === 429) {
       await new Promise(r => setTimeout(r, 10000 * (attempt + 1)));
