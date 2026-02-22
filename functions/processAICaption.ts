@@ -84,7 +84,7 @@ function buildSCC(cues) {
   return lines.join('\n');
 }
 
-// ─── STEP 1: PRE-SEGMENT ─────────────────────────────────────────────────────
+// ─── PRE-SEGMENT ─────────────────────────────────────────────────────────────
 
 function buildRawSegments(utterances) {
   const MAX_DUR = 7500;
@@ -128,7 +128,7 @@ function findGaps(utterances, totalDurationMs) {
   return gaps;
 }
 
-// ─── STEP 2: GPT POLISH (one batch at a time) ────────────────────────────────
+// ─── GPT POLISH (single batch, server-side) ──────────────────────────────────
 
 async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, batchIndex, totalBatches) {
   const segmentInput = segments.map((s, i) =>
@@ -141,7 +141,7 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     : '';
 
   const highlightDump = highlights && highlights.length > 0
-    ? 'KEY AUDIO TERMS: ' + highlights.slice(0, 20).map(h => `"${h.text}"`).join(', ')
+    ? 'KEY AUDIO TERMS: ' + highlights.slice(0, 20).map(h => `"${h}"`).join(', ')
     : '';
 
   const batchNote = totalBatches > 1
@@ -210,7 +210,7 @@ ${gapInput}
 ${highlightDump}`;
 
   let res;
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -221,11 +221,11 @@ ${highlightDump}`;
           { role: 'user', content: prompt },
         ],
         temperature: 0.1,
-        max_tokens: 16000,
+        max_tokens: 4000,
       }),
     });
     if (res.status === 429) {
-      await new Promise(r => setTimeout(r, 30000 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 10000 * (attempt + 1)));
       continue;
     }
     break;
@@ -239,7 +239,7 @@ ${highlightDump}`;
   return JSON.parse(jsonMatch[0]);
 }
 
-// ─── STEP 3: FINAL ENFORCEMENT ───────────────────────────────────────────────
+// ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
 
 function finalEnforce(cues) {
   const MAX_CHARS = 32;
@@ -332,12 +332,12 @@ function runQC(cues) {
   return { issuesCount: issues.length, issues };
 }
 
-// ─── MAIN ────────────────────────────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────────────────────
 //
-// action="prepare"  → fetch transcript, build slim segment plan, return it to frontend
-// action="finalize" → receive polished cues from frontend, enforce rules, build exports, save to DB
+// action="start"        → fetch transcript, build plan, kick off batch 0, save plan to DB
+// action="process_batch"→ process one GPT batch, save progress, trigger next batch or finalize
 //
-// GPT processing happens IN THE FRONTEND (no timeout constraints) using the returned plan.
+// Everything runs server-side. Frontend just polls the DB.
 
 Deno.serve(async (req) => {
   try {
@@ -345,69 +345,111 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { transcript_id, job_db_id, action = 'prepare', polished_cues } = await req.json();
+    const { transcript_id, job_db_id, action = 'start' } = await req.json();
     if (!transcript_id || !job_db_id) return Response.json({ error: 'transcript_id and job_db_id required' }, { status: 400 });
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    // ── PREPARE: fetch transcript, build and return the segment plan ──
-            if (action === 'prepare') {
-              const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-              if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
+    // ── START: fetch transcript, build plan, save to DB, kick off batch 0 ──
+    if (action === 'start') {
+      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
+      if (transcript.status !== 'completed') return Response.json({ status: transcript.status });
 
-              const utterances = transcript.utterances || [];
-              const rawSegments = buildRawSegments(utterances);
-              const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
-              const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
-              const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
+      const utterances = transcript.utterances || [];
+      const rawSegments = buildRawSegments(utterances);
+      const gaps = findGaps(utterances, transcript.audio_duration ? transcript.audio_duration * 1000 : null);
+      const highlights = (transcript.auto_highlights_result?.results || []).slice(0, 20).map(h => h.text);
+      const assemblyRawCues = utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker }));
 
-              // Batch by segment count: 10 segments per batch (smaller = less CPU per call)
-              const BATCH_SIZE = 10;
-              const batches = [];
-              for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
-                batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
-              }
-
-              // Log the prepare step
-              const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
-              await base44.asServiceRole.entities.Job.update(job_db_id, {
-                pipelineLog: [prepareLog],
-              });
-
-              return Response.json({
-                status: 'ready',
-                batches,
-                gaps,
-                highlights,
-                language: transcript.language_code,
-                assemblyRawCues: assemblyRawCues.map(({ start, end, text, speaker }) => ({ start, end, text, speaker })),
-              });
-            }
-
-    // ── FINALIZE: receive polished cues, enforce, QC, export, save ──
-    if (action === 'finalize') {
-      if (!polished_cues || !Array.isArray(polished_cues)) {
-        return Response.json({ error: 'polished_cues array required' }, { status: 400 });
+      const BATCH_SIZE = 10;
+      const batches = [];
+      for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
+        batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      const cues = finalEnforce(polished_cues);
+      const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+
+      // Save the full processing plan to DB so server can resume without re-fetching transcript
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        pipelineLog: [prepareLog],
+        processingPlan: {
+          batches,
+          gaps,
+          highlights,
+          language: transcript.language_code,
+          assemblyRawCues,
+          polishedCues: [],  // accumulates as batches complete
+          totalBatches: batches.length,
+        },
+      });
+
+      // Kick off batch 0 asynchronously (fire and forget — server carries it forward)
+      base44.functions.invoke('processAICaption', {
+        transcript_id,
+        job_db_id,
+        action: 'process_batch',
+        batch_index: 0,
+      }).catch(() => {});
+
+      return Response.json({ status: 'started', totalBatches: batches.length });
+    }
+
+    // ── PROCESS_BATCH: run one GPT batch, save progress, trigger next ──
+    if (action === 'process_batch') {
+      const { batch_index } = await req.json().catch(() => ({}));
+      const batchIndex = typeof batch_index === 'number' ? batch_index : 0;
+
+      const job = await base44.asServiceRole.entities.Job.get(job_db_id);
+      if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
+
+      // If job errored or was cancelled, stop
+      if (job.status === 'error' || job.status === 'done') return Response.json({ status: job.status });
+
+      const plan = job.processingPlan;
+      if (!plan) return Response.json({ error: 'No processing plan found' }, { status: 400 });
+
+      const { batches, gaps, highlights, language, assemblyRawCues, totalBatches } = plan;
+      const polishedCues = plan.polishedCues || [];
+      const batch = batches[batchIndex];
+
+      // Get gaps relevant to this batch window
+      const batchWindowStart = batch[0].start;
+      const batchWindowEnd = batch[batch.length - 1].end;
+      const batchGaps = (gaps || []).filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+
+      // Call GPT for this batch
+      const batchResult = await polishBatchWithGPT(batch, batchGaps, language, highlights, OPENAI_API_KEY, batchIndex, totalBatches);
+
+      // Append results and update log
+      const newPolishedCues = [...polishedCues, ...batchResult];
+      const existingLog = job.pipelineLog || [];
+      const batchLog = { step: `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, status: 'ok', detail: `GPT batch ${batchIndex + 1}/${totalBatches} returned ${batchResult.length} cues.`, ts: new Date().toISOString() };
+
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        pipelineLog: [...existingLog, batchLog],
+        processingPlan: { ...plan, polishedCues: newPolishedCues },
+      });
+
+      const nextBatch = batchIndex + 1;
+      if (nextBatch < totalBatches) {
+        // Trigger next batch asynchronously
+        base44.functions.invoke('processAICaption', {
+          transcript_id,
+          job_db_id,
+          action: 'process_batch',
+          batch_index: nextBatch,
+        }).catch(() => {});
+        return Response.json({ status: 'batch_done', next: nextBatch });
+      }
+
+      // All batches done — finalize
+      const cues = finalEnforce(newPolishedCues);
       const srt = buildSRT(cues);
       const vtt = buildVTT(cues);
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
-      // Fetch original transcript to get assemblyRawCues for diagnostic
-      const transcript = await getTranscript(transcript_id, ASSEMBLYAI_API_KEY);
-      const assemblyRawCues = (transcript.utterances || []).map(u => ({ 
-        start: u.start, 
-        end: u.end, 
-        text: u.text, 
-        speaker: u.speaker 
-      }));
-
-      // Fetch existing pipelineLog to append
-      const existingJob = await base44.asServiceRole.entities.Job.get(job_db_id).catch(() => null);
-      const existingLog = existingJob?.pipelineLog || [];
       const finalLog = { step: '3_finalize', status: 'ok', detail: `Final enforce done. ${cues.length} cues. QC issues: ${qc.issuesCount}.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
@@ -415,22 +457,34 @@ Deno.serve(async (req) => {
         result: {
           cues,
           assemblyRawCues,
-          openaiReformattedCues: polished_cues,
+          openaiReformattedCues: newPolishedCues,
           exports: { srt: null, vtt: null, scc: null },
           qc,
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
         issuesCount: qc.issuesCount || 0,
         lastPolledAt: new Date().toISOString(),
-        pipelineLog: [...existingLog, finalLog],
+        pipelineLog: [...(job.pipelineLog || []), batchLog, finalLog],
+        processingPlan: null, // clean up
       });
 
-      return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
+      return Response.json({ status: 'completed', cues: cues.length, qcIssues: qc.issuesCount });
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error) {
+    // Mark job as error if we have job_db_id
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.job_db_id) {
+        const base44 = createClientFromRequest(req);
+        await base44.asServiceRole.entities.Job.update(body.job_db_id, {
+          status: 'error',
+          error: error.message,
+        });
+      }
+    } catch (_) { /* ignore */ }
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
