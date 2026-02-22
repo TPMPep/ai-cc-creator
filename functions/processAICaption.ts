@@ -398,7 +398,6 @@ Deno.serve(async (req) => {
 
     // ── PROCESS_BATCH: run one GPT batch, save progress, trigger next ──
     if (action === 'process_batch') {
-      const { batch_index } = await req.json().catch(() => ({}));
       const batchIndex = typeof batch_index === 'number' ? batch_index : 0;
 
       const job = await base44.asServiceRole.entities.Job.get(job_db_id);
