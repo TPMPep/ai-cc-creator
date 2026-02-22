@@ -16,13 +16,32 @@ function msToTimecode(ms) {
   return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(ms2).padStart(3,"0")}`;
 }
 
-// Align rows: for each final cue, find overlapping assembly/openai cues
+// Align rows: assign each assembly/openai cue to the final cue it overlaps MOST with (no duplicates)
 function alignRows(assemblyCues, openaiCues, finalCues) {
-  return finalCues.map((final) => {
-    const assembly = assemblyCues.filter(c => c.start < final.end && c.end > final.start);
-    const openai = openaiCues.filter(c => c.start < final.end && c.end > final.start);
-    return { final, assembly, openai };
-  });
+  // For each source cue, find the final cue with maximum overlap and assign it there only
+  function assignBestMatch(sourceCues) {
+    const assignments = new Array(finalCues.length).fill(null).map(() => []);
+    for (const src of sourceCues) {
+      let bestIdx = -1;
+      let bestOverlap = 0;
+      for (let i = 0; i < finalCues.length; i++) {
+        const f = finalCues[i];
+        const overlap = Math.min(src.end, f.end) - Math.max(src.start, f.start);
+        if (overlap > bestOverlap) { bestOverlap = overlap; bestIdx = i; }
+      }
+      if (bestIdx >= 0) assignments[bestIdx].push(src);
+    }
+    return assignments;
+  }
+
+  const assemblyAssigned = assignBestMatch(assemblyCues);
+  const openaiAssigned = assignBestMatch(openaiCues);
+
+  return finalCues.map((final, i) => ({
+    final,
+    assembly: assemblyAssigned[i],
+    openai: openaiAssigned[i],
+  }));
 }
 
 export default function DiagnosticAI() {
