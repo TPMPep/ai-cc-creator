@@ -143,7 +143,7 @@ export default function JobDetailAI() {
     const tick = () => {
       const elapsed = Date.now() - pollStartRef.current;
       // Use longer intervals since GPT-4o takes 30-60s — no point polling faster than that
-      const interval = elapsed < 60000 ? 15000 : 20000;
+      const interval = 10000; // Poll every 10s — server handles all processing
       pollingRef.current = setTimeout(async () => {
         await doPoll();
         if (jobRef.current?.status !== "done" && jobRef.current?.status !== "error") {
