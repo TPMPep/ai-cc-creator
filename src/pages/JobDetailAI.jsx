@@ -103,7 +103,7 @@ export default function JobDetailAI() {
     } finally {
       isPollingRef.current = false;
     }
-  }, [jobId, runBatchProcessing]);
+  }, [jobId, startServerProcessing]);
 
   // Elapsed time counter — based on job.created_date so navigating away and back doesn't reset it
   useEffect(() => {
