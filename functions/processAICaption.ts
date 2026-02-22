@@ -199,6 +199,7 @@ TIMING RULES (BROADCAST CRITICAL):
 3. MAXIMUM cue duration: 7000ms. If input is longer, you MUST split it.
 4. MINIMUM gap between cues: 67ms (2 frames at 29.97fps). Never overlap cues.
 5. Reading speed: target 130–180 words per minute. A 1-second cue should have ≤3 words. A 3-second cue should have ≤8–9 words. Never exceed ~20 chars/sec.
+6. SEGMENT ATOMICITY: Each input segment [N]'s text is locked to that segment's start/end ms. You CANNOT move any words from segment [N] to segment [N+1] or any other cue. The only exception is merging: when you merge two adjacent segments, combine ALL their text and use the merged timecode.
 
 ═══════════════════════════════════════
 CHARACTER/LINE RULES (BROADCAST CRITICAL):
