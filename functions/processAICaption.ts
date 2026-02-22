@@ -225,7 +225,7 @@ ${highlightDump}`;
             }),
     });
     if (res.status === 429) {
-      await new Promise(r => setTimeout(r, 10000 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 5000 * (attempt + 1)));
       continue;
     }
     break;
