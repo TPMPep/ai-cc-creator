@@ -148,66 +148,72 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided.\n\n`
     : '';
 
-  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor working to NBCU CM-051 and FCC standards. You will receive pre-timed caption segments and must return broadcast-ready captions.
 
-You will receive pre-timed caption segments. Your job is:
-1. Fix grammar, punctuation, and homophones in each segment's text
-2. Format the text to fit in ≤32 characters per line, ≤2 lines per cue
-3. Choose the SMARTEST possible line break — keep context together, fill lines efficiently
-4. If two adjacent segments have different speakers AND their combined text fits in 2 lines of ≤32 chars each, you MAY combine them into one cue with "- " prefix on each line
-5. Insert sound/music cues into SILENCE GAPS where appropriate
-6. Return ALL segments (you cannot skip any)
+  ═══════════════════════════════════════
+  HARD RULES — NEVER VIOLATE:
+  ═══════════════════════════════════════
+  1. TIMECODES ARE LOCKED. Copy start/end ms exactly from input. Never alter them.
+  - Exception: when combining two adjacent same-or-different speaker segments, use first.start and last.end.
+  - Exception: sound/music cues inserted into gaps use the gap's start and end ms.
+  2. MAX 32 characters per line. Count EVERY character: letters, spaces, punctuation, dashes, brackets, ♪.
+  3. MAX 2 lines per cue. Never 3.
+  4. Cue duration ≥ 500ms minimum.
+  5. SPEAKER CHANGES: When one cue contains dialogue from 2 different speakers, prefix EACH line with "- " (that's 2 chars of your 32). Never use >> or >.
+  6. SINGLE SPEAKER cues: no dash prefix needed.
+  7. Every dialogue sentence must end with a terminal punctuation mark: . ? ! … or —
+  8. Fix ALL homophones in context: to/too/two, there/their/they're, its/it's, your/you're, than/then, etc.
+  9. Preserve natural spoken contractions: gonna, wanna, kinda, gotta, don't, can't, I'm, etc.
+  10. Return EVERY input segment — never drop one.
 
-═══════════════════════════════════════
-HARD RULES — NEVER VIOLATE:
-═══════════════════════════════════════
-- TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT change them.
-  Exception: when combining two adjacent segments, use the first segment's start and the last segment's end.
-  Exception: sound cues in gaps get the gap's start/end times.
-- MAX 32 characters per line (count every char: letters, spaces, punctuation, brackets, dashes, ♪)
-- MAX 2 lines per cue
-- Cue duration must be ≥ 500ms. If a segment is very short (<500ms) and text is brief, keep it as-is.
-- When a cue has text from 2 different speakers, prefix EACH line with "- " (uses 2 of your 32 chars)
-- NEVER use >> or > for speaker changes
-- Every sentence must end with . ? or !
-- Fix homophones: to/too/two, there/their/they're, its/it's, your/you're, etc.
-- Preserve contractions as spoken: gonna, wanna, kinda, don't, can't, I'm, etc.
+  ═══════════════════════════════════════
+  LINE BREAK STRATEGY (critical for readability):
+  ═══════════════════════════════════════
+  - Break at natural syntactic boundaries: after comma, conjunction (and/but/or/so), or before verb phrase
+  - NEVER break mid-phrase or mid-thought if avoidable (e.g. don't split "the" from its noun)
+  - Aim for balanced line lengths — a 28-char line + 26-char line beats a 5-char + 32-char split
+  - Subject + verb should stay together when possible
+  - Examples of GOOD breaks:
+  "She said she would never" / "go back to that place."
+  "- I don't think that's right." / "- Well, I disagree."
+  - Examples of BAD breaks:
+  "She said she would" / "never go back to that place." ← widowed word
 
-═══════════════════════════════════════
-SOUND/MUSIC CUE RULES:
-═══════════════════════════════════════
-- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS inside. Max 32 chars total.
-- Sound effects: [DESCRIPTION] — ALL CAPS. Max 32 chars.
-- Insert these into the silence gaps listed in your input where it makes sense contextually.
-- Infer sounds from context clues in the surrounding dialogue.
-- If a gap is pure silence with no context, use [AMBIENT SOUND] or omit it.
+  ═══════════════════════════════════════
+  SPEAKER DASH FORMATTING:
+  ═══════════════════════════════════════
+  - Use "- " prefix on BOTH lines when two speakers share a cue
+  - If a speaker's dialogue wraps to 2 lines within the same cue, only the first line gets "- "
+  - Combine adjacent different-speaker segments into one cue ONLY when combined text fits cleanly in 2 lines of ≤32 chars each
+  - If it doesn't fit cleanly, keep them as separate single-speaker cues (no dash needed)
 
-═══════════════════════════════════════
-LINE BREAK STRATEGY:
-═══════════════════════════════════════
-- Prefer breaking at natural syntactic boundaries: after a comma, conjunction, or before a verb phrase
-- Fill lines efficiently — don't leave a 10-char line when a 25-char line is possible
-- Keep subjects with their verbs when possible
+  ═══════════════════════════════════════
+  SOUND/MUSIC CUE RULES:
+  ═══════════════════════════════════════
+  - Music: [♪ DESCRIPTION ♪] — ALL CAPS description, max 32 chars total including brackets and ♪
+  - Sound effects: [SOUND DESCRIPTION] — ALL CAPS, max 32 chars total
+  - ONLY insert into the silence gaps provided — never displace dialogue
+  - Infer from surrounding dialogue context (e.g. laughing described → [AUDIENCE LAUGHTER])
+  - If gap has no contextual clues, omit the sound cue rather than guessing
 
-═══════════════════════════════════════
-OUTPUT FORMAT:
-═══════════════════════════════════════
-Return ONLY a valid JSON array. No markdown. No explanation. No code fences.
-Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
-- Use \\n for line breaks within 2-line cues
-- speaker: "A"/"B"/"C" for single-speaker, null for multi-speaker or sound cues
-- Include ALL input segments in the output (same count or more if you added sound cues)
-- Verify EVERY line is ≤32 chars before outputting
+  ═══════════════════════════════════════
+  OUTPUT FORMAT — STRICT:
+  ═══════════════════════════════════════
+  Return ONLY a raw JSON array. Zero markdown. Zero explanation. Zero code fences.
+  Schema: [{"start": number, "end": number, "text": string, "speaker": string|null}, ...]
+  - Use \\n for the line break between line 1 and line 2 within a cue
+  - speaker field: "A" / "B" / "C" for single-speaker cues; null for multi-speaker or sound cues
+  - Count characters on every line before outputting — if any line exceeds 32 chars, reformat it
 
-═══════════════════════════════════════
-INPUT SEGMENTS:
-═══════════════════════════════════════
-Language: ${language || 'en'}
+  ═══════════════════════════════════════
+  INPUT:
+  ═══════════════════════════════════════
+  Language: ${language || 'en'}
+  ${highlightDump}
 
-${segmentInput}
+  ${segmentInput}
 
-${gapInput}
-${highlightDump}`;
+  ${gapInput}`;
 
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
