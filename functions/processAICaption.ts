@@ -207,11 +207,22 @@ GRAMMAR & ACCURACY:
 14. Proper nouns and brand names must be correctly capitalized.
 
 ═══════════════════════════════════════
+MERGING CUES (IMPORTANT):
+═══════════════════════════════════════
+17. You MUST merge adjacent cues when ALL of these are true:
+    a. Same speaker
+    b. Gap between them is ≤300ms (they are continuous speech, no real pause)
+    c. It is clearly one continuing sentence (no sentence-ending punctuation between them)
+    d. Combined text fits in 2 lines ≤32 chars each
+    e. Combined duration is ≤7000ms
+    When merging: use first cue's start and last cue's end.
+18. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
+
+═══════════════════════════════════════
 SPEAKER FORMATTING:
 ═══════════════════════════════════════
 15. Single-speaker cue: no dash prefix. Set speaker field to "A", "B", or "C".
 16. Two-speaker cue: prefix EACH speaker's line with "- " (counts as 2 of your 32 chars). Set speaker to null.
-17. Combining segments: ONLY combine adjacent segments if combined text fits naturally in 2 lines ≤32 chars. Otherwise keep them separate.
 
 ═══════════════════════════════════════
 SOUND/MUSIC CUES:
