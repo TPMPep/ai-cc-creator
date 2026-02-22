@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
         status: 'done',
         result: {
           cues,
-          assemblyRawCues,
+          assemblyRawCues: assemblySRTCues || assemblyRawCues, // use SRT cues as the "raw" for diagnostic
           openaiReformattedCues: newPolishedCues,
           exports: { srt: null, vtt: null, scc: null },
           qc,
