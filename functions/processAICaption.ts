@@ -405,23 +405,22 @@ Deno.serve(async (req) => {
         speaker: u.speaker 
       }));
 
+      const finalLog = { step: '3_finalize', status: 'ok', detail: `Final enforce done. ${cues.length} cues. QC issues: ${qc.issuesCount}.`, ts: new Date().toISOString() };
+
       // Store cues, intermediate data for diagnostics, and QC; exports are generated on-demand
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues,
-          assemblyRawCues,  // For diagnostic comparison
-          openaiReformattedCues: polished_cues,  // For diagnostic comparison
-          exports: { 
-            srt: null,  // Generated on-demand
-            vtt: null,  // Generated on-demand
-            scc: null   // Generated on-demand
-          },
+          assemblyRawCues,
+          openaiReformattedCues: polished_cues,
+          exports: { srt: null, vtt: null, scc: null },
           qc,
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
         issuesCount: qc.issuesCount || 0,
         lastPolledAt: new Date().toISOString(),
+        pipelineLog: [finalLog],
       });
 
       return Response.json({ status: 'completed', cues, exports: { srt, vtt, scc }, qc });
