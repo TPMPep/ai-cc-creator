@@ -676,7 +676,8 @@ Deno.serve(async (req) => {
         status: 'done',
         result: {
           cues,
-          assemblyRawCues: assemblySRTCues || assemblyRawCues, // use SRT cues as the "raw" for diagnostic
+          assemblyRawCues: assemblySRTCues || assemblyRawCues, // SRT cues used as GPT input
+          assemblyUtterances: assemblyRawCues, // actual utterance data with real speaker labels
           openaiReformattedCues: newPolishedCues,
           exports: { srt: null, vtt: null, scc: null },
           qc,
