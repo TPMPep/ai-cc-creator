@@ -27,6 +27,7 @@ Deno.serve(async (req) => {
         disfluencies: false,
         auto_highlights: true,
         content_safety: true,
+        audio_events: true,
         speech_models: ["universal-2"],
       }),
     });
