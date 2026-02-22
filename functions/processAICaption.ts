@@ -482,6 +482,65 @@ Deno.serve(async (req) => {
       return Response.json({ status: 'started', totalBatches: batches.length });
     }
 
+    // ── REPROCESS: re-run GPT pipeline using saved AssemblyAI data (no new charge) ──
+    if (action === 'reprocess') {
+      const job = await base44.asServiceRole.entities.Job.get(job_db_id);
+      if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
+
+      const savedCues = job.result?.assemblyRawCues || [];
+      if (!savedCues.length) return Response.json({ error: 'No saved AssemblyAI data found. You must reprocess from AssemblyAI.' }, { status: 400 });
+
+      // Reconstruct utterance-like objects from saved assemblyRawCues
+      // Group consecutive cues with same speaker into utterances
+      const utterances = [];
+      for (const cue of savedCues) {
+        const last = utterances[utterances.length - 1];
+        if (last && last.speaker === cue.speaker && cue.start - last.end < 2000) {
+          last.end = cue.end;
+          last.text += ' ' + cue.text;
+          if (cue.words) last.words.push(...cue.words);
+        } else {
+          utterances.push({ start: cue.start, end: cue.end, text: cue.text, speaker: cue.speaker, words: cue.words || [] });
+        }
+      }
+
+      const rawSegments = buildRawSegments(utterances);
+      const gaps = findGaps(utterances, savedCues[savedCues.length - 1]?.end || null);
+      const highlights = job.result?.highlights || [];
+      const language = job.result?.language || 'en';
+
+      const BATCH_SIZE = 20;
+      const batches = [];
+      for (let i = 0; i < rawSegments.length; i += BATCH_SIZE) {
+        batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
+      }
+
+      const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess (no new AssemblyAI charge). ${utterances.length} utterances → ${rawSegments.length} segments → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        status: 'processing',
+        pipelineLog: [reprocessLog],
+        processingPlan: {
+          batches,
+          gaps,
+          highlights,
+          language,
+          assemblyRawCues: savedCues, // preserve original
+          polishedCues: [],
+          totalBatches: batches.length,
+        },
+      });
+
+      base44.functions.invoke('processAICaption', {
+        transcript_id,
+        job_db_id,
+        action: 'process_batch',
+        batch_index: 0,
+      }).catch(() => {});
+
+      return Response.json({ status: 'reprocess_started', totalBatches: batches.length });
+    }
+
     // ── PROCESS_BATCH: run one GPT batch, save progress, trigger next ──
     if (action === 'process_batch') {
       const batchIndex = typeof batch_index === 'number' ? batch_index : 0;
