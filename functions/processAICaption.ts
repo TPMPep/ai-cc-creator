@@ -78,8 +78,6 @@ function buildSCC(cues) {
 
 function buildRawSegments(utterances) {
   const MAX_DUR = 7500;
-  const MIN_SEGMENT_WORDS = 3; // Don't create segments with fewer than 3 words
-  const MIN_SEGMENT_CHARS = 10; // Don't create segments shorter than 10 chars
   const segments = [];
 
   for (const utt of utterances) {
@@ -89,6 +87,20 @@ function buildRawSegments(utterances) {
       continue;
     }
 
+    // If entire utterance fits in MAX_DUR, keep it as one segment (don't split short phrases)
+    const uttDur = words[words.length - 1].end - words[0].start;
+    if (uttDur <= MAX_DUR) {
+      segments.push({
+        start: words[0].start,
+        end: words[words.length - 1].end,
+        text: words.map(w => w.text).join(' '),
+        speaker: utt.speaker,
+        words: words,
+      });
+      continue;
+    }
+
+    // For long utterances, split into chunks but keep each chunk meaningful
     let chunkStart = 0;
     while (chunkStart < words.length) {
       let chunkEnd = chunkStart;
@@ -100,32 +112,27 @@ function buildRawSegments(utterances) {
         } else break;
       }
 
-      const chunkWords = words.slice(chunkStart, chunkEnd + 1);
-      const chunkText = chunkWords.map(w => w.text).join(' ');
-
-      // Check if this would create a too-small trailing segment
-      const remainingWords = words.slice(chunkEnd + 1);
-      if (remainingWords.length > 0 && remainingWords.length < MIN_SEGMENT_WORDS) {
-        const remainingText = remainingWords.map(w => w.text).join(' ');
-        if (remainingText.length < MIN_SEGMENT_CHARS) {
-          // Absorb the remaining words into this chunk (even if slightly over MAX_DUR)
-          const allWords = words.slice(chunkStart);
-          segments.push({
-            start: allWords[0].start,
-            end: allWords[allWords.length - 1].end,
-            text: allWords.map(w => w.text).join(' '),
-            speaker: utt.speaker,
-            words: allWords,
-          });
-          chunkStart = words.length; // done with this utterance
-          continue;
-        }
+      // Check if remaining words after this chunk would be too small (< 4 words)
+      const remainingCount = words.length - (chunkEnd + 1);
+      if (remainingCount > 0 && remainingCount < 4) {
+        // Absorb remaining words into this chunk
+        const allWords = words.slice(chunkStart);
+        segments.push({
+          start: allWords[0].start,
+          end: allWords[allWords.length - 1].end,
+          text: allWords.map(w => w.text).join(' '),
+          speaker: utt.speaker,
+          words: allWords,
+        });
+        chunkStart = words.length;
+        continue;
       }
 
+      const chunkWords = words.slice(chunkStart, chunkEnd + 1);
       segments.push({
         start: chunkWords[0].start,
         end: chunkWords[chunkWords.length - 1].end,
-        text: chunkText,
+        text: chunkWords.map(w => w.text).join(' '),
         speaker: utt.speaker,
         words: chunkWords,
       });
