@@ -198,11 +198,14 @@ You will receive pre-timed caption segments. Your job is:
 3. Choose the SMARTEST possible line break — keep context together, fill lines efficiently
 4. If two adjacent segments have different speakers AND their combined text fits in 2 lines of ≤32 chars each, you MAY combine them into one cue with "- " prefix on each line
 5. Insert sound/music cues into SILENCE GAPS where appropriate
-6. Return ALL segments (you cannot skip any)
+6. Return ALL segments — NEVER skip or drop any spoken content. Every word from the input MUST appear in the output.
+7. NEVER split a short phrase across multiple cues if it fits in one. E.g. "Previously on Love Island USA." must stay as ONE cue, not split into "Previously on", "Love Island", "USA." separately.
+8. When adjacent input segments form a single sentence or phrase, COMBINE them into one cue (using the first segment's start and the last segment's end) if the combined text fits within 2 lines of ≤32 chars each.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
 ═══════════════════════════════════════
+- NEVER DROP OR OMIT spoken content. Every word in the input MUST appear in the output.
 - TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT change them.
   Exception: when combining two adjacent segments, use the first segment's start and the last segment's end.
   Exception: sound cues in gaps get the gap's start/end times.
