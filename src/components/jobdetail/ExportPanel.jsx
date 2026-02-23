@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Copy, Check } from "lucide-react";
+import { Download, Copy, Check, Loader2 } from "lucide-react";
 
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
@@ -18,58 +18,108 @@ function sanitizeFilename(str) {
   return (str || "export").replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 50);
 }
 
+async function downloadFromUrl(url, filename) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(blobUrl);
+  a.remove();
+}
+
+async function fetchTextFromUrl(url) {
+  const res = await fetch(url);
+  return res.text();
+}
+
 export default function ExportPanel({ result, title, jobId }) {
   const [copiedSrt, setCopiedSrt] = useState(false);
   const [copiedVtt, setCopiedVtt] = useState(false);
+  const [downloading, setDownloading] = useState(null);
 
   if (!result) return null;
 
   const safeName = sanitizeFilename(title || "export");
 
-  const handleCopy = async (text, setter) => {
+  // Support both URL-based and inline data
+  const hasScc = result.scc_url || result.scc;
+  const hasSrt = result.srt_url || result.srt;
+  const hasVtt = result.vtt_url || result.vtt;
+
+  const handleDownload = async (urlOrContent, isUrl, filename) => {
+    setDownloading(filename);
+    if (isUrl) {
+      await downloadFromUrl(urlOrContent, filename);
+    } else {
+      downloadBlob(urlOrContent, filename, "text/plain");
+    }
+    setDownloading(null);
+  };
+
+  const handleCopy = async (urlOrContent, isUrl, setter) => {
+    const text = isUrl ? await fetchTextFromUrl(urlOrContent) : urlOrContent;
     await navigator.clipboard.writeText(text);
     setter(true);
     setTimeout(() => setter(false), 2000);
   };
 
+  const DownloadBtn = ({ onClick, children, className, highlight }) => (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      disabled={!!downloading}
+      className={highlight
+        ? "w-full bg-blue-600/10 border-blue-500/40 text-blue-300 hover:bg-blue-600/20 hover:text-blue-200 text-xs h-9 justify-start font-semibold"
+        : "bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start"
+      }
+    >
+      {downloading ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Download className="w-3 h-3 mr-1.5" />}
+      {children}
+    </Button>
+  );
+
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Exports</h3>
-      {result.scc && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => downloadBlob(result.scc, `${safeName}_${jobId}.scc`, "text/plain")}
-          className="w-full bg-blue-600/10 border-blue-500/40 text-blue-300 hover:bg-blue-600/20 hover:text-blue-200 text-xs h-9 justify-start font-semibold"
+      {hasScc && (
+        <DownloadBtn
+          highlight
+          onClick={() => handleDownload(result.scc_url || result.scc, !!result.scc_url, `${safeName}_${jobId}.scc`)}
         >
-          <Download className="w-3.5 h-3.5 mr-2" /> SCC (Broadcast / CEA-608)
-        </Button>
+          SCC (Broadcast / CEA-608)
+        </DownloadBtn>
       )}
       <div className="grid grid-cols-2 gap-2">
-        {result.srt && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.srt, `${safeName}_${jobId}.srt`, "text/plain")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
-            <Download className="w-3 h-3 mr-1.5" /> SRT
-          </Button>
+        {hasSrt && (
+          <DownloadBtn onClick={() => handleDownload(result.srt_url || result.srt, !!result.srt_url, `${safeName}_${jobId}.srt`)}>
+            SRT
+          </DownloadBtn>
         )}
-        {result.vtt && (
-          <Button variant="outline" size="sm" onClick={() => downloadBlob(result.vtt, `${safeName}_${jobId}.vtt`, "text/plain")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
-            <Download className="w-3 h-3 mr-1.5" /> VTT
-          </Button>
+        {hasVtt && (
+          <DownloadBtn onClick={() => handleDownload(result.vtt_url || result.vtt, !!result.vtt_url, `${safeName}_${jobId}.vtt`)}>
+            VTT
+          </DownloadBtn>
         )}
-
-        <Button variant="outline" size="sm" onClick={() => downloadBlob(JSON.stringify(result, null, 2), `${safeName}_${jobId}.json`, "application/json")} className="bg-transparent border-zinc-800 text-zinc-300 hover:bg-zinc-800 hover:text-white text-xs h-8 justify-start">
-          <Download className="w-3 h-3 mr-1.5" /> JSON
-        </Button>
+        <DownloadBtn onClick={() => {
+          downloadBlob(JSON.stringify(result.cues || result, null, 2), `${safeName}_${jobId}.json`, "application/json");
+        }}>
+          JSON (Cues)
+        </DownloadBtn>
       </div>
       <div className="flex gap-2">
-        {result.srt && (
-          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.srt, setCopiedSrt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
+        {hasSrt && (
+          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.srt_url || result.srt, !!result.srt_url, setCopiedSrt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedSrt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedSrt ? "Copied" : "Copy SRT"}
           </Button>
         )}
-        {result.vtt && (
-          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.vtt, setCopiedVtt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
+        {hasVtt && (
+          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.vtt_url || result.vtt, !!result.vtt_url, setCopiedVtt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedVtt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedVtt ? "Copied" : "Copy VTT"}
           </Button>
