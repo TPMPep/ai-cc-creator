@@ -425,7 +425,7 @@ function finalEnforce(cues, originalSegments) {
   const MIN_GAP = 67;
   const MAX_CPS = 25;
   const MIN_WORDS_STANDALONE = 3; // cues with fewer words get merged
-  const MERGE_GAP_LIMIT = 500;    // ms — max gap for short-cue merging
+  const MERGE_GAP_LIMIT = 800;    // ms — max gap for short-cue merging
 
   // Helper: check if text is a sound/music cue
   function isSound(text) {
