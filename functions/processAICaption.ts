@@ -211,58 +211,40 @@ YOUR TASKS:
 SPEAKER DASHES — CRITICAL:
 ═══════════════════════════════════════
 - ONLY use "- " prefix when TWO DIFFERENT SPEAKERS share the SAME cue
-- For a dual-speaker cue: line 1 = "- Speaker A text", line 2 = "- Speaker B text"
-- NEVER put a dash on a single-speaker cue. A cue where only one person talks = NO DASH, ever.
-- This means: if a cue has 2 lines but both lines are the same speaker, NO DASHES.
+- NEVER put a dash on a single-speaker cue.
 
 ═══════════════════════════════════════
 ORPHAN WORDS — CRITICAL:
 ═══════════════════════════════════════
-- NEVER create a cue with just 1-3 words if those words are part of a larger sentence from the previous or next cue.
-- If adjacent input segments form a single sentence/phrase, COMBINE them into one cue (first segment's start, last segment's end) when the combined text fits in 2 lines × 32 chars.
-- NEVER leave a single word dangling as its own cue.
-- After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged with its neighbor.
+- NEVER create a cue with just 1-3 words if those words are part of a larger sentence.
+- Combine adjacent segments into one cue when the combined text fits in 2 lines × 32 chars.
+- After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
 ═══════════════════════════════════════
-- NEVER DROP OR OMIT spoken content. Every word in the input MUST appear in the output.
-- TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT invent new times.
-  Exception: when combining adjacent segments, use the first segment's start and the last segment's end.
+- NEVER DROP OR OMIT spoken content.
+- TIMECODES ARE LOCKED. Output the exact start/end ms from the input.
+  Exception: when combining adjacent segments, use first start and last end.
   Exception: sound cues in gaps get the gap's start/end times.
-- MAX 32 characters per line (count EVERY char: letters, spaces, punctuation, brackets, dashes, ♪)
-- MAX 2 lines per cue
+- MAX 32 characters per line, MAX 2 lines per cue
 - Cue duration must be ≥ 500ms
 - Every sentence must end with . ? or !
-- Fix homophones: to/too/two, there/their/they're, its/it's, your/you're, etc.
-- Preserve contractions as spoken: gonna, wanna, kinda, don't, can't, I'm, etc.
-- Do NOT censor. If objectionable words are said, include them exactly as spoken.
+- Preserve contractions as spoken. Do NOT censor.
 
 ═══════════════════════════════════════
 SOUND/MUSIC CUE RULES:
 ═══════════════════════════════════════
-- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS inside. Max 32 chars total.
-- Sound effects: [DESCRIPTION] — ALL CAPS. Max 32 chars.
-- Only insert into SILENCE GAPS listed below where it makes contextual sense.
-- If a gap is pure silence with no context, omit it.
-
-═══════════════════════════════════════
-LINE BREAK STRATEGY:
-═══════════════════════════════════════
-- Break at natural syntactic boundaries (after conjunctions, before prepositions, between clauses)
-- Fill both lines as evenly as possible
-- Keep subjects with their verbs
-- Keep adjectives/articles with their nouns
-- NEVER break mid-word
+- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS. Max 32 chars.
+- Sound: [DESCRIPTION] — ALL CAPS. Max 32 chars.
+- Only insert into SILENCE GAPS. If no context, omit.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT:
 ═══════════════════════════════════════
-Return ONLY a valid JSON array. No markdown. No explanation. No code fences.
+Return ONLY a valid JSON array. No markdown. No code fences.
 Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
-- Use \\n for line breaks within 2-line cues
-- speaker: "A"/"B"/"C" etc. for single-speaker cues, null for dual-speaker or sound cues
-- VERIFY before outputting: every line ≤32 chars, no orphan-word cues, no single-speaker dashes
+Use \\n for line breaks within 2-line cues.
 
 ═══════════════════════════════════════
 INPUT SEGMENTS:
@@ -287,7 +269,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — do not change start/end values from the input. Every text line must be ≤32 characters. Every cue must have ≤2 lines. NEVER drop or omit any spoken content — every word from the input MUST appear in the output. Combine adjacent short segments that form a single phrase into one cue. NEVER use "- " dashes on single-speaker cues — dashes are ONLY for when two different speakers share one cue. NEVER create orphan cues with 1-3 words that are part of a larger sentence — merge them with their neighbor. Verify each cue before including it.',
+            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues.',
           },
           { role: 'user', content: prompt },
         ],
@@ -348,13 +330,11 @@ ${highlightDump}`;
     return null;
   };
 
-  // Backward merge
   const merged = [];
   for (let i = 0; i < parsed.length; i++) {
     const cue = parsed[i];
     if (!cue.text || !cue.text.trim()) continue;
     if (isSoundCueFn(cue.text)) { merged.push(cue); continue; }
-
     const plainText = cue.text.replace(/\n/g, ' ').trim();
     const wordCount = plainText.split(/\s+/).length;
     const prevIdx = merged.length - 1;
@@ -374,7 +354,6 @@ ${highlightDump}`;
     merged.push(cue);
   }
 
-  // Forward merge
   const finalMerged = [];
   for (let i = 0; i < merged.length; i++) {
     const cue = merged[i];
@@ -453,7 +432,6 @@ function finalEnforce(cues) {
 
   result.sort((a, b) => a.start - b.start);
 
-  // Fix overlaps
   for (let i = 1; i < result.length; i++) {
     if (result[i].start < result[i - 1].end) {
       result[i].start = result[i - 1].end + MIN_GAP;
@@ -463,7 +441,6 @@ function finalEnforce(cues) {
     }
   }
 
-  // Final orphan sweep
   const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
   const repack = (text) => {
     const words = text.split(/\s+/).filter(Boolean);
@@ -495,7 +472,6 @@ function finalEnforce(cues) {
     }
   }
 
-  // Final dash cleanup
   for (const c of result) {
     if (!c.text || isSndCue(c.text)) continue;
     const lines = c.text.split('\n');
@@ -532,7 +508,7 @@ function runQC(cues) {
     }
     if (i > 0) {
       const gap = c.start - cues[i - 1].end;
-      if (gap < 0) issues.push({ cue: i, type: 'overlap', value: `${Math.abs(gap)}ms overlap with cue ${i}` });
+      if (gap < 0) issues.push({ cue: i, type: 'overlap', value: `${Math.abs(gap)}ms overlap` });
       else if (gap < 67) issues.push({ cue: i, type: 'gap_too_small', value: `${gap}ms (min 67ms)` });
     }
     if (!isSoundCue && c.text.trim().length > 0) {
@@ -556,16 +532,22 @@ async function addLog(base44, jobId, step, status, detail) {
 }
 
 // ─── MAIN HANDLER ────────────────────────────────────────────────────────────
-// ARCHITECTURE: Single invocation processes ALL batches sequentially.
-// No function chaining — avoids 403 auth errors from asServiceRole.functions.invoke.
+// ARCHITECTURE: Process up to 3 batches per invocation, then HTTP-chain to self
+// for the remaining batches. This avoids the 150s timeout while keeping batches
+// sequential. No asServiceRole.functions.invoke (which causes 403).
 //
 // Actions:
-//   "start"     — fetch transcript, pre-segment, process ALL batches, finalize
-//   "reprocess" — re-run GPT on saved transcript data, process ALL batches, finalize
+//   "start"         — fetch transcript, pre-segment, start processing batches
+//   "process_batch" — process up to 3 batches, chain or finalize
+//   "reprocess"     — reset job, re-run GPT on saved transcript data
+
+const BATCHES_PER_INVOCATION = 3;
 
 Deno.serve(async (req) => {
+  // Clone request for potential re-read in catch block
+  const reqClone = req.clone();
   const base44 = createClientFromRequest(req);
-  let job_db_id = null; // declared here so catch block can access it
+  let job_db_id = null;
 
   try {
     const user = await base44.auth.me();
@@ -583,73 +565,23 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
-    // ── Shared function: process all batches and finalize ──────────────────
-    async function processAllBatchesAndFinalize(jobDbId, batches, gaps, highlights, language) {
-      const totalBatches = batches.length;
-      const allPolished = [];
+    // ── Helper: chain to next batch via HTTP fetch (avoids SDK 403 issue) ──
+    // We extract the authorization header from the original request and re-use it.
+    const authHeader = reqClone.headers.get('authorization') || reqClone.headers.get('Authorization');
+    const appIdHeader = reqClone.headers.get('x-app-id');
 
-      for (let bi = 0; bi < totalBatches; bi++) {
-        const batchSegments = batches[bi];
-        if (!batchSegments || batchSegments.length === 0) continue;
-
-        const batchWindowStart = batchSegments[0].start;
-        const batchWindowEnd = batchSegments[batchSegments.length - 1].end;
-        const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-
-        console.log(`[BATCH ${bi + 1}/${totalBatches}] Processing ${batchSegments.length} segments...`);
-        await addLog(base44, jobDbId, `2_gpt_batch_${bi + 1}_of_${totalBatches}`, 'running',
-          `GPT-4o processing batch ${bi + 1}/${totalBatches} (${batchSegments.length} segments)`);
-
-        const polishedBatch = await polishBatchWithGPT(
-          batchSegments, batchGaps, language, highlights, OPENAI_API_KEY, bi, totalBatches
-        );
-
-        allPolished.push(...polishedBatch);
-        console.log(`[BATCH ${bi + 1}/${totalBatches}] Got ${polishedBatch.length} cues`);
-
-        await addLog(base44, jobDbId, `2_gpt_batch_${bi + 1}_of_${totalBatches}`, 'ok',
-          `Batch ${bi + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
-
-        // Small delay between batches to avoid rate limits
-        if (bi < totalBatches - 1) {
-          await new Promise(r => setTimeout(r, 3000));
-        }
-      }
-
-      // ── FINALIZE ─────────────────────────────────────────────────────────
-      console.log(`[FINALIZE] All ${totalBatches} batches done. Enforcing rules on ${allPolished.length} cues...`);
-      await addLog(base44, jobDbId, '3_finalize', 'running', 'Applying final formatting rules and QC...');
-
-      const enforced = finalEnforce(allPolished);
-      const qc = runQC(enforced);
-      const srt = buildSRT(enforced);
-      const vtt = buildVTT(enforced);
-      const scc = buildSCC(enforced);
-      const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
-
-      await base44.asServiceRole.entities.Job.update(jobDbId, {
-        status: 'done',
-        result: {
-          cues: enforced,
-          srt_url: null,
-          vtt_url: null,
-          scc_url: null,
-          srt_text: srt,
-          vtt_text: vtt,
-          scc_text: scc,
-          qc,
-          language,
-        },
-        durationMs,
-        issuesCount: qc.issuesCount,
-      });
-
-      await addLog(base44, jobDbId, '3_finalize', 'ok',
-        `Done! ${enforced.length} cues, ${qc.issuesCount} QC issues.`);
-
-      console.log(`[FINALIZE] Job ${jobDbId} complete: ${enforced.length} cues, ${qc.issuesCount} issues`);
-
-      return { cues: enforced.length, issues: qc.issuesCount };
+    function chainToSelf(payload) {
+      const selfUrl = reqClone.url;
+      const headers = { 'Content-Type': 'application/json' };
+      if (authHeader) headers['Authorization'] = authHeader;
+      if (appIdHeader) headers['x-app-id'] = appIdHeader;
+      
+      // Fire and forget — don't await
+      fetch(selfUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }).catch(err => console.error('[CHAIN] HTTP self-call failed:', err.message));
     }
 
     // ── ACTION: START ────────────────────────────────────────────────────────
@@ -664,10 +596,7 @@ Deno.serve(async (req) => {
       });
       if (!aaiRes.ok) throw new Error(`AssemblyAI fetch failed: ${aaiRes.status}`);
       const transcript = await aaiRes.json();
-
-      if (transcript.status !== 'completed') {
-        throw new Error(`Transcript not ready: ${transcript.status}`);
-      }
+      if (transcript.status !== 'completed') throw new Error(`Transcript not ready: ${transcript.status}`);
 
       const utterances = transcript.utterances || [];
       const language = transcript.language_code || 'en';
@@ -680,22 +609,20 @@ Deno.serve(async (req) => {
 
       console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}`);
 
-      // Save processing plan
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         processingPlan: {
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
-          gaps,
-          highlights,
-          language,
+          gaps, highlights, language,
           totalBatches: batches.length,
+          polishedCues: [],
           utterances: utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words })),
         },
       });
 
-      // Process ALL batches in this single invocation
-      const result = await processAllBatchesAndFinalize(job_db_id, batches, gaps, highlights, language);
+      // Chain to process_batch
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0 });
 
-      return Response.json({ status: 'done', ...result });
+      return Response.json({ status: 'started', batches: batches.length });
     }
 
     // ── ACTION: REPROCESS ────────────────────────────────────────────────────
@@ -708,8 +635,7 @@ Deno.serve(async (req) => {
 
       if (!utterances || utterances.length === 0) {
         const tid = transcript_id || job.railwayJobId;
-        if (!tid) return Response.json({ error: 'No saved transcript data and no transcript_id to re-fetch' }, { status: 400 });
-        console.log(`[REPROCESS] No saved utterances, re-fetching from AssemblyAI: ${tid}`);
+        if (!tid) return Response.json({ error: 'No saved transcript data' }, { status: 400 });
         const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${tid}`, {
           headers: { 'authorization': ASSEMBLYAI_API_KEY },
         });
@@ -724,12 +650,8 @@ Deno.serve(async (req) => {
       }
 
       const segments = buildRawSegments(utterances);
-      const gaps = plan.gaps || [];
-      const highlights = plan.highlights || [];
-      const language = plan.language || 'en';
       const batches = buildBatches(segments);
 
-      // Reset job state
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'processing',
         result: null,
@@ -737,36 +659,129 @@ Deno.serve(async (req) => {
         pipelineLog: [{ step: '1_transcribe', status: 'ok', detail: 'Reprocess — using saved transcript data.', ts: new Date().toISOString() }],
         processingPlan: {
           ...plan,
-          utterances: utterances,
+          utterances,
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
           totalBatches: batches.length,
+          polishedCues: [],
         },
       });
 
       console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches`);
 
-      // Process ALL batches in this single invocation
-      const result = await processAllBatchesAndFinalize(job_db_id, batches, gaps, highlights, language);
+      // Chain to process_batch
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0 });
 
-      return Response.json({ status: 'done', ...result });
+      return Response.json({ status: 'reprocessing', batches: batches.length });
+    }
+
+    // ── ACTION: PROCESS_BATCH ────────────────────────────────────────────────
+    if (action === 'process_batch') {
+      let batchIndex = body.batch_index ?? 0;
+
+      const job = await base44.asServiceRole.entities.Job.get(job_db_id);
+      if (job.status === 'done') {
+        console.log(`[BATCH ${batchIndex}] Job already done, skipping.`);
+        return Response.json({ status: 'done' });
+      }
+
+      const plan = job.processingPlan;
+      if (!plan || !plan.batches) return Response.json({ error: 'No processing plan' }, { status: 400 });
+
+      const totalBatches = plan.totalBatches;
+      const gaps = plan.gaps || [];
+      const language = plan.language || 'en';
+      const highlights = plan.highlights || [];
+
+      // Process up to BATCHES_PER_INVOCATION batches in this call
+      let processedCount = 0;
+      let allNewCues = [];
+
+      while (batchIndex < totalBatches && processedCount < BATCHES_PER_INVOCATION) {
+        const batchSegments = plan.batches[batchIndex];
+        if (!batchSegments || batchSegments.length === 0) { batchIndex++; continue; }
+
+        const batchWindowStart = batchSegments[0].start;
+        const batchWindowEnd = batchSegments[batchSegments.length - 1].end;
+        const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+
+        console.log(`[BATCH ${batchIndex + 1}/${totalBatches}] Processing ${batchSegments.length} segments...`);
+        await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'running',
+          `GPT-4o processing batch ${batchIndex + 1}/${totalBatches} (${batchSegments.length} segments)`);
+
+        const polishedBatch = await polishBatchWithGPT(
+          batchSegments, batchGaps, language, highlights, OPENAI_API_KEY, batchIndex, totalBatches
+        );
+
+        allNewCues.push(...polishedBatch);
+        console.log(`[BATCH ${batchIndex + 1}/${totalBatches}] Got ${polishedBatch.length} cues`);
+
+        await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'ok',
+          `Batch ${batchIndex + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
+
+        batchIndex++;
+        processedCount++;
+
+        // Small delay between batches
+        if (processedCount < BATCHES_PER_INVOCATION && batchIndex < totalBatches) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+
+      // Save all new polished cues
+      const freshJob = await base44.asServiceRole.entities.Job.get(job_db_id);
+      const freshPlan = freshJob.processingPlan;
+      const allPolished = [...(freshPlan.polishedCues || []), ...allNewCues];
+
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        processingPlan: { ...freshPlan, polishedCues: allPolished },
+      });
+
+      // More batches remaining — chain to self
+      if (batchIndex < totalBatches) {
+        console.log(`[CHAIN] Processed ${processedCount} batches, chaining to batch ${batchIndex}...`);
+        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex });
+        return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
+      }
+
+      // ── FINALIZE ─────────────────────────────────────────────────────────
+      console.log(`[FINALIZE] All ${totalBatches} batches done. Enforcing rules on ${allPolished.length} cues...`);
+      await addLog(base44, job_db_id, '3_finalize', 'running', 'Applying final formatting rules and QC...');
+
+      const enforced = finalEnforce(allPolished);
+      const qc = runQC(enforced);
+      const srt = buildSRT(enforced);
+      const vtt = buildVTT(enforced);
+      const scc = buildSCC(enforced);
+      const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
+
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        status: 'done',
+        result: {
+          cues: enforced,
+          srt_url: null, vtt_url: null, scc_url: null,
+          srt_text: srt, vtt_text: vtt, scc_text: scc,
+          qc, language,
+        },
+        durationMs,
+        issuesCount: qc.issuesCount,
+      });
+
+      await addLog(base44, job_db_id, '3_finalize', 'ok',
+        `Done! ${enforced.length} cues, ${qc.issuesCount} QC issues.`);
+
+      console.log(`[FINALIZE] Job ${job_db_id} complete: ${enforced.length} cues, ${qc.issuesCount} issues`);
+      return Response.json({ status: 'done', cues: enforced.length, issues: qc.issuesCount });
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
 
   } catch (error) {
     console.error('[processAICaption] Error:', error.message);
-
-    // Try to mark job as error — body was already parsed above,
-    // so we use the job_db_id from the outer scope if available
     try {
       if (job_db_id) {
-        await base44.asServiceRole.entities.Job.update(job_db_id, {
-          status: 'error',
-          error: error.message,
-        });
+        await base44.asServiceRole.entities.Job.update(job_db_id, { status: 'error', error: error.message });
       }
-    } catch (_) { /* best effort */ }
-
+    } catch (_) {}
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
