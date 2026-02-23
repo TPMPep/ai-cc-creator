@@ -113,22 +113,115 @@ function parseSRT(srtText) {
 }
 
 // ─── MAP SPEAKERS ONTO SRT CUES ──────────────────────────────────────────────
-// For each SRT cue, find the utterance with the most overlap and assign its speaker.
+// For each SRT cue, find ALL overlapping utterances and split the cue when
+// multiple speakers are present. This prevents short interjections from being
+// swallowed by a dominant speaker's long SRT block.
 function mapSpeakers(srtCues, utterances) {
-  return srtCues.map(cue => {
-    let bestSpeaker = null;
-    let bestOverlap = 0;
+  const result = [];
+  for (const cue of srtCues) {
+    // Find all utterances that overlap this SRT cue
+    const overlapping = [];
     for (const utt of utterances) {
-      const overlapStart = Math.max(cue.start, utt.start);
-      const overlapEnd = Math.min(cue.end, utt.end);
-      const overlap = overlapEnd - overlapStart;
-      if (overlap > bestOverlap) {
-        bestOverlap = overlap;
-        bestSpeaker = utt.speaker || null;
+      const os = Math.max(cue.start, utt.start);
+      const oe = Math.min(cue.end, utt.end);
+      if (oe > os) {
+        overlapping.push({ ...utt, overlapStart: os, overlapEnd: oe, overlap: oe - os });
       }
     }
-    return { ...cue, speaker: bestSpeaker };
-  });
+
+    if (overlapping.length === 0) {
+      result.push({ ...cue, speaker: null });
+      continue;
+    }
+
+    // Check if multiple distinct speakers overlap this cue
+    const speakerSet = new Set(overlapping.map(o => o.speaker).filter(Boolean));
+
+    if (speakerSet.size <= 1) {
+      // Single speaker — simple assignment
+      result.push({ ...cue, speaker: overlapping[0].speaker || null });
+      continue;
+    }
+
+    // Multiple speakers overlap this SRT cue.
+    // Split the cue text proportionally among the speakers based on their
+    // temporal position in the cue. Each utterance gets a portion of the text
+    // corresponding to its time fraction within the cue.
+    overlapping.sort((a, b) => a.overlapStart - b.overlapStart);
+
+    // Group consecutive overlapping utterances by speaker
+    const speakerSegments = [];
+    for (const ov of overlapping) {
+      const last = speakerSegments[speakerSegments.length - 1];
+      if (last && last.speaker === ov.speaker) {
+        last.end = ov.overlapEnd;
+        last.totalOverlap += ov.overlap;
+      } else {
+        speakerSegments.push({
+          speaker: ov.speaker,
+          start: ov.overlapStart,
+          end: ov.overlapEnd,
+          totalOverlap: ov.overlap,
+        });
+      }
+    }
+
+    // Split the cue text among speaker segments proportionally by time
+    const cueDur = cue.end - cue.start;
+    const cueText = cue.text;
+    const totalChars = cueText.length;
+
+    if (speakerSegments.length === 1 || cueDur <= 0 || totalChars === 0) {
+      // Fallback — just use the dominant speaker
+      const best = speakerSegments.reduce((a, b) => a.totalOverlap > b.totalOverlap ? a : b);
+      result.push({ ...cue, speaker: best.speaker || null });
+      continue;
+    }
+
+    // Calculate character boundaries for each speaker segment
+    const words = cueText.split(/\s+/);
+    let charPos = 0;
+    const charBoundaries = speakerSegments.map((seg, idx) => {
+      const frac = seg.totalOverlap / overlapping.reduce((s, o) => s + o.overlap, 0);
+      const chars = idx === speakerSegments.length - 1
+        ? totalChars - charPos
+        : Math.round(totalChars * frac);
+      const boundary = { ...seg, charStart: charPos, charEnd: charPos + chars };
+      charPos += chars;
+      return boundary;
+    });
+
+    // Split at word boundaries
+    let wordIdx = 0;
+    let runningChars = 0;
+    for (let si = 0; si < charBoundaries.length; si++) {
+      const seg = charBoundaries[si];
+      const segWords = [];
+      const targetEnd = seg.charEnd;
+
+      while (wordIdx < words.length) {
+        const word = words[wordIdx];
+        const wordEnd = runningChars + word.length + (runningChars > 0 ? 1 : 0);
+        // Last segment gets all remaining words
+        if (si === charBoundaries.length - 1 || wordEnd <= targetEnd + 5) {
+          segWords.push(word);
+          runningChars = wordEnd;
+          wordIdx++;
+        } else {
+          break;
+        }
+      }
+
+      if (segWords.length > 0) {
+        const segText = segWords.join(' ');
+        // Calculate proportional timecodes
+        const segStart = seg.start;
+        const segEnd = seg.end;
+        result.push({ start: segStart, end: segEnd, text: segText, speaker: seg.speaker || null });
+      }
+    }
+  }
+  return result;
 }
 
 function findGaps(utterances, totalDurationMs) {
