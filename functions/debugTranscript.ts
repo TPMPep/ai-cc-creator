@@ -32,17 +32,23 @@ Deno.serve(async (req) => {
     // Also check content_safety_labels for any sound-related data
     const contentSafety = transcript.content_safety_labels;
 
+    // Check EVERY key for anything that could contain audio event / sound data
+    const allData = {};
+    for (const key of topLevelKeys) {
+      const val = transcript[key];
+      if (val !== null && val !== undefined && val !== false && val !== '' && val !== 0) {
+        if (typeof val === 'object' || Array.isArray(val)) {
+          allData[key] = JSON.stringify(val).substring(0, 200);
+        }
+      }
+    }
+
     return Response.json({
       topLevelKeys,
-      audioRelatedKeys,
-      audioEventData,
-      hasAudioEvents: !!transcript.audio_events,
-      hasAudioEventsResult: !!transcript.audio_events_result,
-      audioEventsRaw: transcript.audio_events,
-      audioEventsResultRaw: transcript.audio_events_result,
-      // Check a few other possible field names
-      audioIntelligence: transcript.audio_intelligence,
-      // First 3 utterances for speaker label verification
+      audioEventsFieldValue: transcript.audio_events,
+      contentSafetyEnabled: transcript.content_safety,
+      // Dump all non-null object/array fields to find where events might be
+      objectFields: allData,
       utterancesSample: (transcript.utterances || []).slice(0, 5).map(u => ({
         start: u.start, end: u.end, speaker: u.speaker, text: u.text?.substring(0, 80)
       })),
