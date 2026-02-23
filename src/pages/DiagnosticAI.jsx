@@ -70,6 +70,8 @@ export default function DiagnosticAI() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [diagnosticData, setDiagnosticData] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   useEffect(() => {
     if (!jobId) { setLoading(false); return; }
@@ -78,6 +80,37 @@ export default function DiagnosticAI() {
       setLoading(false);
     });
   }, [jobId]);
+
+  useEffect(() => {
+    if (!job?.result) return;
+    if (job.result.assemblyRawCues) {
+      setDiagnosticData({
+        assemblyCues: job.result.assemblyRawCues,
+        assemblyUtterances: job.result.assemblyUtterances || [],
+        openaiCues: job.result.openaiReformattedCues || [],
+        rawAudioEvents: job.result.rawAudioEvents || [],
+      });
+    } else if (job.result.diagnostic_url) {
+      setDiagLoading(true);
+      fetch(job.result.diagnostic_url).then(r => r.json()).then(data => {
+        setDiagnosticData({
+          assemblyCues: data.assemblyRawCues || [],
+          assemblyUtterances: data.assemblyUtterances || [],
+          openaiCues: data.openaiReformattedCues || [],
+          rawAudioEvents: data.rawAudioEvents || [],
+        });
+        setDiagLoading(false);
+      }).catch(() => setDiagLoading(false));
+    }
+  }, [job?.result]);
+
+  const finalCues = job?.result?.cues || [];
+  const assemblyCues = diagnosticData?.assemblyCues || [];
+  const assemblyUtterances = diagnosticData?.assemblyUtterances || [];
+  const openaiCues = diagnosticData?.openaiCues || [];
+  const rawAudioEvents = diagnosticData?.rawAudioEvents || [];
+  const rows = alignRows(assemblyCues, openaiCues, finalCues, assemblyUtterances, rawAudioEvents);
+  const activeFinalIndex = finalCues.findIndex(c => c.start <= currentTimeMs && currentTimeMs <= c.end);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -92,45 +125,6 @@ export default function DiagnosticAI() {
       <Link to={createPageUrl("Jobs")}><Button variant="outline" className="border-zinc-800 text-zinc-300">Go to Jobs</Button></Link>
     </div>
   );
-
-  const finalCues = job.result?.cues || [];
-
-  // Diagnostic data: support both inline (legacy) and URL-based (new) formats
-  const [diagnosticData, setDiagnosticData] = useState(null);
-  const [diagLoading, setDiagLoading] = useState(false);
-
-  useEffect(() => {
-    if (!job?.result) return;
-    // If we have inline data, use it directly
-    if (job.result.assemblyRawCues) {
-      setDiagnosticData({
-        assemblyCues: job.result.assemblyRawCues,
-        assemblyUtterances: job.result.assemblyUtterances || [],
-        openaiCues: job.result.openaiReformattedCues || [],
-        rawAudioEvents: job.result.rawAudioEvents || [],
-      });
-    } else if (job.result.diagnostic_url) {
-      // Fetch from URL
-      setDiagLoading(true);
-      fetch(job.result.diagnostic_url).then(r => r.json()).then(data => {
-        setDiagnosticData({
-          assemblyCues: data.assemblyRawCues || [],
-          assemblyUtterances: data.assemblyUtterances || [],
-          openaiCues: data.openaiReformattedCues || [],
-          rawAudioEvents: data.rawAudioEvents || [],
-        });
-        setDiagLoading(false);
-      }).catch(() => setDiagLoading(false));
-    }
-  }, [job?.result]);
-
-  const assemblyCues = diagnosticData?.assemblyCues || [];
-  const assemblyUtterances = diagnosticData?.assemblyUtterances || [];
-  const openaiCues = diagnosticData?.openaiCues || [];
-  const rawAudioEvents = diagnosticData?.rawAudioEvents || [];
-  const rows = alignRows(assemblyCues, openaiCues, finalCues, assemblyUtterances, rawAudioEvents);
-
-  const activeFinalIndex = finalCues.findIndex(c => c.start <= currentTimeMs && currentTimeMs <= c.end);
 
   const handleSeek = (ms) => {
     if (videoRef.current) videoRef.current.currentTime = ms / 1000;
