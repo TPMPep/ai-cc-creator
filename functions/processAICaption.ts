@@ -866,20 +866,22 @@ Deno.serve(async (req) => {
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
       // Upload large text files to avoid entity field size limits
-      const uploadText = async (content, filename, mimeType) => {
-        const blob = new Blob([content], { type: mimeType });
-        const formData = new FormData();
-        formData.append('file', blob, filename);
-        const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file: blob });
+      const uploadText = async (content, filename) => {
+        const tmpPath = `/tmp/${filename}`;
+        await Deno.writeTextFile(tmpPath, content);
+        const fileData = await Deno.readFile(tmpPath);
+        const file = new File([fileData], filename, { type: 'text/plain' });
+        const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file });
+        // Clean up tmp file
+        await Deno.remove(tmpPath).catch(() => {});
         return uploadResult.file_url;
       };
 
       console.log(`[FINALIZE] Uploading SRT/VTT/SCC files...`);
-      const [srtUrl, vttUrl, sccUrl] = await Promise.all([
-        uploadText(srt, `${job_db_id}.srt`, 'text/plain'),
-        uploadText(vtt, `${job_db_id}.vtt`, 'text/plain'),
-        uploadText(scc, `${job_db_id}.scc`, 'text/plain'),
-      ]);
+      // Upload sequentially to avoid memory pressure
+      const srtUrl = await uploadText(srt, `${job_db_id}.srt`);
+      const vttUrl = await uploadText(vtt, `${job_db_id}.vtt`);
+      const sccUrl = await uploadText(scc, `${job_db_id}.scc`);
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
