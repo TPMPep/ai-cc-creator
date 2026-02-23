@@ -206,8 +206,9 @@ You will receive pre-timed caption segments. Your job is:
 4. If two adjacent segments have different speakers AND their combined text fits in 2 lines of ≤32 chars each, you MAY combine them into one cue with "- " prefix on each line
 5. Insert sound/music cues into SILENCE GAPS where appropriate
 6. Return ALL segments — NEVER skip or drop any spoken content. Every word from the input MUST appear in the output.
-7. NEVER split a short phrase across multiple cues if it fits in one. E.g. "Previously on Love Island USA." must stay as ONE cue, not split into "Previously on", "Love Island", "USA." separately.
-8. When adjacent input segments form a single sentence or phrase, COMBINE them into one cue (using the first segment's start and the last segment's end) if the combined text fits within 2 lines of ≤32 chars each.
+7. NEVER split a short phrase across multiple cues if it fits in one. E.g. "Previously on Love Island USA." MUST be ONE cue — never "Previously on Love", "Island", "USA." as three separate cues.
+8. When adjacent input segments form a single sentence or phrase, you MUST COMBINE them into one cue (using the first segment's start and the last segment's end) if the combined text fits within 2 lines of ≤32 chars each. This is CRITICAL — look at the full sentence across segments before deciding cue boundaries.
+9. NEVER create a cue with just 1-2 words (like "Island" or "USA.") if the previous cue is from the same sentence — always merge them.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
