@@ -645,10 +645,7 @@ Deno.serve(async (req) => {
         },
       });
 
-      // Chain to process_batch using internal secret
-      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0, runId });
-
-      return Response.json({ status: 'started', batches: batches.length });
+      return Response.json({ status: 'started', batches: batches.length, runId });
     }
 
     // ── ACTION: REPROCESS ────────────────────────────────────────────────────
