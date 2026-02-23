@@ -457,31 +457,39 @@ function finalEnforce(cues, originalSegments) {
     return text.split('\n').map(l => l.replace(/^-\s*/, '').trimStart()).join('\n');
   }
 
-  // ── STEP 0: Speaker detection with >20% overlap threshold ──
-  // Only mark multi-speaker if TWO DIFFERENT speakers each have significant overlap.
+  // ── STEP 0: Speaker detection ──
+  // Use the speaker that GPT assigned (from the input SRT segments).
+  // Only mark multi-speaker if GPT explicitly set speaker=null AND the cue has dashes.
+  // We trust GPT's speaker assignment over time-overlap heuristics because
+  // overlap-based detection was producing wrong results (e.g. assigning speaker B
+  // when the utterance data says speaker C).
   function getSpeakersForCue(cue) {
-    const sources = originalSegments || [];
-    if (!sources.length) return [];
-    const cueDur = cue.end - cue.start;
-    if (cueDur <= 0) return [];
+    // If GPT assigned a specific speaker, trust it
+    if (cue.speaker) return [cue.speaker];
 
-    const speakerOverlap = {};
-    for (const seg of sources) {
-      const os = Math.max(cue.start, seg.start);
-      const oe = Math.min(cue.end, seg.end);
-      const overlap = oe - os;
-      if (overlap > 0 && seg.speaker) {
-        speakerOverlap[seg.speaker] = (speakerOverlap[seg.speaker] || 0) + overlap;
+    // If speaker is null, check if GPT intended multi-speaker (has dashes)
+    const hasDashes = (cue.text || '').split('\n').some(l => l.trimStart().startsWith('- '));
+    if (hasDashes) {
+      // Find the two speakers from utterance overlap
+      const sources = originalSegments || [];
+      const speakerOverlap = {};
+      for (const seg of sources) {
+        const os = Math.max(cue.start, seg.start);
+        const oe = Math.min(cue.end, seg.end);
+        const overlap = oe - os;
+        if (overlap > 0 && seg.speaker) {
+          speakerOverlap[seg.speaker] = (speakerOverlap[seg.speaker] || 0) + overlap;
+        }
       }
+      const speakers = Object.keys(speakerOverlap);
+      speakers.sort((a, b) => speakerOverlap[b] - speakerOverlap[a]);
+      if (speakers.length >= 2) return speakers.slice(0, 2);
+      return speakers;
     }
-    const speakers = Object.keys(speakerOverlap);
-    if (speakers.length <= 1) return speakers;
 
-    // Only count speaker if they occupy >20% of the cue
-    const threshold = cueDur * 0.20;
-    const significant = speakers.filter(s => speakerOverlap[s] >= threshold);
-    significant.sort((a, b) => speakerOverlap[b] - speakerOverlap[a]);
-    return significant;
+    // No speaker, no dashes — try to find dominant from utterances
+    const dom = getDominantSpeaker(cue);
+    return dom ? [dom] : [];
   }
 
   // Get single dominant speaker for a cue
