@@ -905,8 +905,9 @@ Deno.serve(async (req) => {
       const job = await base44.asServiceRole.entities.Job.get(job_db_id);
       if (!job) return Response.json({ error: 'Job not found' }, { status: 404 });
 
-      const savedCues = job.result?.assemblyRawCues || [];
-      if (!savedCues.length) return Response.json({ error: 'No saved AssemblyAI data found. You must reprocess from AssemblyAI.' }, { status: 400 });
+      // Check if we have diagnostic data (either inline or as URL)
+      const hasDiagnostic = job.result?.assemblyRawCues?.length > 0 || job.result?.diagnostic_url;
+      if (!hasDiagnostic) return Response.json({ error: 'No saved AssemblyAI data found. You must reprocess from AssemblyAI.' }, { status: 400 });
 
       // Always re-fetch SRT + utterances from AssemblyAI (cached, no new charge)
       const [transcript, srtText] = await Promise.all([
