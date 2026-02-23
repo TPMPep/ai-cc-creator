@@ -305,7 +305,51 @@ ${highlightDump}`;
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error(`OpenAI did not return valid JSON (batch ${batchIndex + 1})`);
 
-  return JSON.parse(jsonMatch[0]);
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  // Post-GPT merge: combine adjacent spoken cues that form incomplete phrases
+  // (e.g. "Previously on Love" + "Island" + "USA." should be one cue)
+  const merged = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const cue = parsed[i];
+    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
+    if (isSoundCue) { merged.push(cue); continue; }
+
+    // Check if this cue is a short fragment that should merge with the previous spoken cue
+    const plainText = cue.text.replace(/\n/g, ' ').trim();
+    const prevIdx = merged.length - 1;
+    const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
+    const prevIsSoundCue = prevCue && (prevCue.text.startsWith('[') || prevCue.text.includes('♪'));
+
+    if (prevCue && !prevIsSoundCue && plainText.length < 15) {
+      // Check if combined text still fits (2 lines × 32 chars)
+      const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
+      if (combinedText.length <= 64) {
+        // Repack into ≤32 char lines
+        const words = combinedText.split(/\s+/);
+        let line1 = '';
+        let line2 = '';
+        for (const w of words) {
+          if (!line1 || (line1 + ' ' + w).length <= 32) {
+            line1 = line1 ? line1 + ' ' + w : w;
+          } else if (!line2 || (line2 + ' ' + w).length <= 32) {
+            line2 = line2 ? line2 + ' ' + w : w;
+          } else {
+            break; // doesn't fit, skip merge
+          }
+        }
+        const newText = line2 ? line1 + '\n' + line2 : line1;
+        const allFit = newText.split('\n').every(l => l.length <= 32);
+        if (allFit) {
+          merged[prevIdx] = { ...prevCue, end: cue.end, text: newText };
+          continue;
+        }
+      }
+    }
+    merged.push(cue);
+  }
+
+  return merged;
 }
 
 // ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
