@@ -759,7 +759,7 @@ Deno.serve(async (req) => {
     // Try to mark job as error — body was already parsed above,
     // so we use the job_db_id from the outer scope if available
     try {
-      if (typeof job_db_id !== 'undefined' && job_db_id) {
+      if (job_db_id) {
         await base44.asServiceRole.entities.Job.update(job_db_id, {
           status: 'error',
           error: error.message,
