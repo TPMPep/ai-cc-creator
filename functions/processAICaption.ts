@@ -608,8 +608,7 @@ function finalEnforce(cues, originalSegments) {
 
   // ── STEP 1b: Consolidate short cues (1-2 word fragments) ──
   // Merge very short text cues into their neighbors to prevent fragmentation.
-  // For very short text with overly long durations, shrink the cue's end first
-  // so that combining duration stays under MAX_DUR.
+  // CRITICAL: NEVER merge cues with different speakers. Speaker identity is sacred.
   const step1b = [];
   for (let i = 0; i < step1.length; i++) {
     const cue = step1[i];
@@ -625,10 +624,15 @@ function finalEnforce(cues, originalSegments) {
     }
 
     // For very short text (1-2 words), shrink overly long durations
-    // A 1-2 word cue should be ~1-2 seconds max, not 4+ seconds
     const maxDurForShort = Math.max(MIN_DUR, wordCount * 1000);
     const actualDur = cue.end - cue.start;
     const shrunkEnd = actualDur > maxDurForShort ? cue.start + maxDurForShort : cue.end;
+
+    // STRICT speaker matching: both must have a speaker and they must match.
+    // null/undefined speakers NEVER match — they are unresolved and must not be merged.
+    function strictSameSpeaker(spkA, spkB) {
+      return spkA && spkB && spkA === spkB;
+    }
 
     // Try merge with previous
     if (step1b.length > 0) {
@@ -636,18 +640,15 @@ function finalEnforce(cues, originalSegments) {
       const prevIsSound = isSound(prev.text);
       const prevHasDashes = prev.text.split('\n').some(l => l.trimStart().startsWith('- '));
       const gap = cue.start - prev.end;
-      const sameSpeaker = !prevIsSound && !prevHasDashes &&
-        (prev.speaker === cue.speaker || !prev.speaker || !cue.speaker);
       const prevFlat = prev.text.replace(/\n/g, ' ').trim();
       const combined = `${prevFlat} ${flatText}`;
-      // Use shrunk end for duration check to allow merging short fragments
       const combinedDur = shrunkEnd - prev.start;
 
-      if (sameSpeaker && gap <= MERGE_GAP_LIMIT && !prevIsSound && !prevHasDashes
+      if (strictSameSpeaker(prev.speaker, cue.speaker) && gap <= MERGE_GAP_LIMIT
+          && !prevIsSound && !prevHasDashes
           && combinedDur <= MAX_DUR && combined.length <= MAX_CHARS * 2 + 1) {
         prev.end = shrunkEnd;
         prev.text = combined;
-        if (cue.speaker && !prev.speaker) prev.speaker = cue.speaker;
         continue;
       }
     }
@@ -658,17 +659,15 @@ function finalEnforce(cues, originalSegments) {
       const nextIsSound = isSound(next.text);
       const nextHasDashes = next.text.split('\n').some(l => l.trimStart().startsWith('- '));
       const gap = next.start - shrunkEnd;
-      const sameSpeaker = !nextIsSound && !nextHasDashes &&
-        (next.speaker === cue.speaker || !next.speaker || !cue.speaker);
       const nextFlat = next.text.replace(/\n/g, ' ').trim();
       const combined = `${flatText} ${nextFlat}`;
       const combinedDur = next.end - cue.start;
 
-      if (sameSpeaker && gap <= MERGE_GAP_LIMIT && !nextIsSound && !nextHasDashes
+      if (strictSameSpeaker(next.speaker, cue.speaker) && gap <= MERGE_GAP_LIMIT
+          && !nextIsSound && !nextHasDashes
           && combinedDur <= MAX_DUR && combined.length <= MAX_CHARS * 2 + 1) {
         next.start = cue.start;
         next.text = combined;
-        if (cue.speaker && !next.speaker) next.speaker = cue.speaker;
         continue;
       }
     }
