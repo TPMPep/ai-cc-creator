@@ -305,22 +305,46 @@ function finalEnforce(cues) {
   const result = [];
 
   for (const cue of cues) {
+    if (!cue.text || !cue.text.trim()) continue;
+
+    const lines = cue.text.split('\n').filter(l => l.trim().length > 0);
+    if (lines.length === 0) continue;
+
     const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
-    const lines = cue.text.split('\n');
     const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
 
-    if (allOk || isSoundCue) {
-      if (isSoundCue && lines.some(l => l.length > MAX_CHARS)) {
-        result.push({ ...cue, text: lines.map(l => l.substring(0, MAX_CHARS)).join('\n') });
-      } else {
-        result.push(cue);
+    // If it's already compliant, keep it (truncate sound cues if needed)
+    if (allOk) {
+      result.push({ ...cue, text: lines.join('\n') });
+      continue;
+    }
+
+    // For cues with >2 lines or lines >32 chars, we need to split/repack into compliant cues
+    // First, if it's a sound cue, just truncate lines and split into 2-line groups
+    if (isSoundCue) {
+      const truncated = lines.map(l => l.substring(0, MAX_CHARS));
+      const totalDur = cue.end - cue.start;
+      const groupCount = Math.ceil(truncated.length / 2);
+      for (let g = 0; g < groupCount; g++) {
+        const groupLines = truncated.slice(g * 2, g * 2 + 2);
+        const groupStart = cue.start + Math.round((g / groupCount) * totalDur);
+        const groupEnd = g === groupCount - 1 ? cue.end : cue.start + Math.round(((g + 1) / groupCount) * totalDur);
+        result.push({
+          start: groupStart,
+          end: Math.max(groupStart + MIN_DUR, groupEnd),
+          text: groupLines.join('\n'),
+          speaker: cue.speaker,
+        });
       }
       continue;
     }
 
+    // Regular text cue — repack words into ≤32-char lines, ≤2 lines per cue
     const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
+    if (words.length === 0) continue;
+
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
 
@@ -336,6 +360,8 @@ function finalEnforce(cues) {
       }
     }
     if (cur) packed.push(cur);
+
+    if (packed.length === 0) continue;
 
     const totalDur = cue.end - cue.start;
     const chunkCount = Math.ceil(packed.length / 2);
