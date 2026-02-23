@@ -848,7 +848,14 @@ Deno.serve(async (req) => {
 
       // All batches done — finalize
       // Gather all original input segments (flat) for speaker detection
+      // Also include raw utterances for better speaker boundary detection
       const allOriginalSegments = batches.flat();
+      // Prefer utterance data (has real speaker labels from AssemblyAI)
+      const utteranceSegments = (assemblyRawCues || []).map(u => ({
+        start: u.start, end: u.end, text: u.text, speaker: u.speaker
+      }));
+      // Use utterances if available, fall back to SRT-mapped segments
+      const speakerSource = utteranceSegments.length > 0 ? utteranceSegments : allOriginalSegments;
       const cues = finalEnforce(newPolishedCues, allOriginalSegments);
       const srt = buildSRT(cues);
       const vtt = buildVTT(cues);
