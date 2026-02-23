@@ -577,6 +577,7 @@ Deno.serve(async (req) => {
         pipelineLog: [{ step: '1_transcribe', status: 'ok', detail: 'Reprocess — using saved transcript data.', ts: new Date().toISOString() }],
         processingPlan: {
           ...plan,
+          utterances: utterances,
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
           totalBatches: batches.length,
           polishedCues: [],
