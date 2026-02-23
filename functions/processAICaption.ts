@@ -416,73 +416,97 @@ function cleanCueText(text) {
 // ─── FINAL ENFORCEMENT (ZERO TOLERANCE) ─────────────────────────────────────
 // This pass deterministically fixes ALL QC issues so the output is always broadcast-ready.
 // It handles: line length, line count, timing, gaps, overlaps, reading speed,
-// and multi-speaker dash formatting.
+// multi-speaker dash formatting, and short-cue consolidation.
 
 function finalEnforce(cues, originalSegments) {
   const MAX_CHARS = 32;
   const MIN_DUR = 500;
   const MAX_DUR = 7000;
   const MIN_GAP = 67;
-  const MAX_CPS = 25; // chars per second
+  const MAX_CPS = 25;
+  const MIN_WORDS_STANDALONE = 3; // cues with fewer words get merged
+  const MERGE_GAP_LIMIT = 500;    // ms — max gap for short-cue merging
 
-  // ── STEP 0: Build speaker map from original segments AND utterances ──
-  // For each output cue, find which original utterances overlap it and detect speaker changes.
-  // We check BOTH originalSegments (SRT-based, used as GPT input) and raw utterances
-  // because SRT cues can merge multiple speakers into one segment.
+  // Helper: check if text is a sound/music cue
+  function isSound(text) {
+    if (!text) return false;
+    const s = text.replace(/\n/g, ' ').trim();
+    return s.includes('♪') || /^\[.+\](\s*\[.+\])*$/.test(s);
+  }
+
+  // Helper: unconditionally strip all dash prefixes from text
+  function stripDashes(text) {
+    return text.split('\n').map(l => l.replace(/^-\s*/, '').trimStart()).join('\n');
+  }
+
+  // ── STEP 0: Speaker detection with >20% overlap threshold ──
+  // Only mark multi-speaker if TWO DIFFERENT speakers each have significant overlap.
   function getSpeakersForCue(cue) {
     const sources = originalSegments || [];
     if (!sources.length) return [];
+    const cueDur = cue.end - cue.start;
+    if (cueDur <= 0) return [];
 
-    // Find all segments that overlap this cue (even by 1ms)
-    const overlapping = [];
+    const speakerOverlap = {};
     for (const seg of sources) {
-      const overlapStart = Math.max(cue.start, seg.start);
-      const overlapEnd = Math.min(cue.end, seg.end);
-      if (overlapEnd > overlapStart && seg.speaker) {
-        overlapping.push(seg);
+      const os = Math.max(cue.start, seg.start);
+      const oe = Math.min(cue.end, seg.end);
+      const overlap = oe - os;
+      if (overlap > 0 && seg.speaker) {
+        speakerOverlap[seg.speaker] = (speakerOverlap[seg.speaker] || 0) + overlap;
       }
     }
+    const speakers = Object.keys(speakerOverlap);
+    if (speakers.length <= 1) return speakers;
 
-    // Sort by start time and collect unique speaker transitions
-    overlapping.sort((a, b) => a.start - b.start);
-    const speakers = [];
-    for (const seg of overlapping) {
-      if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
-        speakers.push(seg.speaker);
-      }
-    }
-    return speakers;
+    // Only count speaker if they occupy >20% of the cue
+    const threshold = cueDur * 0.20;
+    const significant = speakers.filter(s => speakerOverlap[s] >= threshold);
+    significant.sort((a, b) => speakerOverlap[b] - speakerOverlap[a]);
+    return significant;
   }
 
-  // ── STEP 1: Clean text + fix multi-speaker dashes ──
-  // Dashes are ONLY used when TWO DIFFERENT speakers share the SAME cue.
-  // If a cue has only one speaker, no dash — even if a different speaker was in the previous cue.
+  // Get single dominant speaker for a cue
+  function getDominantSpeaker(cue) {
+    const sources = originalSegments || [];
+    let best = null, bestOv = 0;
+    for (const seg of sources) {
+      const os = Math.max(cue.start, seg.start);
+      const oe = Math.min(cue.end, seg.end);
+      const ov = oe - os;
+      if (ov > bestOv && seg.speaker) { bestOv = ov; best = seg.speaker; }
+    }
+    return best;
+  }
+
+  // ── STEP 1: Clean text + fix dashes ──
+  // Rule: dashes ONLY when 2+ speakers with significant overlap share ONE cue.
+  // Otherwise: unconditionally strip ALL dashes, regardless of line count.
   const step1 = [];
   for (const cue of cues) {
     const cleanedText = cleanCueText(cue.text || '');
     if (!cleanedText || !cleanedText.trim()) continue;
 
+    // Sound cues — no speaker attribution, no dashes
+    if (isSound(cleanedText)) {
+      step1.push({ ...cue, text: stripDashes(cleanedText), speaker: null });
+      continue;
+    }
+
     const speakers = getSpeakersForCue(cue);
     const hasMultipleSpeakers = speakers.length >= 2;
-    const lines = cleanedText.split('\n');
-
-    // Check if GPT already added dashes
-    const alreadyHasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
 
     if (hasMultipleSpeakers) {
-      // This cue genuinely has 2+ speakers — ensure dashes are present
-      if (alreadyHasDashes) {
-        // GPT already formatted correctly
-        step1.push({ ...cue, text: cleanedText, speaker: null });
-      } else if (lines.length >= 2) {
-        // Multiple lines already — add dashes to each
-        const dashedText = lines.map(l => {
-          const trimmed = l.replace(/^- /, '').trimStart();
-          return `- ${trimmed}`;
-        }).join('\n');
+      // Genuine multi-speaker cue — ensure exactly 2 dashed lines
+      const stripped = stripDashes(cleanedText);
+      const lines = stripped.split('\n');
+
+      if (lines.length >= 2) {
+        // Already multi-line — add dashes
+        const dashedText = lines.slice(0, 2).map(l => `- ${l.trim()}`).join('\n');
         step1.push({ ...cue, text: dashedText, speaker: null });
       } else {
-        // Single line with multiple speakers — try to split at speaker boundary
+        // Single line — try to split at speaker boundary
         const overlapping = (originalSegments || []).filter(seg => {
           const os = Math.max(cue.start, seg.start);
           const oe = Math.min(cue.end, seg.end);
@@ -495,17 +519,16 @@ function finalEnforce(cues, originalSegments) {
           for (let si = 1; si < overlapping.length; si++) {
             if (overlapping[si].speaker !== firstSpeaker) {
               const boundaryTime = overlapping[si].start;
-              const textLen = cleanedText.length;
               const cueDur = cue.end - cue.start;
               if (cueDur > 0) {
-                const timeFraction = (boundaryTime - cue.start) / cueDur;
-                splitPoint = Math.round(textLen * timeFraction);
-                const spaceAfter = cleanedText.indexOf(' ', splitPoint);
-                const spaceBefore = cleanedText.lastIndexOf(' ', splitPoint);
-                if (spaceAfter >= 0 && (splitPoint - spaceBefore > spaceAfter - splitPoint || spaceBefore < 0)) {
-                  splitPoint = spaceAfter;
-                } else if (spaceBefore > 0) {
-                  splitPoint = spaceBefore;
+                const frac = (boundaryTime - cue.start) / cueDur;
+                splitPoint = Math.round(stripped.length * frac);
+                const after = stripped.indexOf(' ', splitPoint);
+                const before = stripped.lastIndexOf(' ', splitPoint);
+                if (after >= 0 && (splitPoint - before > after - splitPoint || before < 0)) {
+                  splitPoint = after;
+                } else if (before > 0) {
+                  splitPoint = before;
                 }
               }
               break;
@@ -513,42 +536,96 @@ function finalEnforce(cues, originalSegments) {
           }
         }
 
-        if (splitPoint > 0 && splitPoint < cleanedText.length) {
-          const part1 = cleanedText.substring(0, splitPoint).trim();
-          const part2 = cleanedText.substring(splitPoint).trim();
-          step1.push({ ...cue, text: `- ${part1}\n- ${part2}`, speaker: null });
+        if (splitPoint > 0 && splitPoint < stripped.length) {
+          const p1 = stripped.substring(0, splitPoint).trim();
+          const p2 = stripped.substring(splitPoint).trim();
+          if (p1 && p2) {
+            step1.push({ ...cue, text: `- ${p1}\n- ${p2}`, speaker: null });
+          } else {
+            step1.push({ ...cue, text: stripped, speaker: getDominantSpeaker(cue) || cue.speaker });
+          }
         } else {
-          step1.push({ ...cue, text: cleanedText, speaker: null });
+          // Can't split — assign to dominant speaker, no dashes
+          step1.push({ ...cue, text: stripped, speaker: getDominantSpeaker(cue) || cue.speaker });
         }
       }
     } else {
-      // Single speaker (or no speaker detected) — NEVER add dashes
-      // Strip any erroneous dashes GPT may have added
-      if (alreadyHasDashes) {
-        const strippedText = lines.map(l => l.replace(/^-\s*/, '').trimStart()).join('\n');
-        step1.push({ ...cue, text: strippedText, speaker: speakers[0] || cue.speaker });
-      } else {
-        step1.push({ ...cue, text: cleanedText });
-      }
+      // Single speaker — UNCONDITIONALLY strip ALL dashes from ALL lines
+      const stripped = stripDashes(cleanedText);
+      const speaker = speakers[0] || getDominantSpeaker(cue) || cue.speaker;
+      step1.push({ ...cue, text: stripped, speaker });
     }
   }
 
-  // ── STEP 2: Fix line count and line length ──
-  // Strategy: reflow into 2 lines × 32 chars. If text genuinely can't fit (>~60 chars),
-  // split into exactly 2 cues (halving at a word boundary), each getting half the timecode.
-  // This avoids micro-fragments like single-word cues.
+  // ── STEP 1b: Consolidate short cues (1-2 word fragments) ──
+  // Merge very short text cues into their neighbors to prevent fragmentation.
+  const step1b = [];
+  for (let i = 0; i < step1.length; i++) {
+    const cue = step1[i];
+    const flatText = cue.text.replace(/\n/g, ' ').trim();
+    const wordCount = flatText.split(/\s+/).filter(Boolean).length;
+    const cueIsSound = isSound(cue.text);
+    const hasDashes = cue.text.split('\n').some(l => l.trimStart().startsWith('- '));
 
+    // Skip sound cues, dashed (multi-speaker) cues, and cues long enough
+    if (cueIsSound || hasDashes || wordCount >= MIN_WORDS_STANDALONE) {
+      step1b.push(cue);
+      continue;
+    }
+
+    // Try merge with previous
+    if (step1b.length > 0) {
+      const prev = step1b[step1b.length - 1];
+      const prevIsSound = isSound(prev.text);
+      const prevHasDashes = prev.text.split('\n').some(l => l.trimStart().startsWith('- '));
+      const gap = cue.start - prev.end;
+      const sameSpeaker = !prevIsSound && !prevHasDashes &&
+        (prev.speaker === cue.speaker || !prev.speaker || !cue.speaker);
+      const prevFlat = prev.text.replace(/\n/g, ' ').trim();
+      const combined = `${prevFlat} ${flatText}`;
+      const combinedDur = cue.end - prev.start;
+
+      if (sameSpeaker && gap <= MERGE_GAP_LIMIT && !prevIsSound && !prevHasDashes
+          && combinedDur <= MAX_DUR && combined.length <= MAX_CHARS * 2 + 1) {
+        prev.end = cue.end;
+        prev.text = combined;
+        if (cue.speaker && !prev.speaker) prev.speaker = cue.speaker;
+        continue;
+      }
+    }
+
+    // Try merge with next
+    if (i + 1 < step1.length) {
+      const next = step1[i + 1];
+      const nextIsSound = isSound(next.text);
+      const nextHasDashes = next.text.split('\n').some(l => l.trimStart().startsWith('- '));
+      const gap = next.start - cue.end;
+      const sameSpeaker = !nextIsSound && !nextHasDashes &&
+        (next.speaker === cue.speaker || !next.speaker || !cue.speaker);
+      const nextFlat = next.text.replace(/\n/g, ' ').trim();
+      const combined = `${flatText} ${nextFlat}`;
+      const combinedDur = next.end - cue.start;
+
+      if (sameSpeaker && gap <= MERGE_GAP_LIMIT && !nextIsSound && !nextHasDashes
+          && combinedDur <= MAX_DUR && combined.length <= MAX_CHARS * 2 + 1) {
+        next.start = cue.start;
+        next.text = combined;
+        if (cue.speaker && !next.speaker) next.speaker = cue.speaker;
+        continue;
+      }
+    }
+
+    // Can't merge — keep as-is
+    step1b.push(cue);
+  }
+
+  // ── STEP 2: Fix line count and line length ──
   function reflowText(words, limit) {
-    // Try to fit all words into 2 lines of ≤limit chars each
-    // Returns formatted text string or null if impossible
     if (words.length === 0) return null;
     const full = words.join(' ');
-    // If it fits on one line, just use one line
     if (full.length <= limit) return full;
 
-    // Try balanced 2-line split
-    let bestSplit = -1;
-    let bestBalance = Infinity;
+    let bestSplit = -1, bestBalance = Infinity;
     for (let split = 1; split < words.length; split++) {
       const l1 = words.slice(0, split).join(' ');
       const l2 = words.slice(split).join(' ');
@@ -561,9 +638,7 @@ function finalEnforce(cues, originalSegments) {
       return `${words.slice(0, bestSplit).join(' ')}\n${words.slice(bestSplit).join(' ')}`;
     }
 
-    // Try greedy: pack line 1 as full as possible
-    let line1 = '';
-    let wi = 0;
+    let line1 = '', wi = 0;
     while (wi < words.length) {
       const candidate = line1 ? `${line1} ${words[wi]}` : words[wi];
       if (candidate.length <= limit) { line1 = candidate; wi++; }
@@ -571,19 +646,15 @@ function finalEnforce(cues, originalSegments) {
     }
     if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
     const line2 = words.slice(wi).join(' ');
-    if (line2.length <= limit) {
-      return `${line1}\n${line2}`;
-    }
-
-    return null; // truly can't fit in 2 lines
+    if (line2.length <= limit) return `${line1}\n${line2}`;
+    return null;
   }
 
   const step2 = [];
-  for (const cue of step1) {
-    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
+  for (const cue of step1b) {
+    const cueIsSound = isSound(cue.text);
     let lines = cue.text.split('\n');
 
-    // Collapse 3+ lines into 2
     if (lines.length > 2) {
       const hasDashes = lines.every(l => l.trimStart().startsWith('- '));
       if (hasDashes) {
@@ -594,20 +665,17 @@ function finalEnforce(cues, originalSegments) {
       }
     }
 
-    // Check if all lines already fit
     const allFit = lines.every(l => l.length <= MAX_CHARS);
     if (lines.length <= 2 && allFit) {
       step2.push({ ...cue, text: lines.join('\n') });
       continue;
     }
 
-    // Sound cues: cap at 32 chars
-    if (isSoundCue) {
+    if (cueIsSound) {
       step2.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
       continue;
     }
 
-    // Reflow text to fit 2 lines × 32 chars
     const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
     const stripped = lines.map(l => l.replace(/^- /, '').trim()).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
@@ -619,28 +687,20 @@ function finalEnforce(cues, originalSegments) {
       const prefixed = reflowed.split('\n').map(l => `${prefix}${l}`).join('\n');
       step2.push({ ...cue, text: prefixed });
     } else {
-      // Text won't fit in one 2×32 cue — split into exactly 2 cues at the midpoint
       const midWord = Math.ceil(words.length / 2);
       const half1Words = words.slice(0, midWord);
       const half2Words = words.slice(midWord);
-
-      // Reflow each half (they should fit since we halved)
       const text1 = reflowText(half1Words, limit);
       const text2 = reflowText(half2Words, limit);
-
-      // If a half STILL doesn't fit (very rare — enormous text), just keep it and let QC flag
       const fmt1 = text1 !== null
         ? text1.split('\n').map(l => `${prefix}${l}`).join('\n')
         : `${prefix}${half1Words.join(' ')}`;
       const fmt2 = text2 !== null
         ? text2.split('\n').map(l => `${prefix}${l}`).join('\n')
         : `${prefix}${half2Words.join(' ')}`;
-
-      // Split timecode proportionally
       const totalChars = stripped.length;
       const half1Chars = half1Words.join(' ').length;
       const splitTime = cue.start + Math.round((cue.end - cue.start) * (half1Chars / totalChars));
-
       step2.push(
         { start: cue.start, end: splitTime, text: fmt1, speaker: cue.speaker },
         { start: splitTime, end: cue.end, text: fmt2, speaker: cue.speaker },
@@ -654,26 +714,15 @@ function finalEnforce(cues, originalSegments) {
 
   for (let i = 0; i < result.length; i++) {
     const c = result[i];
+    if (c.end - c.start < MIN_DUR) c.end = c.start + MIN_DUR;
+    if (c.end - c.start > MAX_DUR) c.end = c.start + MAX_DUR;
 
-    // Min duration
-    if (c.end - c.start < MIN_DUR) {
-      c.end = c.start + MIN_DUR;
-    }
-
-    // Max duration — split into two cues
-    if (c.end - c.start > MAX_DUR) {
-      c.end = c.start + MAX_DUR;
-    }
-
-    // Fix overlaps and minimum gaps
     if (i > 0) {
       const prev = result[i - 1];
       if (c.start < prev.end + MIN_GAP) {
-        // Try to shrink prev.end first (keep at least MIN_DUR)
         const canShrinkTo = prev.start + MIN_DUR;
-        const neededStart = c.start;
-        if (prev.end > canShrinkTo && neededStart - MIN_GAP >= canShrinkTo) {
-          prev.end = neededStart - MIN_GAP;
+        if (prev.end > canShrinkTo && c.start - MIN_GAP >= canShrinkTo) {
+          prev.end = c.start - MIN_GAP;
         } else {
           c.start = prev.end + MIN_GAP;
           if (c.end <= c.start) c.end = c.start + MIN_DUR;
@@ -681,11 +730,10 @@ function finalEnforce(cues, originalSegments) {
       }
     }
 
-    // Reading speed — if too fast, extend end (up to next cue start or +MAX_DUR)
     const charCount = c.text.replace(/\n/g, '').length;
     const dur = c.end - c.start;
-    const isSoundCue = c.text.startsWith('[') || c.text.includes('♪');
-    if (!isSoundCue && dur > 0 && charCount / (dur / 1000) > MAX_CPS) {
+    const cueIsSound = isSound(c.text);
+    if (!cueIsSound && dur > 0 && charCount / (dur / 1000) > MAX_CPS) {
       const neededDur = Math.ceil((charCount / MAX_CPS) * 1000);
       const maxEnd = (i + 1 < result.length) ? result[i + 1].start - MIN_GAP : c.start + MAX_DUR;
       c.end = Math.min(c.start + neededDur, maxEnd, c.start + MAX_DUR);
