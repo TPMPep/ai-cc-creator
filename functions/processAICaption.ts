@@ -865,38 +865,12 @@ Deno.serve(async (req) => {
       const scc = buildSCC(enforced);
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
-      // Upload text content as files using Blob
-      const uploadText = async (content, filename) => {
-        const blob = new Blob([content], { type: 'text/plain' });
-        // Create a File-like object from Blob
-        const file = new File([blob], filename, { type: 'text/plain' });
-        console.log(`[UPLOAD] Uploading ${filename} (${content.length} chars)...`);
-        const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file });
-        console.log(`[UPLOAD] ${filename} uploaded: ${uploadResult.file_url}`);
-        return uploadResult.file_url;
-      };
-
-      console.log(`[FINALIZE] Uploading SRT/VTT/SCC files...`);
-      // Upload sequentially to avoid memory pressure
-      let srtUrl, vttUrl, sccUrl;
-      try {
-        srtUrl = await uploadText(srt, `${job_db_id}.srt`);
-      } catch (e) {
-        console.error(`[UPLOAD] SRT upload failed: ${e.message}`);
-        srtUrl = null;
-      }
-      try {
-        vttUrl = await uploadText(vtt, `${job_db_id}.vtt`);
-      } catch (e) {
-        console.error(`[UPLOAD] VTT upload failed: ${e.message}`);
-        vttUrl = null;
-      }
-      try {
-        sccUrl = await uploadText(scc, `${job_db_id}.scc`);
-      } catch (e) {
-        console.error(`[UPLOAD] SCC upload failed: ${e.message}`);
-        sccUrl = null;
-      }
+      // Store caption data directly in result instead of uploading files
+      // This avoids file upload issues in the serverless environment
+      console.log(`[FINALIZE] Storing caption data (${enforced.length} cues)...`);
+      const srtUrl = null;
+      const vttUrl = null;
+      const sccUrl = null;
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
