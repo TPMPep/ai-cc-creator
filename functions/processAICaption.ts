@@ -199,49 +199,67 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
 
   const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
 
-You will receive pre-timed caption segments. Your job is:
-1. Fix grammar, punctuation, and homophones in each segment's text
-2. Format the text to fit in ≤32 characters per line, ≤2 lines per cue
-3. Choose the SMARTEST possible line break — keep context together, fill lines efficiently
-4. If two adjacent segments have different speakers AND their combined text fits in 2 lines of ≤32 chars each, you MAY combine them into one cue with "- " prefix on each line
+You will receive pre-timed caption segments from a transcription API. Your job is to produce broadcast-quality closed captions.
+
+═══════════════════════════════════════
+YOUR TASKS:
+═══════════════════════════════════════
+1. Be TRUE to what is said. Every spoken word MUST appear in the output. NEVER drop, paraphrase, or summarize.
+2. Fix grammar, punctuation, and homophones — but preserve how people actually speak (gonna, wanna, don't, ain't, etc.)
+3. Format each cue: ≤32 characters per line, ≤2 lines per cue
+4. Choose SMART line breaks — keep meaning together, fill lines efficiently
 5. Insert sound/music cues into SILENCE GAPS where appropriate
-6. Return ALL segments — NEVER skip or drop any spoken content. Every word from the input MUST appear in the output.
-7. NEVER split a short phrase across multiple cues if it fits in one. E.g. "Previously on Love Island USA." MUST be ONE cue — never "Previously on Love", "Island", "USA." as three separate cues.
-8. When adjacent input segments form a single sentence or phrase, you MUST COMBINE them into one cue (using the first segment's start and the last segment's end) if the combined text fits within 2 lines of ≤32 chars each. This is CRITICAL — look at the full sentence across segments before deciding cue boundaries.
-9. NEVER create a cue with just 1-2 words (like "Island" or "USA.") if the previous cue is from the same sentence — always merge them.
+6. Timecodes on screen must match when words are actually spoken
+
+═══════════════════════════════════════
+SPEAKER DASHES — CRITICAL:
+═══════════════════════════════════════
+- ONLY use "- " prefix when TWO DIFFERENT SPEAKERS share the SAME cue
+- For a dual-speaker cue: line 1 = "- Speaker A text", line 2 = "- Speaker B text"
+- NEVER put a dash on a single-speaker cue. A cue where only one person talks = NO DASH, ever.
+- This means: if a cue has 2 lines but both lines are the same speaker, NO DASHES.
+
+═══════════════════════════════════════
+ORPHAN WORDS — CRITICAL:
+═══════════════════════════════════════
+- NEVER create a cue with just 1-3 words if those words are part of a larger sentence from the previous or next cue.
+- Example: "Previously on Love Island USA." MUST be ONE cue — never split into "Previously on Love" + "Island USA."
+- If adjacent input segments form a single sentence/phrase, COMBINE them into one cue (first segment's start, last segment's end) when the combined text fits in 2 lines × 32 chars.
+- NEVER leave a single word dangling as its own cue (e.g. "Okay." alone when it's part of "Okay. Good vibration.").
+- After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged with its neighbor.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
 ═══════════════════════════════════════
 - NEVER DROP OR OMIT spoken content. Every word in the input MUST appear in the output.
-- TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT change them.
-  Exception: when combining two adjacent segments, use the first segment's start and the last segment's end.
+- TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT invent new times.
+  Exception: when combining adjacent segments, use the first segment's start and the last segment's end.
   Exception: sound cues in gaps get the gap's start/end times.
-- MAX 32 characters per line (count every char: letters, spaces, punctuation, brackets, dashes, ♪)
+- MAX 32 characters per line (count EVERY char: letters, spaces, punctuation, brackets, dashes, ♪)
 - MAX 2 lines per cue
-- Cue duration must be ≥ 500ms. If a segment is very short (<500ms) and text is brief, keep it as-is.
-- When a cue has text from 2 different speakers, prefix EACH line with "- " (uses 2 of your 32 chars)
-- NEVER use >> or > for speaker changes
-- Every sentence must end with . ? or ! 
+- Cue duration must be ≥ 500ms
+- Every sentence must end with . ? or !
 - Fix homophones: to/too/two, there/their/they're, its/it's, your/you're, etc.
 - Preserve contractions as spoken: gonna, wanna, kinda, don't, can't, I'm, etc.
+- Do NOT censor. If objectionable words are said, include them exactly as spoken.
 
 ═══════════════════════════════════════
 SOUND/MUSIC CUE RULES:
 ═══════════════════════════════════════
 - Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS inside. Max 32 chars total.
 - Sound effects: [DESCRIPTION] — ALL CAPS. Max 32 chars.
-- Insert these into the silence gaps listed in your input where it makes sense contextually.
+- Only insert into SILENCE GAPS listed below where it makes contextual sense.
 - Infer sounds from context clues in the surrounding dialogue.
-- If a gap is pure silence with no context, use [AMBIENT SOUND] or omit it.
+- If a gap is pure silence with no context, omit it.
 
 ═══════════════════════════════════════
 LINE BREAK STRATEGY:
 ═══════════════════════════════════════
-- Prefer breaking at natural syntactic boundaries
-- Fill lines efficiently
-- Keep subjects with their verbs when possible
-- Keep adjectives with their nouns
+- Break at natural syntactic boundaries (after conjunctions, before prepositions, between clauses)
+- Fill both lines as evenly as possible
+- Keep subjects with their verbs
+- Keep adjectives/articles with their nouns
+- NEVER break mid-word
 
 ═══════════════════════════════════════
 OUTPUT FORMAT:
@@ -249,11 +267,8 @@ OUTPUT FORMAT:
 Return ONLY a valid JSON array. No markdown. No explanation. No code fences.
 Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
 - Use \\n for line breaks within 2-line cues
-- speaker: "A"/"B"/"C" for single-speaker, null for multi-speaker or sound cues
-- Include ALL input segments in the output — NEVER drop spoken text
-- Combine adjacent segments that form a single phrase/sentence into one cue when possible
-- Verify EVERY line is ≤32 chars before outputting
-- Count your output cues: if you have fewer spoken-text cues than input segments (excluding sound cues you added), you have DROPPED content — go back and fix it
+- speaker: "A"/"B"/"C" etc. for single-speaker cues, null for dual-speaker or sound cues
+- VERIFY before outputting: every line ≤32 chars, no orphan-word cues, no single-speaker dashes
 
 ═══════════════════════════════════════
 INPUT SEGMENTS:
