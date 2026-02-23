@@ -46,9 +46,9 @@ export default function ExportPanel({ result, title, jobId }) {
   const safeName = sanitizeFilename(title || "export");
 
   // Support both URL-based and inline data
-  const hasScc = result.scc_url || result.scc;
-  const hasSrt = result.srt_url || result.srt;
-  const hasVtt = result.vtt_url || result.vtt;
+  const hasScc = result.scc_url || result.scc || result.scc_text;
+  const hasSrt = result.srt_url || result.srt || result.srt_text;
+  const hasVtt = result.vtt_url || result.vtt || result.vtt_text;
 
   const handleDownload = async (urlOrContent, isUrl, filename) => {
     setDownloading(filename);
