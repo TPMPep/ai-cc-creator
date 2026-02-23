@@ -143,13 +143,17 @@ function findGaps(utterances, totalDurationMs) {
 }
 
 // ─── EXTRACT AUDIO EVENTS ────────────────────────────────────────────────────
-// AssemblyAI doesn't return audio_events_result with Universal-2 model.
-// Instead, we detect silence gaps between utterances and let GPT decide
-// what sound cues to insert based on context (applause after intros, music, etc.)
+// AssemblyAI audio_events returns detected non-speech sounds with timestamps.
 function extractAudioEvents(transcript) {
-  // No audio event detection available from AssemblyAI Universal-2.
-  // Sound cues will be handled by GPT based on gap context and show type.
-  return [];
+  const events = [];
+  const raw = transcript.audio_events_result?.results || [];
+  for (const ev of raw) {
+    // Each event: { label, confidence, start, end }
+    if (ev.confidence >= 0.6) {
+      events.push({ start: ev.start, end: ev.end, label: ev.label, confidence: ev.confidence });
+    }
+  }
+  return events;
 }
 
 // ─── GPT POLISH (single batch, server-side) ──────────────────────────────────
@@ -265,19 +269,16 @@ MERGING CUES (IMPORTANT):
 19. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
 
 ═══════════════════════════════════════
-SPEAKER FORMATTING (CRITICAL):
+SPEAKER FORMATTING (CRITICAL — WATCH FOR SPEAKER CHANGES MID-CUE):
 ═══════════════════════════════════════
-15. Single-speaker cue: NO dash prefix. Set speaker field to "A", "B", or "C".
-    - Even if the speaker CHANGED from the previous cue, do NOT add a dash.
-    - Dashes are ONLY for when two speakers share the SAME cue.
-    - Example: Cue 5 is speaker A. Cue 6 is speaker B. Cue 6 has NO dash — it's a single-speaker cue.
-16. Two-speaker cue (ONLY when TWO DIFFERENT speakers speak in the SAME cue):
-    - This ONLY happens when you MERGE two adjacent segments that have DIFFERENT speaker labels.
+15. Single-speaker cue: no dash prefix. Set speaker field to "A", "B", or "C".
+16. Two-speaker cue (WHEN TWO DIFFERENT SPEAKERS APPEAR IN THE SAME CUE):
+    - This happens when the input segments assigned to this timecode window have DIFFERENT speaker labels (e.g., one segment is SPEAKER=B and the next is SPEAKER=A).
     - You MUST prefix EACH speaker's line with "- " (counts as 2 of your 32 chars).
     - Set speaker field to null.
-    - Example: Segment [5] SPEAKER=B "off on us." and segment [6] SPEAKER=A "Has it done?" are merged:
-      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done?", "speaker": null}
-    - If you do NOT merge two different-speaker segments, NO dashes needed — each is its own cue.
+    - Example: If segment has speaker B saying "off on us." and next segment has speaker A saying "Has it done? Well," and they overlap into one cue, output:
+      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done? Well,", "speaker": null}
+    - NEVER output a cue where two different speakers' words appear WITHOUT the "- " dash prefix on each line.
 
 ═══════════════════════════════════════
 FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
@@ -294,17 +295,17 @@ FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
 20. If a speaker switches back and forth between English and a foreign language, apply rule 19 to each foreign-language segment individually.
 
 ═══════════════════════════════════════
-SOUND/MUSIC CUES (FROM SILENCE GAPS):
+SOUND/MUSIC CUES (FROM AUDIO EVENTS):
 ═══════════════════════════════════════
-21. You are provided SILENCE GAPS — periods where no one is speaking.
-22. For gaps that are clearly non-speech audio moments (intro music, applause after introductions, audience laughter, background music), insert an appropriate sound cue:
+21. You are provided DETECTED AUDIO EVENTS from actual audio analysis — these are REAL detected sounds.
+22. For each detected audio event, insert a sound cue at that timestamp:
     - Music/singing → [♪ MUSIC ♪] or [♪ UPBEAT MUSIC ♪] etc. (≤32 chars including brackets and ♪)
     - Laughter → [LAUGHTER]
     - Applause → [APPLAUSE]
     - Any other sound → [SOUND DESCRIPTION IN CAPS] (≤32 chars)
-23. Use your judgment based on context: a gap after host introductions on a talk show is likely [APPLAUSE]. A gap at the very start may be [♪ MUSIC ♪].
-24. Place the sound cue at the gap's start time. Use the gap's end time as the cue end.
-25. Do NOT insert sound cues for every gap — only where context strongly suggests non-speech audio. Short gaps between sentences are just pauses.
+23. Place the sound cue at the start time of the audio event. Use the event's end time as the cue end.
+24. ONLY insert sound cues for events in the DETECTED AUDIO EVENTS list. NEVER guess or invent sounds.
+25. Sound cues that overlap with dialogue: place them in any gap immediately before or after the dialogue. NEVER displace dialogue.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT — STRICT JSON:
@@ -336,7 +337,7 @@ ${audioEventInput}`;
       body: JSON.stringify({
               model: 'gpt-4o',
               messages: [
-                { role: 'system', content: 'You are a professional broadcast closed caption editor for NBCU/FCC standards. Output ONLY a valid JSON array — no markdown, no explanation. Rules: (1) TIMECODES LOCKED — never change start/end ms. (2) Every line ≤32 chars — count every character. (3) Max 2 lines per cue. (4) Short cues (≤4 words) use 1 line. (5) Never put [A]/[B]/[C] in text field — speaker label goes in speaker field only. (6) Mid-sentence cues get no terminal punctuation. (7) Complete sentences end with . ? ! … or — (8) Foreign language speech: replace with [SPEAKING FOREIGN LANGUAGE], never transcribe foreign words. (9) Dashes (- ) are ONLY for multi-speaker cues where 2 different speakers share the SAME cue — NOT for single-speaker cues even if the speaker changed from the previous cue. (10) Use silence gaps to insert [APPLAUSE], [♪ MUSIC ♪], [LAUGHTER] etc. where context strongly suggests it.' },
+                { role: 'system', content: 'You are a professional broadcast closed caption editor for NBCU/FCC standards. Output ONLY a valid JSON array — no markdown, no explanation. Rules: (1) TIMECODES LOCKED — never change start/end ms. (2) Every line ≤32 chars — count every character. (3) Max 2 lines per cue. (4) Short cues (≤4 words) use 1 line. (5) Never put [A]/[B]/[C] in text field — speaker label goes in speaker field only. (6) Mid-sentence cues get no terminal punctuation. (7) Complete sentences end with . ? ! … or — (8) Foreign language speech: replace with [SPEAKING FOREIGN LANGUAGE], never transcribe foreign words.' },
                 { role: 'user', content: prompt },
               ],
               temperature: 0.05,
@@ -372,29 +373,109 @@ function cleanCueText(text) {
 // It handles: line length, line count, timing, gaps, overlaps, reading speed,
 // and multi-speaker dash formatting.
 
-function finalEnforce(cues) {
+function finalEnforce(cues, originalSegments) {
   const MAX_CHARS = 32;
   const MIN_DUR = 500;
   const MAX_DUR = 7000;
   const MIN_GAP = 67;
   const MAX_CPS = 25; // chars per second
 
-  // ── STEP 1: Clean text, trust GPT's dash decisions ──
-  // GPT sees the SPEAKER= labels and decides when dashes are needed.
-  // We trust GPT's decision: if it put dashes, keep them; if not, don't add them.
-  // We only clean leaked speaker labels like [A], [B] from text.
-  // Single-speaker cues that continue from a previous speaker do NOT get dashes.
+  // ── STEP 0: Build speaker map from original segments AND utterances ──
+  // For each output cue, find which original utterances overlap it and detect speaker changes.
+  // We check BOTH originalSegments (SRT-based, used as GPT input) and raw utterances
+  // because SRT cues can merge multiple speakers into one segment.
+  function getSpeakersForCue(cue) {
+    const sources = originalSegments || [];
+    if (!sources.length) return [];
+
+    // Find all segments that overlap this cue (even by 1ms)
+    const overlapping = [];
+    for (const seg of sources) {
+      const overlapStart = Math.max(cue.start, seg.start);
+      const overlapEnd = Math.min(cue.end, seg.end);
+      if (overlapEnd > overlapStart && seg.speaker) {
+        overlapping.push(seg);
+      }
+    }
+
+    // Sort by start time and collect unique speaker transitions
+    overlapping.sort((a, b) => a.start - b.start);
+    const speakers = [];
+    for (const seg of overlapping) {
+      if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
+        speakers.push(seg.speaker);
+      }
+    }
+    return speakers;
+  }
+
+  // ── STEP 1: Clean text + fix multi-speaker dashes ──
+  // For multi-speaker cues, we need to figure out which words belong to which speaker
+  // by cross-referencing with the original segments' timestamps.
   const step1 = [];
   for (const cue of cues) {
     const cleanedText = cleanCueText(cue.text || '');
     if (!cleanedText || !cleanedText.trim()) continue;
 
+    const speakers = getSpeakersForCue(cue);
+    const hasMultipleSpeakers = speakers.length >= 2;
     const lines = cleanedText.split('\n');
-    const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
+    const alreadyHasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
 
-    if (hasDashes) {
-      // GPT put dashes — this is a multi-speaker cue, set speaker to null
-      step1.push({ ...cue, text: cleanedText, speaker: null });
+    if (hasMultipleSpeakers && !alreadyHasDashes) {
+      if (lines.length >= 2) {
+        // Multiple lines already — add dashes to each
+        const dashedText = lines.map(l => {
+          const trimmed = l.replace(/^- /, '').trimStart();
+          return `- ${trimmed}`;
+        }).join('\n');
+        step1.push({ ...cue, text: dashedText, speaker: null });
+      } else {
+        // Single line with multiple speakers — try to split at speaker boundary
+        // Find the speaker change point by looking at original segments
+        const overlapping = (originalSegments || []).filter(seg => {
+          const os = Math.max(cue.start, seg.start);
+          const oe = Math.min(cue.end, seg.end);
+          return oe > os && seg.speaker;
+        }).sort((a, b) => a.start - b.start);
+
+        // Find where the first speaker ends and second begins
+        let splitPoint = -1;
+        if (overlapping.length >= 2) {
+          const firstSpeaker = overlapping[0].speaker;
+          for (let si = 1; si < overlapping.length; si++) {
+            if (overlapping[si].speaker !== firstSpeaker) {
+              // The boundary time is where this new speaker's segment starts
+              const boundaryTime = overlapping[si].start;
+              // Estimate character position based on time proportion
+              const textLen = cleanedText.length;
+              const cueDur = cue.end - cue.start;
+              if (cueDur > 0) {
+                const timeFraction = (boundaryTime - cue.start) / cueDur;
+                splitPoint = Math.round(textLen * timeFraction);
+                // Snap to nearest word boundary
+                const spaceAfter = cleanedText.indexOf(' ', splitPoint);
+                const spaceBefore = cleanedText.lastIndexOf(' ', splitPoint);
+                if (spaceAfter >= 0 && (splitPoint - spaceBefore > spaceAfter - splitPoint || spaceBefore < 0)) {
+                  splitPoint = spaceAfter;
+                } else if (spaceBefore > 0) {
+                  splitPoint = spaceBefore;
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        if (splitPoint > 0 && splitPoint < cleanedText.length) {
+          const part1 = cleanedText.substring(0, splitPoint).trim();
+          const part2 = cleanedText.substring(splitPoint).trim();
+          step1.push({ ...cue, text: `- ${part1}\n- ${part2}`, speaker: null });
+        } else {
+          // Couldn't determine boundary — keep as-is with null speaker
+          step1.push({ ...cue, text: cleanedText, speaker: null });
+        }
+      }
     } else {
       step1.push({ ...cue, text: cleanedText });
     }
@@ -633,7 +714,7 @@ Deno.serve(async (req) => {
         batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. SRT: ${srtCues.length} cues, ${utterances.length} utterances → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+      const prepareLog = { step: '1_transcribe', status: 'ok', detail: `AssemblyAI completed. SRT: ${srtCues.length} cues, ${utterances.length} utterances, ${audioEvents.length} audio events → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         pipelineLog: [prepareLog],
@@ -690,7 +771,7 @@ Deno.serve(async (req) => {
         batches.push(rawSegments.slice(i, i + BATCH_SIZE).map(({ start, end, text, speaker }) => ({ start, end, text, speaker })));
       }
 
-      const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess using AssemblyAI SRT base (cached — no new charge). SRT: ${srtCues.length} cues → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
+      const reprocessLog = { step: '1_transcribe', status: 'ok', detail: `Reprocess using AssemblyAI SRT base (cached — no new charge). SRT: ${srtCues.length} cues, ${audioEvents.length} audio events → ${batches.length} GPT batches.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'processing',
