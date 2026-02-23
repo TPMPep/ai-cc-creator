@@ -125,13 +125,21 @@ export default function ExportPanel({ result, title, jobId }) {
       </div>
       <div className="flex gap-2">
         {hasSrt && (
-          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.srt_url || result.srt, !!result.srt_url, setCopiedSrt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
+          <Button variant="ghost" size="sm" onClick={() => {
+            const content = result.srt_url || result.srt_text || result.srt;
+            const isUrl = !!result.srt_url;
+            handleCopy(content, isUrl, setCopiedSrt);
+          }} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedSrt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedSrt ? "Copied" : "Copy SRT"}
           </Button>
         )}
         {hasVtt && (
-          <Button variant="ghost" size="sm" onClick={() => handleCopy(result.vtt_url || result.vtt, !!result.vtt_url, setCopiedVtt)} className="text-zinc-500 hover:text-white text-[11px] h-7">
+          <Button variant="ghost" size="sm" onClick={() => {
+            const content = result.vtt_url || result.vtt_text || result.vtt;
+            const isUrl = !!result.vtt_url;
+            handleCopy(content, isUrl, setCopiedVtt);
+          }} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedVtt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedVtt ? "Copied" : "Copy VTT"}
           </Button>
