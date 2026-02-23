@@ -711,7 +711,7 @@ Deno.serve(async (req) => {
         // Small delay to avoid rate limits
         await new Promise(r => setTimeout(r, 3000));
         
-        base44.functions.invoke('processAICaption', {
+        base44.asServiceRole.functions.invoke('processAICaption', {
           transcript_id,
           job_db_id,
           action: 'process_batch',
