@@ -372,7 +372,7 @@ function cleanCueText(text) {
 // It handles: line length, line count, timing, gaps, overlaps, reading speed,
 // and multi-speaker dash formatting.
 
-function finalEnforce(cues, originalSegments) {
+function finalEnforce(cues) {
   const MAX_CHARS = 32;
   const MIN_DUR = 500;
   const MAX_DUR = 7000;
