@@ -753,12 +753,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[processAICaption] Error:', error.message);
 
-    // Try to mark job as error
+    // Try to mark job as error — body was already parsed above,
+    // so we use the job_db_id from the outer scope if available
     try {
-      const body2 = { job_db_id: null };
-      try { const b = await req.clone().json(); body2.job_db_id = b.job_db_id; } catch (_) {}
-      if (body2.job_db_id) {
-        await base44.asServiceRole.entities.Job.update(body2.job_db_id, {
+      if (typeof job_db_id !== 'undefined' && job_db_id) {
+        await base44.asServiceRole.entities.Job.update(job_db_id, {
           status: 'error',
           error: error.message,
         });
