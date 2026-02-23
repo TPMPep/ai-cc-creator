@@ -87,7 +87,6 @@ function buildRawSegments(utterances) {
       continue;
     }
 
-    // If entire utterance fits in MAX_DUR, keep it as one segment (don't split short phrases)
     const uttDur = words[words.length - 1].end - words[0].start;
     if (uttDur <= MAX_DUR) {
       segments.push({
@@ -100,7 +99,6 @@ function buildRawSegments(utterances) {
       continue;
     }
 
-    // For long utterances, split into chunks but keep each chunk meaningful
     let chunkStart = 0;
     while (chunkStart < words.length) {
       let chunkEnd = chunkStart;
@@ -112,10 +110,8 @@ function buildRawSegments(utterances) {
         } else break;
       }
 
-      // Check if remaining words after this chunk would be too small (< 4 words)
       const remainingCount = words.length - (chunkEnd + 1);
       if (remainingCount > 0 && remainingCount < 4) {
-        // Absorb remaining words into this chunk
         const allWords = words.slice(chunkStart);
         segments.push({
           start: allWords[0].start,
@@ -160,7 +156,7 @@ function findGaps(utterances, totalDurationMs) {
 
 // ─── GPT POLISH ──────────────────────────────────────────────────────────────
 
-const BATCH_WINDOW_MS = 5 * 60 * 1000; // 5 minutes per batch
+const BATCH_WINDOW_MS = 5 * 60 * 1000;
 
 function buildBatches(segments) {
   if (segments.length === 0) return [];
@@ -223,9 +219,8 @@ SPEAKER DASHES — CRITICAL:
 ORPHAN WORDS — CRITICAL:
 ═══════════════════════════════════════
 - NEVER create a cue with just 1-3 words if those words are part of a larger sentence from the previous or next cue.
-- Example: "Previously on Love Island USA." MUST be ONE cue — never split into "Previously on Love" + "Island USA."
 - If adjacent input segments form a single sentence/phrase, COMBINE them into one cue (first segment's start, last segment's end) when the combined text fits in 2 lines × 32 chars.
-- NEVER leave a single word dangling as its own cue (e.g. "Okay." alone when it's part of "Okay. Good vibration.").
+- NEVER leave a single word dangling as its own cue.
 - After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged with its neighbor.
 
 ═══════════════════════════════════════
@@ -249,7 +244,6 @@ SOUND/MUSIC CUE RULES:
 - Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS inside. Max 32 chars total.
 - Sound effects: [DESCRIPTION] — ALL CAPS. Max 32 chars.
 - Only insert into SILENCE GAPS listed below where it makes contextual sense.
-- Infer sounds from context clues in the surrounding dialogue.
 - If a gap is pure silence with no context, omit it.
 
 ═══════════════════════════════════════
@@ -323,51 +317,38 @@ ${highlightDump}`;
 
   const parsed = JSON.parse(jsonMatch[0]);
 
-  // ── Post-GPT cleanup pass 1: Strip dashes from single-speaker cues ──
+  // ── Post-GPT cleanup: Strip dashes from single-speaker cues ──
   for (const cue of parsed) {
     if (!cue.text) continue;
     const lines = cue.text.split('\n');
-    const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
-    if (hasDashes) {
-      // Check if it's actually a single-speaker cue (same speaker on both lines)
-      // If the cue has a non-null speaker, it's single-speaker — remove dashes
-      if (cue.speaker) {
-        cue.text = lines.map(l => l.replace(/^- /, '')).join('\n');
-      }
+    if (lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- ')) && cue.speaker) {
+      cue.text = lines.map(l => l.replace(/^- /, '')).join('\n');
     }
-    // Also fix single-line cues that start with "- " (should never happen for single speaker)
     if (lines.length === 1 && lines[0].startsWith('- ') && cue.speaker) {
       cue.text = cue.text.replace(/^- /, '');
     }
   }
 
-  // ── Post-GPT cleanup pass 2: Merge orphan cues ──
-  // Any spoken cue with ≤3 words that doesn't appear to be a complete sentence
-  // should be merged with its neighbor
+  // ── Merge orphan cues ──
   const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
   const isCompleteSentence = (text) => {
     const trimmed = text.replace(/\n/g, ' ').trim();
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
   };
-
   const repackLines = (text) => {
     const words = text.split(/\s+/).filter(Boolean);
-    let line1 = '';
-    let line2 = '';
+    let line1 = '', line2 = '';
     for (const w of words) {
-      if (!line1 || (line1 + ' ' + w).length <= 32) {
-        line1 = line1 ? line1 + ' ' + w : w;
-      } else if (!line2 || (line2 + ' ' + w).length <= 32) {
-        line2 = line2 ? line2 + ' ' + w : w;
-      } else {
-        return null; // doesn't fit
-      }
+      if (!line1 || (line1 + ' ' + w).length <= 32) { line1 = line1 ? line1 + ' ' + w : w; }
+      else if (!line2 || (line2 + ' ' + w).length <= 32) { line2 = line2 ? line2 + ' ' + w : w; }
+      else { return null; }
     }
     const result = line2 ? line1 + '\n' + line2 : line1;
     if (result.split('\n').every(l => l.length <= 32)) return result;
     return null;
   };
 
+  // Backward merge
   const merged = [];
   for (let i = 0; i < parsed.length; i++) {
     const cue = parsed[i];
@@ -380,50 +361,33 @@ ${highlightDump}`;
     const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
     const prevIsSound = prevCue && isSoundCueFn(prevCue.text);
 
-    // If this cue has ≤3 words and is NOT a self-contained sentence, merge with previous
     if (wordCount <= 3 && !isCompleteSentence(plainText) && prevCue && !prevIsSound) {
       const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
       const repacked = repackLines(combinedText);
-      if (repacked) {
-        merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked };
-        continue;
-      }
+      if (repacked) { merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked }; continue; }
     }
-
-    // Also try merging short fragments (< 20 chars) that don't end a sentence
     if (plainText.length < 20 && !/[.?!]$/.test(plainText) && prevCue && !prevIsSound) {
       const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
       const repacked = repackLines(combinedText);
-      if (repacked) {
-        merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked };
-        continue;
-      }
+      if (repacked) { merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked }; continue; }
     }
-
     merged.push(cue);
   }
 
-  // ── Post-GPT cleanup pass 3: Forward-merge orphans that couldn't merge backward ──
+  // Forward merge
   const finalMerged = [];
   for (let i = 0; i < merged.length; i++) {
     const cue = merged[i];
     if (isSoundCueFn(cue.text)) { finalMerged.push(cue); continue; }
-
     const plainText = cue.text.replace(/\n/g, ' ').trim();
     const wordCount = plainText.split(/\s+/).length;
     const nextCue = i + 1 < merged.length ? merged[i + 1] : null;
     const nextIsSound = nextCue && isSoundCueFn(nextCue.text);
-
-    // If this is a ≤2 word orphan and there's a next spoken cue, merge forward
     if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound) {
       const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').trim();
       const repacked = repackLines(combinedText);
-      if (repacked) {
-        merged[i + 1] = { ...nextCue, start: cue.start, text: repacked };
-        continue; // skip adding this cue
-      }
+      if (repacked) { merged[i + 1] = { ...nextCue, start: cue.start, text: repacked }; continue; }
     }
-
     finalMerged.push(cue);
   }
 
@@ -440,21 +404,13 @@ function finalEnforce(cues) {
 
   for (const cue of cues) {
     if (!cue.text || !cue.text.trim()) continue;
-
     const lines = cue.text.split('\n').filter(l => l.trim().length > 0);
     if (lines.length === 0) continue;
-
     const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
     const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
 
-    // If it's already compliant, keep it (truncate sound cues if needed)
-    if (allOk) {
-      result.push({ ...cue, text: lines.join('\n') });
-      continue;
-    }
+    if (allOk) { result.push({ ...cue, text: lines.join('\n') }); continue; }
 
-    // For cues with >2 lines or lines >32 chars, we need to split/repack into compliant cues
-    // First, if it's a sound cue, just truncate lines and split into 2-line groups
     if (isSoundCue) {
       const truncated = lines.map(l => l.substring(0, MAX_CHARS));
       const totalDur = cue.end - cue.start;
@@ -463,76 +419,51 @@ function finalEnforce(cues) {
         const groupLines = truncated.slice(g * 2, g * 2 + 2);
         const groupStart = cue.start + Math.round((g / groupCount) * totalDur);
         const groupEnd = g === groupCount - 1 ? cue.end : cue.start + Math.round(((g + 1) / groupCount) * totalDur);
-        result.push({
-          start: groupStart,
-          end: Math.max(groupStart + MIN_DUR, groupEnd),
-          text: groupLines.join('\n'),
-          speaker: cue.speaker,
-        });
+        result.push({ start: groupStart, end: Math.max(groupStart + MIN_DUR, groupEnd), text: groupLines.join('\n'), speaker: cue.speaker });
       }
       continue;
     }
 
-    // Regular text cue — repack words into ≤32-char lines, ≤2 lines per cue
     const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
-
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
-
     const packed = [];
     let cur = '';
     for (const word of words) {
       const candidate = cur ? `${cur} ${word}` : word;
-      if (candidate.length <= limit) {
-        cur = candidate;
-      } else {
-        if (cur) packed.push(cur);
-        // Never truncate words — keep the full word even if it slightly exceeds limit
-        cur = word;
-      }
+      if (candidate.length <= limit) { cur = candidate; }
+      else { if (cur) packed.push(cur); cur = word; }
     }
     if (cur) packed.push(cur);
-
     if (packed.length === 0) continue;
 
     const totalDur = cue.end - cue.start;
     const chunkCount = Math.ceil(packed.length / 2);
-
     for (let i = 0; i < packed.length; i += 2) {
       const chunk = packed.slice(i, i + 2);
       const ci = Math.floor(i / 2);
       const chunkStart = cue.start + Math.round((ci / chunkCount) * totalDur);
-      const chunkEnd = ci === chunkCount - 1
-        ? cue.end
-        : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
-
-      result.push({
-        start: chunkStart,
-        end: Math.max(chunkStart + MIN_DUR, chunkEnd),
-        text: chunk.map(l => prefix + l).join('\n'),
-        speaker: cue.speaker,
-      });
+      const chunkEnd = ci === chunkCount - 1 ? cue.end : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
+      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.map(l => prefix + l).join('\n'), speaker: cue.speaker });
     }
   }
 
   result.sort((a, b) => a.start - b.start);
 
-  // Fix overlaps and gaps
+  // Fix overlaps
   for (let i = 1; i < result.length; i++) {
     if (result[i].start < result[i - 1].end) {
       result[i].start = result[i - 1].end + MIN_GAP;
-      if (result[i].end <= result[i].start) {
-        result[i].end = result[i].start + MIN_DUR;
-      }
+      if (result[i].end <= result[i].start) result[i].end = result[i].start + MIN_DUR;
     } else if (result[i].start - result[i - 1].end < MIN_GAP && result[i].start > result[i - 1].end) {
       result[i].start = result[i - 1].end + MIN_GAP;
     }
   }
 
-  // Final orphan-word sweep: merge any ≤2 word spoken cues into neighbors
+  // Final orphan sweep
   const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
   const repack = (text) => {
     const words = text.split(/\s+/).filter(Boolean);
@@ -552,29 +483,19 @@ function finalEnforce(cues) {
     const plain = c.text.replace(/\n/g, ' ').trim();
     const wc = plain.split(/\s+/).length;
     if (wc > 2) continue;
-    // Try merge backward
     if (i > 0 && !isSndCue(result[i-1].text)) {
       const combo = result[i-1].text.replace(/\n/g, ' ').trim() + ' ' + plain;
       const repacked = repack(combo);
-      if (repacked) {
-        result[i-1] = { ...result[i-1], end: c.end, text: repacked };
-        result.splice(i, 1);
-        continue;
-      }
+      if (repacked) { result[i-1] = { ...result[i-1], end: c.end, text: repacked }; result.splice(i, 1); continue; }
     }
-    // Try merge forward
     if (i < result.length - 1 && !isSndCue(result[i+1].text)) {
       const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').trim();
       const repacked = repack(combo);
-      if (repacked) {
-        result[i+1] = { ...result[i+1], start: c.start, text: repacked };
-        result.splice(i, 1);
-        continue;
-      }
+      if (repacked) { result[i+1] = { ...result[i+1], start: c.start, text: repacked }; result.splice(i, 1); continue; }
     }
   }
 
-  // Final dash cleanup: ensure no single-speaker cues have "- " prefixes
+  // Final dash cleanup
   for (const c of result) {
     if (!c.text || isSndCue(c.text)) continue;
     const lines = c.text.split('\n');
@@ -601,9 +522,7 @@ function runQC(cues) {
     const isSoundCue = c.text.startsWith('[') || c.text.includes('♪');
 
     for (let li = 0; li < lines.length; li++) {
-      if (lines[li].length > 32) {
-        issues.push({ cue: i, type: 'line_too_long', value: `Line ${li+1}: ${lines[li].length} chars` });
-      }
+      if (lines[li].length > 32) issues.push({ cue: i, type: 'line_too_long', value: `Line ${li+1}: ${lines[li].length} chars` });
     }
     if (lines.length > 2) issues.push({ cue: i, type: 'too_many_lines', value: `${lines.length} lines` });
     if (dur < 500) issues.push({ cue: i, type: 'cue_too_short', value: `${dur}ms (min 500ms)` });
@@ -623,9 +542,6 @@ function runQC(cues) {
         issues.push({ cue: i, type: 'missing_punctuation', value: `Ends with "${lastChar}"` });
       }
     }
-    if (!c.text || c.text.trim().length === 0) {
-      issues.push({ cue: i, type: 'empty_cue', value: 'No text content' });
-    }
   }
   return { issuesCount: issues.length, issues };
 }
@@ -640,14 +556,17 @@ async function addLog(base44, jobId, step, status, detail) {
 }
 
 // ─── MAIN HANDLER ────────────────────────────────────────────────────────────
+// ARCHITECTURE: Single invocation processes ALL batches sequentially.
+// No function chaining — avoids 403 auth errors from asServiceRole.functions.invoke.
+//
 // Actions:
-//   "start"         — fetch AssemblyAI transcript, pre-segment, build batches, start batch 0
-//   "process_batch" — process one GPT batch, then chain to next or finalize
-//   "reprocess"     — re-run GPT using saved transcript data (no new AssemblyAI charge)
+//   "start"     — fetch transcript, pre-segment, process ALL batches, finalize
+//   "reprocess" — re-run GPT on saved transcript data, process ALL batches, finalize
 
 Deno.serve(async (req) => {
+  const base44 = createClientFromRequest(req);
+
   try {
-    const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -661,6 +580,75 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
+    // ── Shared function: process all batches and finalize ──────────────────
+    async function processAllBatchesAndFinalize(jobDbId, batches, gaps, highlights, language) {
+      const totalBatches = batches.length;
+      const allPolished = [];
+
+      for (let bi = 0; bi < totalBatches; bi++) {
+        const batchSegments = batches[bi];
+        if (!batchSegments || batchSegments.length === 0) continue;
+
+        const batchWindowStart = batchSegments[0].start;
+        const batchWindowEnd = batchSegments[batchSegments.length - 1].end;
+        const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
+
+        console.log(`[BATCH ${bi + 1}/${totalBatches}] Processing ${batchSegments.length} segments...`);
+        await addLog(base44, jobDbId, `2_gpt_batch_${bi + 1}_of_${totalBatches}`, 'running',
+          `GPT-4o processing batch ${bi + 1}/${totalBatches} (${batchSegments.length} segments)`);
+
+        const polishedBatch = await polishBatchWithGPT(
+          batchSegments, batchGaps, language, highlights, OPENAI_API_KEY, bi, totalBatches
+        );
+
+        allPolished.push(...polishedBatch);
+        console.log(`[BATCH ${bi + 1}/${totalBatches}] Got ${polishedBatch.length} cues`);
+
+        await addLog(base44, jobDbId, `2_gpt_batch_${bi + 1}_of_${totalBatches}`, 'ok',
+          `Batch ${bi + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
+
+        // Small delay between batches to avoid rate limits
+        if (bi < totalBatches - 1) {
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      // ── FINALIZE ─────────────────────────────────────────────────────────
+      console.log(`[FINALIZE] All ${totalBatches} batches done. Enforcing rules on ${allPolished.length} cues...`);
+      await addLog(base44, jobDbId, '3_finalize', 'running', 'Applying final formatting rules and QC...');
+
+      const enforced = finalEnforce(allPolished);
+      const qc = runQC(enforced);
+      const srt = buildSRT(enforced);
+      const vtt = buildVTT(enforced);
+      const scc = buildSCC(enforced);
+      const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
+
+      await base44.asServiceRole.entities.Job.update(jobDbId, {
+        status: 'done',
+        result: {
+          cues: enforced,
+          srt_url: null,
+          vtt_url: null,
+          scc_url: null,
+          srt_text: srt,
+          vtt_text: vtt,
+          scc_text: scc,
+          qc,
+          language,
+        },
+        durationMs,
+        issuesCount: qc.issuesCount,
+      });
+
+      await addLog(base44, jobDbId, '3_finalize', 'ok',
+        `Done! ${enforced.length} cues, ${qc.issuesCount} QC issues.`);
+
+      console.log(`[FINALIZE] Job ${jobDbId} complete: ${enforced.length} cues, ${qc.issuesCount} issues`);
+
+      return { cues: enforced.length, issues: qc.issuesCount };
+    }
+
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
       if (!transcript_id) return Response.json({ error: 'transcript_id required for start' }, { status: 400 });
@@ -668,7 +656,6 @@ Deno.serve(async (req) => {
       console.log(`[START] Fetching transcript ${transcript_id} for job ${job_db_id}`);
       await addLog(base44, job_db_id, '1_transcribe', 'ok', 'AssemblyAI transcription completed.');
 
-      // Fetch full transcript from AssemblyAI
       const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
         headers: { 'authorization': ASSEMBLYAI_API_KEY },
       });
@@ -684,14 +671,13 @@ Deno.serve(async (req) => {
       const highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
       const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
 
-      // Pre-segment
       const segments = buildRawSegments(utterances);
       const gaps = findGaps(utterances, totalDurationMs);
       const batches = buildBatches(segments);
 
       console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}`);
 
-      // Save processing plan to job
+      // Save processing plan
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         processingPlan: {
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
@@ -699,20 +685,14 @@ Deno.serve(async (req) => {
           highlights,
           language,
           totalBatches: batches.length,
-          polishedCues: [],
           utterances: utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words })),
         },
       });
 
-      // Chain to first batch (use service role so token doesn't expire on long jobs)
-      base44.asServiceRole.functions.invoke('processAICaption', {
-        transcript_id,
-        job_db_id,
-        action: 'process_batch',
-        batch_index: 0,
-      }).catch(err => console.error('[START] Chain to batch 0 failed:', err.message));
+      // Process ALL batches in this single invocation
+      const result = await processAllBatchesAndFinalize(job_db_id, batches, gaps, highlights, language);
 
-      return Response.json({ status: 'started', batches: batches.length });
+      return Response.json({ status: 'done', ...result });
     }
 
     // ── ACTION: REPROCESS ────────────────────────────────────────────────────
@@ -723,23 +703,16 @@ Deno.serve(async (req) => {
       let plan = job.processingPlan || {};
       let utterances = plan.utterances;
 
-      // If no saved utterances, re-fetch from AssemblyAI
       if (!utterances || utterances.length === 0) {
         const tid = transcript_id || job.railwayJobId;
-        if (!tid) {
-          return Response.json({ error: 'No saved transcript data and no transcript_id to re-fetch' }, { status: 400 });
-        }
+        if (!tid) return Response.json({ error: 'No saved transcript data and no transcript_id to re-fetch' }, { status: 400 });
         console.log(`[REPROCESS] No saved utterances, re-fetching from AssemblyAI: ${tid}`);
         const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${tid}`, {
           headers: { 'authorization': ASSEMBLYAI_API_KEY },
         });
-        if (!aaiRes.ok) {
-          return Response.json({ error: `AssemblyAI re-fetch failed: ${aaiRes.status}` }, { status: 500 });
-        }
+        if (!aaiRes.ok) return Response.json({ error: `AssemblyAI re-fetch failed: ${aaiRes.status}` }, { status: 500 });
         const transcript = await aaiRes.json();
-        if (transcript.status !== 'completed') {
-          return Response.json({ error: `Transcript not ready: ${transcript.status}` }, { status: 400 });
-        }
+        if (transcript.status !== 'completed') return Response.json({ error: `Transcript not ready: ${transcript.status}` }, { status: 400 });
         utterances = (transcript.utterances || []).map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words }));
         plan.language = transcript.language_code || 'en';
         plan.highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
@@ -747,7 +720,6 @@ Deno.serve(async (req) => {
         plan.gaps = findGaps(utterances, totalDurationMs);
       }
 
-      // Re-segment from saved utterances
       const segments = buildRawSegments(utterances);
       const gaps = plan.gaps || [];
       const highlights = plan.highlights || [];
@@ -765,136 +737,15 @@ Deno.serve(async (req) => {
           utterances: utterances,
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
           totalBatches: batches.length,
-          polishedCues: [],
         },
       });
 
-      // Chain to first batch (use service role so token doesn't expire on long jobs)
-      base44.asServiceRole.functions.invoke('processAICaption', {
-        transcript_id: job.railwayJobId,
-        job_db_id,
-        action: 'process_batch',
-        batch_index: 0,
-      }).catch(err => console.error('[REPROCESS] Chain to batch 0 failed:', err.message));
+      console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches`);
 
-      return Response.json({ status: 'reprocessing', batches: batches.length });
-    }
+      // Process ALL batches in this single invocation
+      const result = await processAllBatchesAndFinalize(job_db_id, batches, gaps, highlights, language);
 
-    // ── ACTION: PROCESS_BATCH ────────────────────────────────────────────────
-    if (action === 'process_batch') {
-      const batchIndex = body.batch_index ?? 0;
-
-      // Load the job and its processing plan
-      const job = await base44.asServiceRole.entities.Job.get(job_db_id);
-      
-      // Guard: if job is already done (e.g. race condition), skip
-      if (job.status === 'done') {
-        console.log(`[BATCH ${batchIndex}] Job already done, skipping.`);
-        return Response.json({ status: 'done' });
-      }
-
-      const plan = job.processingPlan;
-      if (!plan || !plan.batches) {
-        return Response.json({ error: 'No processing plan found' }, { status: 400 });
-      }
-
-      const totalBatches = plan.totalBatches;
-      const batchSegments = plan.batches[batchIndex];
-      if (!batchSegments) {
-        return Response.json({ error: `Batch ${batchIndex} not found` }, { status: 400 });
-      }
-
-      const gaps = plan.gaps || [];
-      const language = plan.language || 'en';
-      const highlights = plan.highlights || [];
-
-      // Compute gaps for this batch window
-      const batchWindowStart = batchSegments[0].start;
-      const batchWindowEnd = batchSegments[batchSegments.length - 1].end;
-      const batchGaps = gaps.filter(g => g.start >= batchWindowStart - 2000 && g.end <= batchWindowEnd + 2000);
-
-      console.log(`[BATCH ${batchIndex + 1}/${totalBatches}] Processing ${batchSegments.length} segments...`);
-
-      await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'running',
-        `GPT-4o processing batch ${batchIndex + 1}/${totalBatches} (${batchSegments.length} segments)`);
-
-      // Call GPT
-      const polishedBatch = await polishBatchWithGPT(
-        batchSegments, batchGaps, language, highlights, OPENAI_API_KEY, batchIndex, totalBatches
-      );
-
-      console.log(`[BATCH ${batchIndex + 1}/${totalBatches}] Got ${polishedBatch.length} cues from GPT`);
-
-      // Update pipeline log with success
-      await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'ok',
-        `Batch ${batchIndex + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
-
-      // Append polished cues to plan
-      const freshJob = await base44.asServiceRole.entities.Job.get(job_db_id);
-      const freshPlan = freshJob.processingPlan;
-      const allPolished = [...(freshPlan.polishedCues || []), ...polishedBatch];
-
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        processingPlan: { ...freshPlan, polishedCues: allPolished },
-      });
-
-      // Chain to next batch, or finalize
-      if (batchIndex + 1 < totalBatches) {
-        // Small delay to avoid rate limits
-        await new Promise(r => setTimeout(r, 3000));
-        
-        base44.asServiceRole.functions.invoke('processAICaption', {
-          transcript_id,
-          job_db_id,
-          action: 'process_batch',
-          batch_index: batchIndex + 1,
-        }).catch(err => console.error(`[BATCH ${batchIndex + 1}] Chain failed:`, err.message));
-
-        return Response.json({ status: 'batch_done', batch: batchIndex, next: batchIndex + 1 });
-      }
-
-      // ── FINALIZE ─────────────────────────────────────────────────────────
-      console.log(`[FINALIZE] All ${totalBatches} batches done. Enforcing rules...`);
-
-      await addLog(base44, job_db_id, '3_finalize', 'running', 'Applying final formatting rules and QC...');
-
-      const enforced = finalEnforce(allPolished);
-      const qc = runQC(enforced);
-      const srt = buildSRT(enforced);
-      const vtt = buildVTT(enforced);
-      const scc = buildSCC(enforced);
-      const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
-
-      // Store caption data directly in result instead of uploading files
-      // This avoids file upload issues in the serverless environment
-      console.log(`[FINALIZE] Storing caption data (${enforced.length} cues)...`);
-      const srtUrl = null;
-      const vttUrl = null;
-      const sccUrl = null;
-
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        status: 'done',
-        result: {
-          cues: enforced,
-          srt_url: srtUrl,
-          vtt_url: vttUrl,
-          scc_url: sccUrl,
-          srt_text: srt,
-          vtt_text: vtt,
-          scc_text: scc,
-          qc,
-          language,
-        },
-        durationMs,
-        issuesCount: qc.issuesCount,
-      });
-
-      await addLog(base44, job_db_id, '3_finalize', 'ok',
-        `Done! ${enforced.length} cues, ${qc.issuesCount} QC issues.`);
-
-      console.log(`[FINALIZE] Job ${job_db_id} complete: ${enforced.length} cues, ${qc.issuesCount} issues`);
-
-      return Response.json({ status: 'done', cues: enforced.length, issues: qc.issuesCount });
+      return Response.json({ status: 'done', ...result });
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
@@ -904,10 +755,10 @@ Deno.serve(async (req) => {
 
     // Try to mark job as error
     try {
-      const base44 = createClientFromRequest(req);
-      const body = await req.json().catch(() => ({}));
-      if (body.job_db_id) {
-        await base44.asServiceRole.entities.Job.update(body.job_db_id, {
+      const body2 = { job_db_id: null };
+      try { const b = await req.clone().json(); body2.job_db_id = b.job_db_id; } catch (_) {}
+      if (body2.job_db_id) {
+        await base44.asServiceRole.entities.Job.update(body2.job_db_id, {
           status: 'error',
           error: error.message,
         });
