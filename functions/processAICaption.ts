@@ -379,17 +379,30 @@ function finalEnforce(cues, originalSegments) {
   const MIN_GAP = 67;
   const MAX_CPS = 25; // chars per second
 
-  // ── STEP 0: Build speaker map from original segments ──
-  // For each output cue, find which original input segments overlap it and detect speaker changes
+  // ── STEP 0: Build speaker map from original segments AND utterances ──
+  // For each output cue, find which original utterances overlap it and detect speaker changes.
+  // We check BOTH originalSegments (SRT-based, used as GPT input) and raw utterances
+  // because SRT cues can merge multiple speakers into one segment.
   function getSpeakersForCue(cue) {
-    if (!originalSegments || !originalSegments.length) return [];
+    const sources = originalSegments || [];
+    if (!sources.length) return [];
+
+    // Find all segments that overlap this cue by at least 50ms
+    const overlapping = [];
+    for (const seg of sources) {
+      const overlapStart = Math.max(cue.start, seg.start);
+      const overlapEnd = Math.min(cue.end, seg.end);
+      if (overlapEnd - overlapStart >= 50 && seg.speaker) {
+        overlapping.push(seg);
+      }
+    }
+
+    // Sort by start time and collect unique speaker transitions
+    overlapping.sort((a, b) => a.start - b.start);
     const speakers = [];
-    for (const seg of originalSegments) {
-      const overlap = Math.min(cue.end, seg.end) - Math.max(cue.start, seg.start);
-      if (overlap > 0 && seg.speaker) {
-        if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
-          speakers.push(seg.speaker);
-        }
+    for (const seg of overlapping) {
+      if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
+        speakers.push(seg.speaker);
       }
     }
     return speakers;
