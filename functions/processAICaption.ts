@@ -143,16 +143,61 @@ function findGaps(utterances, totalDurationMs) {
 }
 
 // ─── EXTRACT AUDIO EVENTS ────────────────────────────────────────────────────
-// AssemblyAI audio_events returns detected non-speech sounds with timestamps.
+// With Universal-3 Pro + prompting, audio events appear as tagged text like [laughter]
+// in the transcript words/utterances. We also check the legacy audio_events_result field.
 function extractAudioEvents(transcript) {
   const events = [];
+
+  // Method 1: Legacy audio_events_result (older API / universal-2)
   const raw = transcript.audio_events_result?.results || [];
   for (const ev of raw) {
-    // Each event: { label, confidence, start, end }
     if (ev.confidence >= 0.6) {
       events.push({ start: ev.start, end: ev.end, label: ev.label, confidence: ev.confidence });
     }
   }
+
+  // Method 2: Scan transcript words for tagged audio events like [laughter], [applause], etc.
+  // These appear in the word-level data when using universal-3-pro with prompting
+  const audioTagPattern = /^\[(?:laughter|applause|music|silence|noise|cough|sigh|cheering|clapping)\]$/i;
+  const words = transcript.words || [];
+  let i = 0;
+  while (i < words.length) {
+    const w = words[i];
+    if (audioTagPattern.test(w.text)) {
+      // Group consecutive same-tag words
+      const label = w.text.replace(/[\[\]]/g, '').toUpperCase();
+      let end = w.end;
+      let j = i + 1;
+      while (j < words.length && audioTagPattern.test(words[j].text) && words[j].text.toLowerCase() === w.text.toLowerCase()) {
+        end = words[j].end;
+        j++;
+      }
+      // Avoid duplicates from method 1
+      const isDuplicate = events.some(e => Math.abs(e.start - w.start) < 500 && e.label.toUpperCase() === label);
+      if (!isDuplicate) {
+        events.push({ start: w.start, end, label, confidence: 0.9 });
+      }
+      i = j;
+    } else {
+      i++;
+    }
+  }
+
+  // Method 3: Scan utterances for inline tags that weren't captured at word level
+  const utterances = transcript.utterances || [];
+  const inlinePattern = /\[(laughter|applause|music|silence|noise|cough|sigh|cheering|clapping)\]/gi;
+  for (const utt of utterances) {
+    let match;
+    while ((match = inlinePattern.exec(utt.text)) !== null) {
+      const label = match[1].toUpperCase();
+      const isDuplicate = events.some(e => Math.abs(e.start - utt.start) < 1000 && e.label === label);
+      if (!isDuplicate) {
+        events.push({ start: utt.start, end: utt.end, label, confidence: 0.8 });
+      }
+    }
+  }
+
+  events.sort((a, b) => a.start - b.start);
   return events;
 }
 
