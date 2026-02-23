@@ -283,7 +283,7 @@ function extractAudioEvents(transcript) {
 
 async function polishBatchWithGPT(segments, gaps, language, highlights, audioEvents, apiKey, batchIndex, totalBatches) {
   const segmentInput = segments.map((s, i) =>
-    `[${i}] START=${s.start}ms END=${s.end}ms SPEAKER=${s.speaker || 'null'}\nTEXT: ${s.text}`
+    `[${i}] START=${s.start}ms END=${s.end}ms SPEAKER=${s.speaker || 'UNKNOWN'}\nTEXT: ${s.text}`
   ).join('\n\n');
 
   const gapInput = gaps.length > 0
