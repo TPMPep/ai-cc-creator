@@ -590,6 +590,8 @@ function finalEnforce(cues, originalSegments) {
 
   // ── STEP 1b: Consolidate short cues (1-2 word fragments) ──
   // Merge very short text cues into their neighbors to prevent fragmentation.
+  // For very short text with overly long durations, shrink the cue's end first
+  // so that combining duration stays under MAX_DUR.
   const step1b = [];
   for (let i = 0; i < step1.length; i++) {
     const cue = step1[i];
@@ -604,6 +606,12 @@ function finalEnforce(cues, originalSegments) {
       continue;
     }
 
+    // For very short text (1-2 words), shrink overly long durations
+    // A 1-2 word cue should be ~1-2 seconds max, not 4+ seconds
+    const maxDurForShort = Math.max(MIN_DUR, wordCount * 1000);
+    const actualDur = cue.end - cue.start;
+    const shrunkEnd = actualDur > maxDurForShort ? cue.start + maxDurForShort : cue.end;
+
     // Try merge with previous
     if (step1b.length > 0) {
       const prev = step1b[step1b.length - 1];
@@ -614,11 +622,12 @@ function finalEnforce(cues, originalSegments) {
         (prev.speaker === cue.speaker || !prev.speaker || !cue.speaker);
       const prevFlat = prev.text.replace(/\n/g, ' ').trim();
       const combined = `${prevFlat} ${flatText}`;
-      const combinedDur = cue.end - prev.start;
+      // Use shrunk end for duration check to allow merging short fragments
+      const combinedDur = shrunkEnd - prev.start;
 
       if (sameSpeaker && gap <= MERGE_GAP_LIMIT && !prevIsSound && !prevHasDashes
           && combinedDur <= MAX_DUR && combined.length <= MAX_CHARS * 2 + 1) {
-        prev.end = cue.end;
+        prev.end = shrunkEnd;
         prev.text = combined;
         if (cue.speaker && !prev.speaker) prev.speaker = cue.speaker;
         continue;
@@ -630,7 +639,7 @@ function finalEnforce(cues, originalSegments) {
       const next = step1[i + 1];
       const nextIsSound = isSound(next.text);
       const nextHasDashes = next.text.split('\n').some(l => l.trimStart().startsWith('- '));
-      const gap = next.start - cue.end;
+      const gap = next.start - shrunkEnd;
       const sameSpeaker = !nextIsSound && !nextHasDashes &&
         (next.speaker === cue.speaker || !next.speaker || !cue.speaker);
       const nextFlat = next.text.replace(/\n/g, ' ').trim();
@@ -646,7 +655,8 @@ function finalEnforce(cues, originalSegments) {
       }
     }
 
-    // Can't merge — keep as-is
+    // Can't merge — keep but use shrunk duration
+    cue.end = shrunkEnd;
     step1b.push(cue);
   }
 
