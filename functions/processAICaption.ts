@@ -242,8 +242,10 @@ Return ONLY a valid JSON array. No markdown. No explanation. No code fences.
 Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
 - Use \\n for line breaks within 2-line cues
 - speaker: "A"/"B"/"C" for single-speaker, null for multi-speaker or sound cues
-- Include ALL input segments in the output
+- Include ALL input segments in the output — NEVER drop spoken text
+- Combine adjacent segments that form a single phrase/sentence into one cue when possible
 - Verify EVERY line is ≤32 chars before outputting
+- Count your output cues: if you have fewer spoken-text cues than input segments (excluding sound cues you added), you have DROPPED content — go back and fix it
 
 ═══════════════════════════════════════
 INPUT SEGMENTS:
