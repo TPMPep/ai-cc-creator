@@ -95,7 +95,7 @@ export default function ExportPanel({ result, title, jobId }) {
         <DownloadBtn
           highlight
           onClick={() => {
-            const content = result.scc_url || result.scc_text || result.scc;
+            const content = result.scc_url || result.scc_text || result.scc || (result.scc_chunks ? joinChunks(result.scc_chunks) : null);
             const isUrl = !!result.scc_url;
             handleDownload(content, isUrl, `${safeName}_${jobId}.scc`);
           }}
@@ -106,7 +106,7 @@ export default function ExportPanel({ result, title, jobId }) {
       <div className="grid grid-cols-2 gap-2">
         {hasSrt && (
           <DownloadBtn onClick={() => {
-            const content = result.srt_url || result.srt_text || result.srt;
+            const content = result.srt_url || result.srt_text || result.srt || (result.srt_chunks ? joinChunks(result.srt_chunks) : null);
             const isUrl = !!result.srt_url;
             handleDownload(content, isUrl, `${safeName}_${jobId}.srt`);
           }}>
@@ -115,7 +115,7 @@ export default function ExportPanel({ result, title, jobId }) {
         )}
         {hasVtt && (
           <DownloadBtn onClick={() => {
-            const content = result.vtt_url || result.vtt_text || result.vtt;
+            const content = result.vtt_url || result.vtt_text || result.vtt || (result.vtt_chunks ? joinChunks(result.vtt_chunks) : null);
             const isUrl = !!result.vtt_url;
             handleDownload(content, isUrl, `${safeName}_${jobId}.vtt`);
           }}>
@@ -131,7 +131,7 @@ export default function ExportPanel({ result, title, jobId }) {
       <div className="flex gap-2">
         {hasSrt && (
           <Button variant="ghost" size="sm" onClick={() => {
-            const content = result.srt_url || result.srt_text || result.srt;
+            const content = result.srt_url || result.srt_text || result.srt || (result.srt_chunks ? joinChunks(result.srt_chunks) : null);
             const isUrl = !!result.srt_url;
             handleCopy(content, isUrl, setCopiedSrt);
           }} className="text-zinc-500 hover:text-white text-[11px] h-7">
@@ -141,7 +141,7 @@ export default function ExportPanel({ result, title, jobId }) {
         )}
         {hasVtt && (
           <Button variant="ghost" size="sm" onClick={() => {
-            const content = result.vtt_url || result.vtt_text || result.vtt;
+            const content = result.vtt_url || result.vtt_text || result.vtt || (result.vtt_chunks ? joinChunks(result.vtt_chunks) : null);
             const isUrl = !!result.vtt_url;
             handleCopy(content, isUrl, setCopiedVtt);
           }} className="text-zinc-500 hover:text-white text-[11px] h-7">
