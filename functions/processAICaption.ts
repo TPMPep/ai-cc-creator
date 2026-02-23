@@ -647,8 +647,9 @@ Deno.serve(async (req) => {
       const segments = buildRawSegments(utterances);
       const gaps = findGaps(utterances, totalDurationMs);
       const batches = buildBatches(segments);
+      const runId = newRunId();
 
-      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}`);
+      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}, runId=${runId}`);
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         processingPlan: {
@@ -656,12 +657,13 @@ Deno.serve(async (req) => {
           gaps, highlights, language,
           totalBatches: batches.length,
           polishedCues: [],
+          runId,
           utterances: utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words })),
         },
       });
 
-      // Chain to process_batch
-      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0 });
+      // Chain to process_batch using internal secret
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0, runId });
 
       return Response.json({ status: 'started', batches: batches.length });
     }
@@ -692,6 +694,7 @@ Deno.serve(async (req) => {
 
       const segments = buildRawSegments(utterances);
       const batches = buildBatches(segments);
+      const runId = newRunId();
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'processing',
@@ -704,13 +707,14 @@ Deno.serve(async (req) => {
           batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
           totalBatches: batches.length,
           polishedCues: [],
+          runId,
         },
       });
 
-      console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches`);
+      console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches, runId=${runId}`);
 
-      // Chain to process_batch
-      chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0 });
+      // Chain to process_batch using internal secret
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0, runId });
 
       return Response.json({ status: 'reprocessing', batches: batches.length });
     }
