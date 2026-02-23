@@ -368,7 +368,8 @@ function finalEnforce(cues) {
         cur = candidate;
       } else {
         if (cur) packed.push(cur);
-        cur = word.length > limit ? word.substring(0, limit) : word;
+        // Never truncate words — keep the full word even if it slightly exceeds limit
+        cur = word;
       }
     }
     if (cur) packed.push(cur);
