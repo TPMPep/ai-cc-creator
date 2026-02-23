@@ -208,6 +208,7 @@ CHARACTER/LINE RULES (BROADCAST CRITICAL):
 7. MAXIMUM 2 lines per cue. NEVER output 3 lines.
 8. Short segments (≤4 words): use 1 line only. Do NOT force 2 lines on short cues.
 9. Longer segments: use 2 lines, breaking at a natural syntactic boundary.
+9b. CRITICAL: If a segment's text CANNOT fit in 2 lines × 32 chars (i.e. >~60 chars total), you MUST split it into 2 separate output cues. Divide the text at a natural sentence or clause boundary, and divide the timecode proportionally. NEVER output a cue whose text exceeds 2 lines × 32 chars.
 
 ═══════════════════════════════════════
 SEGMENTATION STRATEGY (NO FRAGMENTATION):
