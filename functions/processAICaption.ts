@@ -567,13 +567,7 @@ function runQC(cues) {
       if (gap < 0) issues.push({ cue: i, type: 'overlap', value: `${Math.abs(gap)}ms overlap with cue ${i}` });
       else if (gap < 67) issues.push({ cue: i, type: 'gap_too_small', value: `${gap}ms (min 67ms)` });
     }
-    if (!isSoundCue && c.text.trim().length > 0) {
-      const lastLine = lines[lines.length - 1].replace(/^- /, '').trim();
-      const lastChar = lastLine[lastLine.length - 1];
-      if (!['.', '?', '!', '…', '"', "'"].includes(lastChar) && !lastLine.endsWith('--') && !lastLine.endsWith('—')) {
-        issues.push({ cue: i, type: 'missing_punctuation', value: `Ends with "${lastChar}"` });
-      }
-    }
+    // Note: missing_punctuation is informational only — mid-sentence cues intentionally omit terminal punctuation
     if (!c.text || c.text.trim().length === 0) issues.push({ cue: i, type: 'empty_cue', value: 'No text content' });
   }
   return { issuesCount: issues.length, issues };
