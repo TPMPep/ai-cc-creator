@@ -565,13 +565,16 @@ async function addLog(base44, jobId, step, status, detail) {
 
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
+  let job_db_id = null; // declared here so catch block can access it
 
   try {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { action, transcript_id, job_db_id } = body;
+    const action = body.action;
+    const transcript_id = body.transcript_id;
+    job_db_id = body.job_db_id;
 
     if (!action || !job_db_id) {
       return Response.json({ error: 'action and job_db_id required' }, { status: 400 });
