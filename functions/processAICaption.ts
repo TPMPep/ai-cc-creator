@@ -1031,7 +1031,9 @@ Deno.serve(async (req) => {
           assemblyUtterances: assemblyRawCues, // actual utterance data with real speaker labels
           openaiReformattedCues: newPolishedCues,
           rawAudioEvents: audioEvents || [], // raw detected audio events with timestamps
-          exports: { srt: null, vtt: null, scc: null },
+          srt,
+          vtt,
+          scc,
           qc,
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
