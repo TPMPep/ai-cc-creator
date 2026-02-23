@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
         disfluencies: false,
         auto_highlights: true,
         content_safety: true,
-        audio_events: true,
-        speech_models: ["universal-2"],
+        speech_models: ["universal-3-pro", "universal-2"],
+        prompt: "Preserve non-speech audio in tags to indicate when the audio occurred. Tag sounds: [laughter], [applause], [music], [silence], [noise], [cough], [sigh].",
       }),
     });
 
