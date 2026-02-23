@@ -312,6 +312,8 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, audioEve
 
 ABSOLUTE RULE — SPEAKER LABELS: NEVER put [A], [B], [C] or any speaker label in the "text" field. Speaker identity ONLY goes in the separate "speaker" field. Text field = spoken words only.
 
+ABSOLUTE RULE — TRUST INPUT SPEAKERS: Each input segment has a SPEAKER field (A, B, C, etc.) from the transcription engine. You MUST preserve this speaker assignment exactly. If segment [3] says SPEAKER=C, your output cue for that segment MUST have "speaker": "C". NEVER reassign speakers based on your own judgment.
+
 ═══════════════════════════════════════
 TIMING RULES (BROADCAST CRITICAL):
 ═══════════════════════════════════════
