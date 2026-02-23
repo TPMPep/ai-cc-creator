@@ -436,7 +436,7 @@ function finalEnforce(cues, originalSegments) {
         const overlapping = (originalSegments || []).filter(seg => {
           const os = Math.max(cue.start, seg.start);
           const oe = Math.min(cue.end, seg.end);
-          return oe - os >= 50 && seg.speaker;
+          return oe > os && seg.speaker;
         }).sort((a, b) => a.start - b.start);
 
         // Find where the first speaker ends and second begins
