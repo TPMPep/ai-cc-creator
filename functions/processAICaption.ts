@@ -421,12 +421,20 @@ function finalEnforce(cues, originalSegments) {
     }
   }
 
-  // ── STEP 2: Fix line count and line length — split cues when text won't fit ──
-  // Tries to reflow into 2×32. If that fails, splits the cue into multiple cues
-  // with proportionally divided timecodes. Never truncates, never overflows.
+  // ── STEP 2: Fix line count and line length ──
+  // Strategy: reflow into 2 lines × 32 chars. If text genuinely can't fit (>~60 chars),
+  // split into exactly 2 cues (halving at a word boundary), each getting half the timecode.
+  // This avoids micro-fragments like single-word cues.
 
-  function reflowIntoTwoLines(words, prefix, limit) {
-    // Try balanced split first
+  function reflowText(words, limit) {
+    // Try to fit all words into 2 lines of ≤limit chars each
+    // Returns formatted text string or null if impossible
+    if (words.length === 0) return null;
+    const full = words.join(' ');
+    // If it fits on one line, just use one line
+    if (full.length <= limit) return full;
+
+    // Try balanced 2-line split
     let bestSplit = -1;
     let bestBalance = Infinity;
     for (let split = 1; split < words.length; split++) {
@@ -438,9 +446,10 @@ function finalEnforce(cues, originalSegments) {
       }
     }
     if (bestSplit >= 0) {
-      return `${prefix}${words.slice(0, bestSplit).join(' ')}\n${prefix}${words.slice(bestSplit).join(' ')}`;
+      return `${words.slice(0, bestSplit).join(' ')}\n${words.slice(bestSplit).join(' ')}`;
     }
-    // Try greedy pack
+
+    // Try greedy: pack line 1 as full as possible
     let line1 = '';
     let wi = 0;
     while (wi < words.length) {
@@ -451,52 +460,10 @@ function finalEnforce(cues, originalSegments) {
     if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
     const line2 = words.slice(wi).join(' ');
     if (line2.length <= limit) {
-      return `${prefix}${line1}\n${prefix}${line2}`;
-    }
-    return null; // can't fit — needs splitting into multiple cues
-  }
-
-  function splitCueByWords(cue, words, prefix, limit) {
-    // Split words into groups that each fit in 2 lines × limit chars
-    const cueChunks = [];
-    let remaining = [...words];
-    while (remaining.length > 0) {
-      // Find the maximum number of words that fit in 2 lines
-      let maxWords = remaining.length;
-      let fitted = null;
-      // Try largest first, shrink until it fits
-      for (let count = maxWords; count >= 1; count--) {
-        const chunk = remaining.slice(0, count);
-        const text = reflowIntoTwoLines(chunk, prefix, limit);
-        if (text !== null) { fitted = { text, wordCount: count }; break; }
-      }
-      if (!fitted) {
-        // Single word too long — just use it as-is (extremely rare edge case)
-        fitted = { text: `${prefix}${remaining[0]}`, wordCount: 1 };
-      }
-      cueChunks.push(fitted.text);
-      remaining = remaining.slice(fitted.wordCount);
+      return `${line1}\n${line2}`;
     }
 
-    // Distribute time proportionally across chunks
-    const totalChars = cueChunks.reduce((sum, t) => sum + t.replace(/\n/g, '').length, 0);
-    const totalDur = cue.end - cue.start;
-    const result = [];
-    let timeOffset = cue.start;
-    for (let ci = 0; ci < cueChunks.length; ci++) {
-      const chunkChars = cueChunks[ci].replace(/\n/g, '').length;
-      const chunkDur = ci === cueChunks.length - 1
-        ? (cue.end - timeOffset)  // last chunk gets remainder
-        : Math.max(MIN_DUR, Math.round(totalDur * (chunkChars / totalChars)));
-      result.push({
-        start: timeOffset,
-        end: timeOffset + chunkDur,
-        text: cueChunks[ci],
-        speaker: cue.speaker,
-      });
-      timeOffset += chunkDur;
-    }
-    return result;
+    return null; // truly can't fit in 2 lines
   }
 
   const step2 = [];
@@ -522,7 +489,7 @@ function finalEnforce(cues, originalSegments) {
       continue;
     }
 
-    // Sound cues: cap at 32 chars (they're short descriptors)
+    // Sound cues: cap at 32 chars
     if (isSoundCue) {
       step2.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
       continue;
@@ -535,13 +502,37 @@ function finalEnforce(cues, originalSegments) {
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
 
-    const reflowed = reflowIntoTwoLines(words, prefix, limit);
+    const reflowed = reflowText(words, limit);
     if (reflowed !== null) {
-      step2.push({ ...cue, text: reflowed });
+      const prefixed = reflowed.split('\n').map(l => `${prefix}${l}`).join('\n');
+      step2.push({ ...cue, text: prefixed });
     } else {
-      // Text won't fit in one cue — split into multiple cues with proportional timing
-      const splitCues = splitCueByWords(cue, words, prefix, limit);
-      step2.push(...splitCues);
+      // Text won't fit in one 2×32 cue — split into exactly 2 cues at the midpoint
+      const midWord = Math.ceil(words.length / 2);
+      const half1Words = words.slice(0, midWord);
+      const half2Words = words.slice(midWord);
+
+      // Reflow each half (they should fit since we halved)
+      const text1 = reflowText(half1Words, limit);
+      const text2 = reflowText(half2Words, limit);
+
+      // If a half STILL doesn't fit (very rare — enormous text), just keep it and let QC flag
+      const fmt1 = text1 !== null
+        ? text1.split('\n').map(l => `${prefix}${l}`).join('\n')
+        : `${prefix}${half1Words.join(' ')}`;
+      const fmt2 = text2 !== null
+        ? text2.split('\n').map(l => `${prefix}${l}`).join('\n')
+        : `${prefix}${half2Words.join(' ')}`;
+
+      // Split timecode proportionally
+      const totalChars = stripped.length;
+      const half1Chars = half1Words.join(' ').length;
+      const splitTime = cue.start + Math.round((cue.end - cue.start) * (half1Chars / totalChars));
+
+      step2.push(
+        { start: cue.start, end: splitTime, text: fmt1, speaker: cue.speaker },
+        { start: splitTime, end: cue.end, text: fmt2, speaker: cue.speaker },
+      );
     }
   }
 
