@@ -569,17 +569,33 @@ async function addLog(base44, jobId, step, status, detail) {
 const BATCHES_PER_INVOCATION = 3;
 
 Deno.serve(async (req) => {
-  // Clone request for potential re-read in catch block
   const reqClone = req.clone();
   const base44 = createClientFromRequest(req);
   let job_db_id = null;
 
   try {
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-    const body = await req.json();
-    const action = body.action;
+    const action = body?.action;
+    const internal = isInternalChain(body);
+
+    // Only require a real user for start/reprocess actions.
+    // process_batch is allowed for internal chain calls.
+    if (!internal) {
+      const user = await base44.auth.me();
+      if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Internal calls cannot start/reprocess jobs (safety guard).
+    if (internal && (action === 'start' || action === 'reprocess')) {
+      return Response.json({ error: 'Internal chain cannot perform start/reprocess' }, { status: 403 });
+    }
+
     const transcript_id = body.transcript_id;
     job_db_id = body.job_db_id;
 
@@ -590,22 +606,22 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
-    // ── Helper: chain to next batch via HTTP fetch (avoids SDK 403 issue) ──
-    // We extract the authorization header from the original request and re-use it.
-    const authHeader = reqClone.headers.get('authorization') || reqClone.headers.get('Authorization');
-    const appIdHeader = reqClone.headers.get('x-app-id');
-
+    // ── Helper: chain to next batch via internal secret (no user token needed) ──
     function chainToSelf(payload) {
       const selfUrl = reqClone.url;
       const headers = { 'Content-Type': 'application/json' };
-      if (authHeader) headers['Authorization'] = authHeader;
+      // Only forward app-id header, NOT Authorization
+      const appIdHeader = reqClone.headers.get('x-app-id');
       if (appIdHeader) headers['x-app-id'] = appIdHeader;
       
       // Fire and forget — don't await
       fetch(selfUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          chain_secret: INTERNAL_CHAIN_SECRET,
+        }),
       }).catch(err => console.error('[CHAIN] HTTP self-call failed:', err.message));
     }
 
