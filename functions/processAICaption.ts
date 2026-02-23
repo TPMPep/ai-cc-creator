@@ -291,17 +291,17 @@ FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
 20. If a speaker switches back and forth between English and a foreign language, apply rule 19 to each foreign-language segment individually.
 
 ═══════════════════════════════════════
-SOUND/MUSIC CUES (FROM AUDIO EVENTS):
+SOUND/MUSIC CUES (FROM SILENCE GAPS):
 ═══════════════════════════════════════
-21. You are provided DETECTED AUDIO EVENTS from actual audio analysis — these are REAL detected sounds.
-22. For each detected audio event, insert a sound cue at that timestamp:
+21. You are provided SILENCE GAPS — periods where no one is speaking.
+22. For gaps that are clearly non-speech audio moments (intro music, applause after introductions, audience laughter, background music), insert an appropriate sound cue:
     - Music/singing → [♪ MUSIC ♪] or [♪ UPBEAT MUSIC ♪] etc. (≤32 chars including brackets and ♪)
     - Laughter → [LAUGHTER]
     - Applause → [APPLAUSE]
     - Any other sound → [SOUND DESCRIPTION IN CAPS] (≤32 chars)
-23. Place the sound cue at the start time of the audio event. Use the event's end time as the cue end.
-24. ONLY insert sound cues for events in the DETECTED AUDIO EVENTS list. NEVER guess or invent sounds.
-25. Sound cues that overlap with dialogue: place them in any gap immediately before or after the dialogue. NEVER displace dialogue.
+23. Use your judgment based on context: a gap after host introductions on a talk show is likely [APPLAUSE]. A gap at the very start may be [♪ MUSIC ♪].
+24. Place the sound cue at the gap's start time. Use the gap's end time as the cue end.
+25. Do NOT insert sound cues for every gap — only where context strongly suggests non-speech audio. Short gaps between sentences are just pauses.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT — STRICT JSON:
