@@ -520,6 +520,7 @@ function finalEnforce(cues) {
 
   result.sort((a, b) => a.start - b.start);
 
+  // Fix overlaps and gaps
   for (let i = 1; i < result.length; i++) {
     if (result[i].start < result[i - 1].end) {
       result[i].start = result[i - 1].end + MIN_GAP;
@@ -528,6 +529,60 @@ function finalEnforce(cues) {
       }
     } else if (result[i].start - result[i - 1].end < MIN_GAP && result[i].start > result[i - 1].end) {
       result[i].start = result[i - 1].end + MIN_GAP;
+    }
+  }
+
+  // Final orphan-word sweep: merge any ≤2 word spoken cues into neighbors
+  const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
+  const repack = (text) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    let l1 = '', l2 = '';
+    for (const w of words) {
+      if (!l1 || (l1 + ' ' + w).length <= MAX_CHARS) { l1 = l1 ? l1 + ' ' + w : w; }
+      else if (!l2 || (l2 + ' ' + w).length <= MAX_CHARS) { l2 = l2 ? l2 + ' ' + w : w; }
+      else return null;
+    }
+    const r = l2 ? l1 + '\n' + l2 : l1;
+    return r.split('\n').every(l => l.length <= MAX_CHARS) ? r : null;
+  };
+
+  for (let i = result.length - 1; i >= 0; i--) {
+    const c = result[i];
+    if (!c.text || isSndCue(c.text)) continue;
+    const plain = c.text.replace(/\n/g, ' ').trim();
+    const wc = plain.split(/\s+/).length;
+    if (wc > 2) continue;
+    // Try merge backward
+    if (i > 0 && !isSndCue(result[i-1].text)) {
+      const combo = result[i-1].text.replace(/\n/g, ' ').trim() + ' ' + plain;
+      const repacked = repack(combo);
+      if (repacked) {
+        result[i-1] = { ...result[i-1], end: c.end, text: repacked };
+        result.splice(i, 1);
+        continue;
+      }
+    }
+    // Try merge forward
+    if (i < result.length - 1 && !isSndCue(result[i+1].text)) {
+      const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').trim();
+      const repacked = repack(combo);
+      if (repacked) {
+        result[i+1] = { ...result[i+1], start: c.start, text: repacked };
+        result.splice(i, 1);
+        continue;
+      }
+    }
+  }
+
+  // Final dash cleanup: ensure no single-speaker cues have "- " prefixes
+  for (const c of result) {
+    if (!c.text || isSndCue(c.text)) continue;
+    const lines = c.text.split('\n');
+    if (lines.length >= 2 && lines.every(l => l.startsWith('- ')) && c.speaker) {
+      c.text = lines.map(l => l.replace(/^- /, '')).join('\n');
+    }
+    if (lines.length === 1 && lines[0].startsWith('- ') && c.speaker) {
+      c.text = c.text.replace(/^- /, '');
     }
   }
 
