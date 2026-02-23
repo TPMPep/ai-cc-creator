@@ -1016,6 +1016,7 @@ Deno.serve(async (req) => {
           assemblyRawCues: assemblySRTCues || assemblyRawCues, // SRT cues used as GPT input
           assemblyUtterances: assemblyRawCues, // actual utterance data with real speaker labels
           openaiReformattedCues: newPolishedCues,
+          rawAudioEvents: audioEvents || [], // raw detected audio events with timestamps
           exports: { srt: null, vtt: null, scc: null },
           qc,
         },
