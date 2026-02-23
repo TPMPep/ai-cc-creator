@@ -380,104 +380,22 @@ function finalEnforce(cues, originalSegments) {
   const MIN_GAP = 67;
   const MAX_CPS = 25; // chars per second
 
-  // ── STEP 0: Build speaker map from original segments/utterances ──
-  // For each output cue, find which utterances have SIGNIFICANT overlap
-  // (not just 1ms — require at least 30% of the utterance or 200ms to count).
-  // This prevents a long utterance from "leaking" its speaker into an adjacent cue.
-  function getSpeakersForCue(cue) {
-    const sources = originalSegments || [];
-    if (!sources.length) return [];
-
-    const overlapping = [];
-    for (const seg of sources) {
-      const overlapStart = Math.max(cue.start, seg.start);
-      const overlapEnd = Math.min(cue.end, seg.end);
-      const overlap = overlapEnd - overlapStart;
-      if (overlap <= 0 || !seg.speaker) continue;
-      // Require significant overlap: at least 200ms AND at least 20% of the cue duration
-      const cueDur = cue.end - cue.start;
-      if (overlap >= 200 || (cueDur > 0 && overlap / cueDur >= 0.2)) {
-        overlapping.push(seg);
-      }
-    }
-
-    overlapping.sort((a, b) => a.start - b.start);
-    const speakers = [];
-    for (const seg of overlapping) {
-      if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
-        speakers.push(seg.speaker);
-      }
-    }
-    return speakers;
-  }
-
-  // ── STEP 1: Clean text + fix multi-speaker dashes ──
-  // For multi-speaker cues, we need to figure out which words belong to which speaker
-  // by cross-referencing with the original segments' timestamps.
+  // ── STEP 1: Clean text, trust GPT's dash decisions ──
+  // GPT sees the SPEAKER= labels and decides when dashes are needed.
+  // We trust GPT's decision: if it put dashes, keep them; if not, don't add them.
+  // We only clean leaked speaker labels like [A], [B] from text.
+  // Single-speaker cues that continue from a previous speaker do NOT get dashes.
   const step1 = [];
   for (const cue of cues) {
     const cleanedText = cleanCueText(cue.text || '');
     if (!cleanedText || !cleanedText.trim()) continue;
 
-    const speakers = getSpeakersForCue(cue);
-    const hasMultipleSpeakers = speakers.length >= 2;
     const lines = cleanedText.split('\n');
-    const alreadyHasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
+    const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
 
-    if (hasMultipleSpeakers && !alreadyHasDashes) {
-      if (lines.length >= 2) {
-        // Multiple lines already — add dashes to each
-        const dashedText = lines.map(l => {
-          const trimmed = l.replace(/^- /, '').trimStart();
-          return `- ${trimmed}`;
-        }).join('\n');
-        step1.push({ ...cue, text: dashedText, speaker: null });
-      } else {
-        // Single line with multiple speakers — try to split at speaker boundary
-        // Find the speaker change point by looking at original segments
-        const overlapping = (originalSegments || []).filter(seg => {
-          const os = Math.max(cue.start, seg.start);
-          const oe = Math.min(cue.end, seg.end);
-          return oe > os && seg.speaker;
-        }).sort((a, b) => a.start - b.start);
-
-        // Find where the first speaker ends and second begins
-        let splitPoint = -1;
-        if (overlapping.length >= 2) {
-          const firstSpeaker = overlapping[0].speaker;
-          for (let si = 1; si < overlapping.length; si++) {
-            if (overlapping[si].speaker !== firstSpeaker) {
-              // The boundary time is where this new speaker's segment starts
-              const boundaryTime = overlapping[si].start;
-              // Estimate character position based on time proportion
-              const textLen = cleanedText.length;
-              const cueDur = cue.end - cue.start;
-              if (cueDur > 0) {
-                const timeFraction = (boundaryTime - cue.start) / cueDur;
-                splitPoint = Math.round(textLen * timeFraction);
-                // Snap to nearest word boundary
-                const spaceAfter = cleanedText.indexOf(' ', splitPoint);
-                const spaceBefore = cleanedText.lastIndexOf(' ', splitPoint);
-                if (spaceAfter >= 0 && (splitPoint - spaceBefore > spaceAfter - splitPoint || spaceBefore < 0)) {
-                  splitPoint = spaceAfter;
-                } else if (spaceBefore > 0) {
-                  splitPoint = spaceBefore;
-                }
-              }
-              break;
-            }
-          }
-        }
-
-        if (splitPoint > 0 && splitPoint < cleanedText.length) {
-          const part1 = cleanedText.substring(0, splitPoint).trim();
-          const part2 = cleanedText.substring(splitPoint).trim();
-          step1.push({ ...cue, text: `- ${part1}\n- ${part2}`, speaker: null });
-        } else {
-          // Couldn't determine boundary — keep as-is with null speaker
-          step1.push({ ...cue, text: cleanedText, speaker: null });
-        }
-      }
+    if (hasDashes) {
+      // GPT put dashes — this is a multi-speaker cue, set speaker to null
+      step1.push({ ...cue, text: cleanedText, speaker: null });
     } else {
       step1.push({ ...cue, text: cleanedText });
     }
