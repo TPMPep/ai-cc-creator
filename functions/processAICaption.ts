@@ -314,16 +314,20 @@ MERGING CUES (IMPORTANT):
 19. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
 
 ═══════════════════════════════════════
-SPEAKER FORMATTING (CRITICAL — WATCH FOR SPEAKER CHANGES MID-CUE):
+SPEAKER FORMATTING (CRITICAL — BROADCAST STANDARD):
 ═══════════════════════════════════════
-15. Single-speaker cue: no dash prefix. Set speaker field to "A", "B", or "C".
-16. Two-speaker cue (WHEN TWO DIFFERENT SPEAKERS APPEAR IN THE SAME CUE):
-    - This happens when the input segments assigned to this timecode window have DIFFERENT speaker labels (e.g., one segment is SPEAKER=B and the next is SPEAKER=A).
-    - You MUST prefix EACH speaker's line with "- " (counts as 2 of your 32 chars).
-    - Set speaker field to null.
-    - Example: If segment has speaker B saying "off on us." and next segment has speaker A saying "Has it done? Well," and they overlap into one cue, output:
-      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done? Well,", "speaker": null}
-    - NEVER output a cue where two different speakers' words appear WITHOUT the "- " dash prefix on each line.
+15. Single-speaker cue: NO dash prefix. Set speaker field to "A", "B", or "C".
+16. Two-speaker cue (speaker change within a cue):
+    - When one speaker CONTINUES from the previous cue and a NEW speaker starts mid-cue:
+      * The CONTINUING speaker's line gets NO dash (they are already identified).
+      * ONLY the NEW speaker's line gets a "- " dash prefix.
+      * Set speaker field to null.
+      * Example: Speaker A was speaking in previous cue. This cue has A finishing + B starting:
+        {"text": "I love this.\n- Thank you.", "speaker": null}
+    - When BOTH speakers are new (neither spoke in the previous cue):
+      * BOTH lines get "- " dash prefix.
+      * Example: {"text": "- Hello there.\n- Hi, how are you?", "speaker": null}
+    - NEVER add dashes to a single-speaker cue, even if the previous cue had a different speaker.
 
 ═══════════════════════════════════════
 FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
