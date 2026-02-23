@@ -733,16 +733,31 @@ Deno.serve(async (req) => {
       const scc = buildSCC(enforced);
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
+      // Upload large text files to avoid entity field size limits
+      const uploadText = async (content, filename, mimeType) => {
+        const blob = new Blob([content], { type: mimeType });
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file: blob });
+        return uploadResult.file_url;
+      };
+
+      console.log(`[FINALIZE] Uploading SRT/VTT/SCC files...`);
+      const [srtUrl, vttUrl, sccUrl] = await Promise.all([
+        uploadText(srt, `${job_db_id}.srt`, 'text/plain'),
+        uploadText(vtt, `${job_db_id}.vtt`, 'text/plain'),
+        uploadText(scc, `${job_db_id}.scc`, 'text/plain'),
+      ]);
+
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues: enforced,
-          srt,
-          vtt,
-          scc,
+          srt_url: srtUrl,
+          vtt_url: vttUrl,
+          scc_url: sccUrl,
           qc,
           language,
-          raw_utterances: (freshPlan.utterances || []).slice(0, 50), // keep first 50 for diagnostics
         },
         durationMs,
         issuesCount: qc.issuesCount,
