@@ -60,30 +60,31 @@ export default function JobDetailAI() {
   const isPollingRef = useRef(false);
 
   // Trigger server-side processing when AssemblyAI is done
+  // Fire-and-forget: the function processes all batches in one call (can take minutes).
+  // We don't await it — the polling loop will detect when status changes to 'done'.
   const startServerProcessing = useCallback(async (currentJob) => {
-    const res = await base44.functions.invoke("processAICaption", {
+    base44.functions.invoke("processAICaption", {
       transcript_id: currentJob.railwayJobId,
       job_db_id: currentJob.id,
       action: "start",
-    });
-    if (res.data?.error) throw new Error(res.data.error);
-    }, []);
+    }).catch(err => console.error("startServerProcessing error:", err));
+  }, []);
 
-    const reprocessStartRef = useRef(null);
+  const reprocessStartRef = useRef(null);
 
-    const handleReprocess = useCallback(async () => {
-      if (!job) return;
-      reprocessStartRef.current = Date.now();
-      const res = await base44.functions.invoke("processAICaption", {
-        transcript_id: job.railwayJobId,
-        job_db_id: job.id,
-        action: "reprocess",
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      // Reset local state to show processing UI, use reprocess start time
-      setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], created_date: new Date(reprocessStartRef.current).toISOString() }));
-      setCues([]);
-    }, [job]);
+  const handleReprocess = useCallback(async () => {
+    if (!job) return;
+    reprocessStartRef.current = Date.now();
+    // Reset local state immediately to show processing UI
+    setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], result: null, created_date: new Date(reprocessStartRef.current).toISOString() }));
+    setCues([]);
+    // Fire-and-forget — polling will pick up progress
+    base44.functions.invoke("processAICaption", {
+      transcript_id: job.railwayJobId,
+      job_db_id: job.id,
+      action: "reprocess",
+    }).catch(err => console.error("handleReprocess error:", err));
+  }, [job]);
 
   const doPoll = useCallback(async () => {
     const currentJob = jobRef.current;
