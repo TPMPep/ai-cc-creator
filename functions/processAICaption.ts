@@ -732,6 +732,12 @@ Deno.serve(async (req) => {
       const plan = job.processingPlan;
       if (!plan || !plan.batches) return Response.json({ error: 'No processing plan' }, { status: 400 });
 
+      // ── Zombie/stale chain guard ──
+      if (!plan.runId || body.runId !== plan.runId) {
+        console.log(`[process_batch] Ignoring stale chain call. payload runId=${body?.runId} current runId=${plan?.runId}`);
+        return Response.json({ status: 'stale_ignored' });
+      }
+
       const totalBatches = plan.totalBatches;
       const gaps = plan.gaps || [];
       const language = plan.language || 'en';
