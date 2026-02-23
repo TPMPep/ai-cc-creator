@@ -1021,19 +1021,37 @@ Deno.serve(async (req) => {
       const scc = buildSCC(cues);
       const qc = runQC(cues);
 
+      // Upload large text files (SRT/VTT/SCC) and large JSON data as files
+      // to avoid hitting entity field size limits on long videos
+      async function uploadTextFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const file = new File([blob], filename, { type: mimeType });
+        const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file });
+        return file_url;
+      }
+
+      const [srtUrl, vttUrl, sccUrl, diagnosticUrl] = await Promise.all([
+        uploadTextFile(srt, `${job_db_id}.srt`, 'text/plain'),
+        uploadTextFile(vtt, `${job_db_id}.vtt`, 'text/plain'),
+        uploadTextFile(scc, `${job_db_id}.scc`, 'text/plain'),
+        uploadTextFile(JSON.stringify({
+          assemblyRawCues: assemblySRTCues || assemblyRawCues,
+          assemblyUtterances: assemblyRawCues,
+          openaiReformattedCues: newPolishedCues,
+          rawAudioEvents: audioEvents || [],
+        }), `${job_db_id}_diagnostic.json`, 'application/json'),
+      ]);
+
       const finalLog = { step: '3_finalize', status: 'ok', detail: `Final enforce done. ${cues.length} cues. QC issues: ${qc.issuesCount}.`, ts: new Date().toISOString() };
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues,
-          assemblyRawCues: assemblySRTCues || assemblyRawCues, // SRT cues used as GPT input
-          assemblyUtterances: assemblyRawCues, // actual utterance data with real speaker labels
-          openaiReformattedCues: newPolishedCues,
-          rawAudioEvents: audioEvents || [], // raw detected audio events with timestamps
-          srt,
-          vtt,
-          scc,
+          srt_url: srtUrl,
+          vtt_url: vttUrl,
+          scc_url: sccUrl,
+          diagnostic_url: diagnosticUrl,
           qc,
         },
         durationMs: cues.length > 0 ? cues[cues.length - 1].end : 0,
