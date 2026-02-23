@@ -787,10 +787,10 @@ Deno.serve(async (req) => {
         processingPlan: { ...freshPlan, polishedCues: allPolished },
       });
 
-      // More batches remaining — chain to self
+      // More batches remaining — chain to self with runId
       if (batchIndex < totalBatches) {
         console.log(`[CHAIN] Processed ${processedCount} batches, chaining to batch ${batchIndex}...`);
-        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex });
+        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex, runId: body.runId });
         return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
       }
 
@@ -805,12 +805,18 @@ Deno.serve(async (req) => {
       const scc = buildSCC(enforced);
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
+      // Chunk large export strings to avoid field size limits
+      const srtChunks = chunkString(srt);
+      const vttChunks = chunkString(vtt);
+      const sccChunks = chunkString(scc);
+
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
           cues: enforced,
-          srt_url: null, vtt_url: null, scc_url: null,
-          srt_text: srt, vtt_text: vtt, scc_text: scc,
+          srt_chunks: srtChunks,
+          vtt_chunks: vttChunks,
+          scc_chunks: sccChunks,
           qc, language,
         },
         durationMs,
