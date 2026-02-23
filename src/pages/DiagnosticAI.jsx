@@ -94,10 +94,40 @@ export default function DiagnosticAI() {
   );
 
   const finalCues = job.result?.cues || [];
-  const assemblyCues = job.result?.assemblyRawCues || job.result?.diagnostic?.assemblyRawCues || [];
-  const assemblyUtterances = job.result?.assemblyUtterances || [];
-  const openaiCues = job.result?.openaiReformattedCues || job.result?.diagnostic?.openaiRawCues || [];
-  const rawAudioEvents = job.result?.rawAudioEvents || [];
+
+  // Diagnostic data: support both inline (legacy) and URL-based (new) formats
+  const [diagnosticData, setDiagnosticData] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  useEffect(() => {
+    if (!job?.result) return;
+    // If we have inline data, use it directly
+    if (job.result.assemblyRawCues) {
+      setDiagnosticData({
+        assemblyCues: job.result.assemblyRawCues,
+        assemblyUtterances: job.result.assemblyUtterances || [],
+        openaiCues: job.result.openaiReformattedCues || [],
+        rawAudioEvents: job.result.rawAudioEvents || [],
+      });
+    } else if (job.result.diagnostic_url) {
+      // Fetch from URL
+      setDiagLoading(true);
+      fetch(job.result.diagnostic_url).then(r => r.json()).then(data => {
+        setDiagnosticData({
+          assemblyCues: data.assemblyRawCues || [],
+          assemblyUtterances: data.assemblyUtterances || [],
+          openaiCues: data.openaiReformattedCues || [],
+          rawAudioEvents: data.rawAudioEvents || [],
+        });
+        setDiagLoading(false);
+      }).catch(() => setDiagLoading(false));
+    }
+  }, [job?.result]);
+
+  const assemblyCues = diagnosticData?.assemblyCues || [];
+  const assemblyUtterances = diagnosticData?.assemblyUtterances || [];
+  const openaiCues = diagnosticData?.openaiCues || [];
+  const rawAudioEvents = diagnosticData?.rawAudioEvents || [];
   const rows = alignRows(assemblyCues, openaiCues, finalCues, assemblyUtterances, rawAudioEvents);
 
   const activeFinalIndex = finalCues.findIndex(c => c.start <= currentTimeMs && currentTimeMs <= c.end);
