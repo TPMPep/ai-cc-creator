@@ -293,7 +293,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — do not change start/end values from the input. Every text line must be ≤32 characters. Every cue must have ≤2 lines. NEVER drop or omit any spoken content — every word from the input MUST appear in the output. Combine adjacent short segments that form a single phrase into one cue. Verify each cue before including it.',
+            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — do not change start/end values from the input. Every text line must be ≤32 characters. Every cue must have ≤2 lines. NEVER drop or omit any spoken content — every word from the input MUST appear in the output. Combine adjacent short segments that form a single phrase into one cue. NEVER use "- " dashes on single-speaker cues — dashes are ONLY for when two different speakers share one cue. NEVER create orphan cues with 1-3 words that are part of a larger sentence — merge them with their neighbor. Verify each cue before including it.',
           },
           { role: 'user', content: prompt },
         ],
