@@ -89,19 +89,31 @@ export default function ExportPanel({ result, title, jobId }) {
       {hasScc && (
         <DownloadBtn
           highlight
-          onClick={() => handleDownload(result.scc_url || result.scc, !!result.scc_url, `${safeName}_${jobId}.scc`)}
+          onClick={() => {
+            const content = result.scc_url || result.scc_text || result.scc;
+            const isUrl = !!result.scc_url;
+            handleDownload(content, isUrl, `${safeName}_${jobId}.scc`);
+          }}
         >
           SCC (Broadcast / CEA-608)
         </DownloadBtn>
       )}
       <div className="grid grid-cols-2 gap-2">
         {hasSrt && (
-          <DownloadBtn onClick={() => handleDownload(result.srt_url || result.srt, !!result.srt_url, `${safeName}_${jobId}.srt`)}>
+          <DownloadBtn onClick={() => {
+            const content = result.srt_url || result.srt_text || result.srt;
+            const isUrl = !!result.srt_url;
+            handleDownload(content, isUrl, `${safeName}_${jobId}.srt`);
+          }}>
             SRT
           </DownloadBtn>
         )}
         {hasVtt && (
-          <DownloadBtn onClick={() => handleDownload(result.vtt_url || result.vtt, !!result.vtt_url, `${safeName}_${jobId}.vtt`)}>
+          <DownloadBtn onClick={() => {
+            const content = result.vtt_url || result.vtt_text || result.vtt;
+            const isUrl = !!result.vtt_url;
+            handleDownload(content, isUrl, `${safeName}_${jobId}.vtt`);
+          }}>
             VTT
           </DownloadBtn>
         )}
