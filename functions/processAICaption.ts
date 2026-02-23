@@ -535,14 +535,35 @@ Deno.serve(async (req) => {
       console.log(`[REPROCESS] Re-running GPT for job ${job_db_id}`);
 
       const job = await base44.asServiceRole.entities.Job.get(job_db_id);
-      const plan = job.processingPlan;
+      let plan = job.processingPlan || {};
+      let utterances = plan.utterances;
 
-      if (!plan || !plan.utterances) {
-        return Response.json({ error: 'No saved transcript data to reprocess' }, { status: 400 });
+      // If no saved utterances, re-fetch from AssemblyAI
+      if (!utterances || utterances.length === 0) {
+        const tid = transcript_id || job.railwayJobId;
+        if (!tid) {
+          return Response.json({ error: 'No saved transcript data and no transcript_id to re-fetch' }, { status: 400 });
+        }
+        console.log(`[REPROCESS] No saved utterances, re-fetching from AssemblyAI: ${tid}`);
+        const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${tid}`, {
+          headers: { 'authorization': ASSEMBLYAI_API_KEY },
+        });
+        if (!aaiRes.ok) {
+          return Response.json({ error: `AssemblyAI re-fetch failed: ${aaiRes.status}` }, { status: 500 });
+        }
+        const transcript = await aaiRes.json();
+        if (transcript.status !== 'completed') {
+          return Response.json({ error: `Transcript not ready: ${transcript.status}` }, { status: 400 });
+        }
+        utterances = (transcript.utterances || []).map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words }));
+        plan.language = transcript.language_code || 'en';
+        plan.highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
+        const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
+        plan.gaps = findGaps(utterances, totalDurationMs);
       }
 
       // Re-segment from saved utterances
-      const segments = buildRawSegments(plan.utterances);
+      const segments = buildRawSegments(utterances);
       const gaps = plan.gaps || [];
       const highlights = plan.highlights || [];
       const language = plan.language || 'en';
