@@ -572,8 +572,8 @@ Deno.serve(async (req) => {
         },
       });
 
-      // Chain to first batch
-      base44.functions.invoke('processAICaption', {
+      // Chain to first batch (use service role so token doesn't expire on long jobs)
+      base44.asServiceRole.functions.invoke('processAICaption', {
         transcript_id,
         job_db_id,
         action: 'process_batch',
