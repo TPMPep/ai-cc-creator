@@ -755,7 +755,9 @@ Deno.serve(async (req) => {
       }
 
       // All batches done — finalize
-      const cues = finalEnforce(newPolishedCues);
+      // Gather all original input segments (flat) for speaker detection
+      const allOriginalSegments = batches.flat();
+      const cues = finalEnforce(newPolishedCues, allOriginalSegments);
       const srt = buildSRT(cues);
       const vtt = buildVTT(cues);
       const scc = buildSCC(cues);
