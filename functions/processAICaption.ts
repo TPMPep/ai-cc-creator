@@ -143,17 +143,13 @@ function findGaps(utterances, totalDurationMs) {
 }
 
 // ─── EXTRACT AUDIO EVENTS ────────────────────────────────────────────────────
-// AssemblyAI audio_events returns detected non-speech sounds with timestamps.
+// AssemblyAI doesn't return audio_events_result with Universal-2 model.
+// Instead, we detect silence gaps between utterances and let GPT decide
+// what sound cues to insert based on context (applause after intros, music, etc.)
 function extractAudioEvents(transcript) {
-  const events = [];
-  const raw = transcript.audio_events_result?.results || [];
-  for (const ev of raw) {
-    // Each event: { label, confidence, start, end }
-    if (ev.confidence >= 0.6) {
-      events.push({ start: ev.start, end: ev.end, label: ev.label, confidence: ev.confidence });
-    }
-  }
-  return events;
+  // No audio event detection available from AssemblyAI Universal-2.
+  // Sound cues will be handled by GPT based on gap context and show type.
+  return [];
 }
 
 // ─── GPT POLISH (single batch, server-side) ──────────────────────────────────
