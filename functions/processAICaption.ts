@@ -265,16 +265,19 @@ MERGING CUES (IMPORTANT):
 19. Do NOT merge if there is a gap >300ms — that gap is a real pause, keep them separate.
 
 ═══════════════════════════════════════
-SPEAKER FORMATTING (CRITICAL — WATCH FOR SPEAKER CHANGES MID-CUE):
+SPEAKER FORMATTING (CRITICAL):
 ═══════════════════════════════════════
-15. Single-speaker cue: no dash prefix. Set speaker field to "A", "B", or "C".
-16. Two-speaker cue (WHEN TWO DIFFERENT SPEAKERS APPEAR IN THE SAME CUE):
-    - This happens when the input segments assigned to this timecode window have DIFFERENT speaker labels (e.g., one segment is SPEAKER=B and the next is SPEAKER=A).
+15. Single-speaker cue: NO dash prefix. Set speaker field to "A", "B", or "C".
+    - Even if the speaker CHANGED from the previous cue, do NOT add a dash.
+    - Dashes are ONLY for when two speakers share the SAME cue.
+    - Example: Cue 5 is speaker A. Cue 6 is speaker B. Cue 6 has NO dash — it's a single-speaker cue.
+16. Two-speaker cue (ONLY when TWO DIFFERENT speakers speak in the SAME cue):
+    - This ONLY happens when you MERGE two adjacent segments that have DIFFERENT speaker labels.
     - You MUST prefix EACH speaker's line with "- " (counts as 2 of your 32 chars).
     - Set speaker field to null.
-    - Example: If segment has speaker B saying "off on us." and next segment has speaker A saying "Has it done? Well," and they overlap into one cue, output:
-      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done? Well,", "speaker": null}
-    - NEVER output a cue where two different speakers' words appear WITHOUT the "- " dash prefix on each line.
+    - Example: Segment [5] SPEAKER=B "off on us." and segment [6] SPEAKER=A "Has it done?" are merged:
+      {"start": ..., "end": ..., "text": "- off on us.\n- Has it done?", "speaker": null}
+    - If you do NOT merge two different-speaker segments, NO dashes needed — each is its own cue.
 
 ═══════════════════════════════════════
 FOREIGN LANGUAGE (NBCU CM-051 CRITICAL):
