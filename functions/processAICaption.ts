@@ -606,23 +606,13 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
-    // ── Helper: chain to next batch via internal secret (no user token needed) ──
+    // ── Helper: chain to next batch via service role SDK (no user token needed) ──
     function chainToSelf(payload) {
-      const selfUrl = reqClone.url;
-      const headers = { 'Content-Type': 'application/json' };
-      // Only forward app-id header, NOT Authorization
-      const appIdHeader = reqClone.headers.get('x-app-id');
-      if (appIdHeader) headers['x-app-id'] = appIdHeader;
-      
-      // Fire and forget — don't await
-      fetch(selfUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...payload,
-          chain_secret: INTERNAL_CHAIN_SECRET,
-        }),
-      }).catch(err => console.error('[CHAIN] HTTP self-call failed:', err.message));
+      // Use service role SDK to invoke self — this provides proper auth context
+      base44.asServiceRole.functions.invoke('processAICaption', {
+        ...payload,
+        chain_secret: INTERNAL_CHAIN_SECRET,
+      }).catch(err => console.error('[CHAIN] Service role self-invoke failed:', err.message));
     }
 
     // ── ACTION: START ────────────────────────────────────────────────────────
