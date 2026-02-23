@@ -32,27 +32,33 @@ Deno.serve(async (req) => {
     // Also check content_safety_labels for any sound-related data
     const contentSafety = transcript.content_safety_labels;
 
-    // Check EVERY key for anything that could contain audio event / sound data
-    const allData = {};
-    for (const key of topLevelKeys) {
-      const val = transcript[key];
-      if (val !== null && val !== undefined && val !== false && val !== '' && val !== 0) {
-        if (typeof val === 'object' || Array.isArray(val)) {
-          allData[key] = JSON.stringify(val).substring(0, 200);
-        }
-      }
-    }
+    // Check what's in the saved job result for utterances
+    const jobResult = await base44.asServiceRole.entities.Job.filter({ railwayJobId: transcript_id }, '-created_date', 1);
+    const job = jobResult[0];
+    const savedUtterances = job?.result?.assemblyUtterances || [];
+    const savedAssemblyRaw = job?.result?.assemblyRawCues || [];
 
     return Response.json({
-      topLevelKeys,
-      audioEventsFieldValue: transcript.audio_events,
-      contentSafetyEnabled: transcript.content_safety,
-      // Dump all non-null object/array fields to find where events might be
-      objectFields: allData,
-      utterancesSample: (transcript.utterances || []).slice(0, 5).map(u => ({
+      audioEventsFieldExists: 'audio_events_result' in transcript,
+      audioEventsValue: transcript.audio_events ?? 'field not present',
+      // Sample utterances from AssemblyAI directly
+      directUtterancesSample: (transcript.utterances || []).slice(0, 3).map(u => ({
+        start: u.start, end: u.end, speaker: u.speaker, text: u.text?.substring(0, 60)
+      })),
+      directUtteranceCount: (transcript.utterances || []).length,
+      // What's saved in the DB
+      savedUtteranceCount: savedUtterances.length,
+      savedUtteranceSample: savedUtterances.slice(0, 3).map(u => ({
+        start: u.start, end: u.end, speaker: u.speaker, text: u.text?.substring(0, 60)
+      })),
+      savedAssemblyRawCount: savedAssemblyRaw.length,
+      savedAssemblyRawSample: savedAssemblyRaw.slice(0, 3).map(u => ({
+        start: u.start, end: u.end, speaker: u.speaker, text: u.text?.substring(0, 60)
+      })),
+      // Around 56 seconds - check utterances near that time
+      utterancesAround56s: (transcript.utterances || []).filter(u => u.start >= 50000 && u.start <= 65000).map(u => ({
         start: u.start, end: u.end, speaker: u.speaker, text: u.text?.substring(0, 80)
       })),
-      utteranceCount: (transcript.utterances || []).length,
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
