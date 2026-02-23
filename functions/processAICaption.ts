@@ -505,9 +505,11 @@ function finalEnforce(cues, originalSegments) {
     return best;
   }
 
-  // ── STEP 1: Clean text + fix dashes ──
-  // Rule: dashes ONLY when 2+ speakers with significant overlap share ONE cue.
-  // Otherwise: unconditionally strip ALL dashes, regardless of line count.
+  // ── STEP 1: Clean text + preserve GPT's speaker/dash decisions ──
+  // PHILOSOPHY CHANGE: GPT was given the correct speaker labels in the input segments.
+  // GPT's output speaker field and dash formatting should be TRUSTED, not overridden.
+  // finalEnforce should only CLEAN (remove leaked [A] tags) and FIX formatting issues,
+  // not re-derive speaker assignments from time-overlap heuristics.
   const step1 = [];
   for (const cue of cues) {
     const cleanedText = cleanCueText(cue.text || '');
@@ -519,98 +521,23 @@ function finalEnforce(cues, originalSegments) {
       continue;
     }
 
-    const speakers = getSpeakersForCue(cue);
-    const hasMultipleSpeakers = speakers.length >= 2;
+    // Trust GPT's speaker assignment and dash formatting.
+    // Only clean leaked [A]/[B]/[C] tags from text.
+    // If GPT set speaker=null and has dashes, it's a multi-speaker cue — preserve it.
+    // If GPT set a specific speaker, it's single-speaker — strip any accidental dashes.
+    const hasDashes = cleanedText.split('\n').some(l => l.trimStart().startsWith('- '));
 
-    if (hasMultipleSpeakers) {
-      // Genuine multi-speaker cue.
-      // Per NBCU/FCC broadcast rules:
-      //   - The CONTINUING speaker (from previous cue) gets NO dash.
-      //   - Only the NEW speaker gets a "- " dash prefix.
-      //   - If BOTH speakers are new (neither spoke in the previous cue), both get dashes.
+    if (cue.speaker === null && hasDashes) {
+      // GPT intended multi-speaker — preserve dashes as-is
+      step1.push({ ...cue, text: cleanedText, speaker: null });
+    } else if (cue.speaker) {
+      // GPT assigned a specific speaker — single speaker, strip any accidental dashes
       const stripped = stripDashes(cleanedText);
-
-      // Determine which speaker is "continuing" from the previous cue
-      const prevCue = step1.length > 0 ? step1[step1.length - 1] : null;
-      const prevSpeaker = prevCue ? (prevCue.speaker || null) : null;
-
-      // Find the speaker boundary in the overlapping utterances
-      const overlapping = (originalSegments || []).filter(seg => {
-        const os = Math.max(cue.start, seg.start);
-        const oe = Math.min(cue.end, seg.end);
-        return oe > os && seg.speaker;
-      }).sort((a, b) => a.start - b.start);
-
-      // Identify first and second speaker in this cue
-      let firstCueSpeaker = null;
-      let secondCueSpeaker = null;
-      let boundaryTime = -1;
-      if (overlapping.length >= 2) {
-        firstCueSpeaker = overlapping[0].speaker;
-        for (let si = 1; si < overlapping.length; si++) {
-          if (overlapping[si].speaker !== firstCueSpeaker) {
-            secondCueSpeaker = overlapping[si].speaker;
-            boundaryTime = overlapping[si].start;
-            break;
-          }
-        }
-      }
-
-      // Calculate text split point based on speaker boundary
-      let splitPoint = -1;
-      if (boundaryTime > 0) {
-        const cueDur = cue.end - cue.start;
-        if (cueDur > 0) {
-          const frac = (boundaryTime - cue.start) / cueDur;
-          splitPoint = Math.round(stripped.length * frac);
-          const after = stripped.indexOf(' ', splitPoint);
-          const before = stripped.lastIndexOf(' ', splitPoint);
-          if (after >= 0 && (splitPoint - before > after - splitPoint || before < 0)) {
-            splitPoint = after;
-          } else if (before > 0) {
-            splitPoint = before;
-          }
-        }
-      }
-
-      // Try to split into lines (from existing \n or from boundary)
-      const existingLines = stripped.split('\n');
-      let line1, line2;
-      if (existingLines.length >= 2) {
-        line1 = existingLines[0].trim();
-        line2 = existingLines.slice(1).join(' ').trim();
-      } else if (splitPoint > 0 && splitPoint < stripped.length) {
-        line1 = stripped.substring(0, splitPoint).trim();
-        line2 = stripped.substring(splitPoint).trim();
-      } else {
-        // Can't split — assign to dominant speaker, no dashes
-        step1.push({ ...cue, text: stripped, speaker: getDominantSpeaker(cue) || cue.speaker });
-        continue;
-      }
-
-      if (!line1 || !line2) {
-        step1.push({ ...cue, text: stripped, speaker: getDominantSpeaker(cue) || cue.speaker });
-        continue;
-      }
-
-      // Determine dash placement:
-      // First speaker is "continuing" if they match the previous cue's speaker → no dash
-      // Second speaker is always "new" → gets dash
-      // If first speaker is NOT continuing (both are new), both get dashes
-      const firstIsContinuing = prevSpeaker && firstCueSpeaker === prevSpeaker;
-
-      if (firstIsContinuing) {
-        // Continuing speaker: no dash. New speaker: dash.
-        step1.push({ ...cue, text: `${line1}\n- ${line2}`, speaker: null });
-      } else {
-        // Both speakers are new to this cue — both get dashes
-        step1.push({ ...cue, text: `- ${line1}\n- ${line2}`, speaker: null });
-      }
+      step1.push({ ...cue, text: stripped, speaker: cue.speaker });
     } else {
-      // Single speaker — UNCONDITIONALLY strip ALL dashes from ALL lines
-      const stripped = stripDashes(cleanedText);
-      const speaker = speakers[0] || getDominantSpeaker(cue) || cue.speaker;
-      step1.push({ ...cue, text: stripped, speaker });
+      // No speaker, no dashes — try to resolve from utterance data
+      const dom = getDominantSpeaker(cue);
+      step1.push({ ...cue, text: cleanedText, speaker: dom || null });
     }
   }
 
