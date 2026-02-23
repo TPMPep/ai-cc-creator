@@ -216,7 +216,7 @@ PRIMARY RULE: Do NOT split an input segment's text across multiple output cues.
 - Each input segment [N]'s complete text MUST stay together as one cue, using that segment's start/end ms.
 - EXCEPTION 1: Merge — If segment [N] and [N+1] are same speaker with gap ≤300ms and form one continuous sentence, merge them into one cue (first.start, last.end), containing ALL text from both.
 - EXCEPTION 2: Reformat within a cue — if a single input segment's text won't fit in 2 lines ≤32 chars, reformat the line breaks and punctuation WITHIN that text. Do NOT move any words to another cue.
-- EXCEPTION 3: Line overflow — if text is truly too long for 2 lines, truncate the text to fit (last resort), but NEVER move words to a different segment's timecode.
+- EXCEPTION 3: Line overflow — if text is truly too long for 2 lines × 32 chars, SPLIT IT into multiple output cues. Divide the timecode proportionally by character count. Never truncate or drop words.
 - WRONG: Input segment [5] has "Thank you for letting me try out". Splitting it to put "try out" in cue [6] — this moves words out of segment 5.
 - RIGHT: Keep "Thank you for letting me try out" in segment [5]'s timecode. Reformat as "Thank you for letting me\ntry out" if needed, but DO NOT move to another cue.
 - WRONG: Merging "This is Chris and" from segment [8] with "George." from segment [9] if they're not adjacent or have a gap >300ms.
@@ -421,7 +421,84 @@ function finalEnforce(cues, originalSegments) {
     }
   }
 
-  // ── STEP 2: Fix line count and line length ──
+  // ── STEP 2: Fix line count and line length — split cues when text won't fit ──
+  // Tries to reflow into 2×32. If that fails, splits the cue into multiple cues
+  // with proportionally divided timecodes. Never truncates, never overflows.
+
+  function reflowIntoTwoLines(words, prefix, limit) {
+    // Try balanced split first
+    let bestSplit = -1;
+    let bestBalance = Infinity;
+    for (let split = 1; split < words.length; split++) {
+      const l1 = words.slice(0, split).join(' ');
+      const l2 = words.slice(split).join(' ');
+      if (l1.length <= limit && l2.length <= limit) {
+        const balance = Math.abs(l1.length - l2.length);
+        if (balance < bestBalance) { bestBalance = balance; bestSplit = split; }
+      }
+    }
+    if (bestSplit >= 0) {
+      return `${prefix}${words.slice(0, bestSplit).join(' ')}\n${prefix}${words.slice(bestSplit).join(' ')}`;
+    }
+    // Try greedy pack
+    let line1 = '';
+    let wi = 0;
+    while (wi < words.length) {
+      const candidate = line1 ? `${line1} ${words[wi]}` : words[wi];
+      if (candidate.length <= limit) { line1 = candidate; wi++; }
+      else break;
+    }
+    if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
+    const line2 = words.slice(wi).join(' ');
+    if (line2.length <= limit) {
+      return `${prefix}${line1}\n${prefix}${line2}`;
+    }
+    return null; // can't fit — needs splitting into multiple cues
+  }
+
+  function splitCueByWords(cue, words, prefix, limit) {
+    // Split words into groups that each fit in 2 lines × limit chars
+    const cueChunks = [];
+    let remaining = [...words];
+    while (remaining.length > 0) {
+      // Find the maximum number of words that fit in 2 lines
+      let maxWords = remaining.length;
+      let fitted = null;
+      // Try largest first, shrink until it fits
+      for (let count = maxWords; count >= 1; count--) {
+        const chunk = remaining.slice(0, count);
+        const text = reflowIntoTwoLines(chunk, prefix, limit);
+        if (text !== null) { fitted = { text, wordCount: count }; break; }
+      }
+      if (!fitted) {
+        // Single word too long — just use it as-is (extremely rare edge case)
+        fitted = { text: `${prefix}${remaining[0]}`, wordCount: 1 };
+      }
+      cueChunks.push(fitted.text);
+      remaining = remaining.slice(fitted.wordCount);
+    }
+
+    // Distribute time proportionally across chunks
+    const totalChars = cueChunks.reduce((sum, t) => sum + t.replace(/\n/g, '').length, 0);
+    const totalDur = cue.end - cue.start;
+    const result = [];
+    let timeOffset = cue.start;
+    for (let ci = 0; ci < cueChunks.length; ci++) {
+      const chunkChars = cueChunks[ci].replace(/\n/g, '').length;
+      const chunkDur = ci === cueChunks.length - 1
+        ? (cue.end - timeOffset)  // last chunk gets remainder
+        : Math.max(MIN_DUR, Math.round(totalDur * (chunkChars / totalChars)));
+      result.push({
+        start: timeOffset,
+        end: timeOffset + chunkDur,
+        text: cueChunks[ci],
+        speaker: cue.speaker,
+      });
+      timeOffset += chunkDur;
+    }
+    return result;
+  }
+
   const step2 = [];
   for (const cue of step1) {
     const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
@@ -431,7 +508,6 @@ function finalEnforce(cues, originalSegments) {
     if (lines.length > 2) {
       const hasDashes = lines.every(l => l.trimStart().startsWith('- '));
       if (hasDashes) {
-        // Keep first dash line, join rest into second
         const stripped = lines.map(l => l.replace(/^- /, '').trim());
         lines = [`- ${stripped[0]}`, `- ${stripped.slice(1).join(' ')}`];
       } else {
@@ -439,14 +515,14 @@ function finalEnforce(cues, originalSegments) {
       }
     }
 
-    // Check if all lines fit
+    // Check if all lines already fit
     const allFit = lines.every(l => l.length <= MAX_CHARS);
     if (lines.length <= 2 && allFit) {
       step2.push({ ...cue, text: lines.join('\n') });
       continue;
     }
 
-    // Sound cues: just truncate
+    // Sound cues: cap at 32 chars (they're short descriptors)
     if (isSoundCue) {
       step2.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
       continue;
@@ -459,40 +535,14 @@ function finalEnforce(cues, originalSegments) {
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
 
-    // Find best balanced 2-line split
-    let bestSplit = -1;
-    let bestBalance = Infinity;
-    for (let split = 1; split < words.length; split++) {
-      const l1 = words.slice(0, split).join(' ');
-      const l2 = words.slice(split).join(' ');
-      if (l1.length <= limit && l2.length <= limit) {
-        const balance = Math.abs(l1.length - l2.length);
-        if (balance < bestBalance) { bestBalance = balance; bestSplit = split; }
-      }
-    }
-
-    let line1, line2;
-    if (bestSplit >= 0) {
-      line1 = words.slice(0, bestSplit).join(' ');
-      line2 = words.slice(bestSplit).join(' ');
+    const reflowed = reflowIntoTwoLines(words, prefix, limit);
+    if (reflowed !== null) {
+      step2.push({ ...cue, text: reflowed });
     } else {
-      // Greedy pack — line 1 as full as possible
-      line1 = '';
-      let wi = 0;
-      while (wi < words.length) {
-        const candidate = line1 ? `${line1} ${words[wi]}` : words[wi];
-        if (candidate.length <= limit) { line1 = candidate; wi++; }
-        else break;
-      }
-      if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
-      line2 = words.slice(wi).join(' ');
-      // If line2 still overflows, keep it as-is — QC will flag it but content is preserved
+      // Text won't fit in one cue — split into multiple cues with proportional timing
+      const splitCues = splitCueByWords(cue, words, prefix, limit);
+      step2.push(...splitCues);
     }
-
-    const finalText = line2
-      ? `${prefix}${line1}\n${prefix}${line2}`
-      : `${prefix}${line1}`;
-    step2.push({ ...cue, text: finalText });
   }
 
   // ── STEP 3: Fix timing ──
