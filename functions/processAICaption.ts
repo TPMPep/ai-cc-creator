@@ -113,25 +113,100 @@ function parseSRT(srtText) {
 }
 
 // ─── MAP SPEAKERS ONTO SRT CUES ──────────────────────────────────────────────
-// For each SRT cue, find the utterance with the most overlap and assign its speaker.
-// We do NOT split SRT text proportionally — that creates tiny fragments ("I", "And").
-// Instead, the whole SRT block keeps its text and gets the dominant speaker.
-// Multi-speaker detection happens later in finalEnforce using utterance data.
+// For each SRT cue, find ALL overlapping utterances. If multiple speakers overlap
+// significantly, SPLIT the SRT cue at the speaker boundary so each output segment
+// has exactly one speaker. This prevents the old bug where a cue spanning two
+// utterances from speakers B and C would just get assigned to whichever had more overlap.
 function mapSpeakers(srtCues, utterances) {
-  return srtCues.map(cue => {
-    let bestSpeaker = null;
-    let bestOverlap = 0;
+  const result = [];
+  for (const cue of srtCues) {
+    // Find all utterances that overlap this SRT cue
+    const overlapping = [];
     for (const utt of utterances) {
-      const overlapStart = Math.max(cue.start, utt.start);
-      const overlapEnd = Math.min(cue.end, utt.end);
-      const overlap = overlapEnd - overlapStart;
-      if (overlap > bestOverlap) {
-        bestOverlap = overlap;
-        bestSpeaker = utt.speaker || null;
+      const os = Math.max(cue.start, utt.start);
+      const oe = Math.min(cue.end, utt.end);
+      if (oe > os) {
+        overlapping.push({ ...utt, overlapStart: os, overlapEnd: oe, overlap: oe - os });
       }
     }
-    return { ...cue, speaker: bestSpeaker };
-  });
+
+    if (overlapping.length === 0) {
+      result.push({ ...cue, speaker: null });
+      continue;
+    }
+
+    // Check if multiple DIFFERENT speakers overlap this cue
+    const speakerMap = {};
+    for (const o of overlapping) {
+      const spk = o.speaker || 'unknown';
+      if (!speakerMap[spk]) speakerMap[spk] = { overlap: 0, segments: [] };
+      speakerMap[spk].overlap += o.overlap;
+      speakerMap[spk].segments.push(o);
+    }
+    const speakers = Object.keys(speakerMap);
+
+    if (speakers.length <= 1) {
+      // Single speaker — assign directly
+      result.push({ ...cue, speaker: overlapping[0].speaker || null });
+      continue;
+    }
+
+    // Multiple speakers — split the SRT cue text proportionally at the boundary
+    // Sort overlapping by start time to find speaker boundary
+    overlapping.sort((a, b) => a.overlapStart - b.overlapStart);
+    
+    // Find the first speaker transition point
+    let boundaryTime = -1;
+    let firstSpeaker = overlapping[0].speaker;
+    let secondSpeaker = null;
+    for (let i = 1; i < overlapping.length; i++) {
+      if (overlapping[i].speaker !== firstSpeaker) {
+        secondSpeaker = overlapping[i].speaker;
+        boundaryTime = overlapping[i].overlapStart;
+        break;
+      }
+    }
+
+    if (boundaryTime <= 0 || !secondSpeaker) {
+      // Couldn't find a clear boundary — use dominant
+      const dominant = speakers.reduce((a, b) => speakerMap[a].overlap > speakerMap[b].overlap ? a : b);
+      result.push({ ...cue, speaker: dominant === 'unknown' ? null : dominant });
+      continue;
+    }
+
+    // Split the text proportionally at the boundary
+    const cueDur = cue.end - cue.start;
+    if (cueDur <= 0) {
+      result.push({ ...cue, speaker: firstSpeaker });
+      continue;
+    }
+
+    const frac = (boundaryTime - cue.start) / cueDur;
+    const words = cue.text.split(/\s+/);
+    
+    if (words.length <= 1) {
+      // Single word — can't split, assign to dominant
+      const dominant = speakers.reduce((a, b) => speakerMap[a].overlap > speakerMap[b].overlap ? a : b);
+      result.push({ ...cue, speaker: dominant === 'unknown' ? null : dominant });
+      continue;
+    }
+
+    const splitWordIndex = Math.max(1, Math.min(words.length - 1, Math.round(words.length * frac)));
+    const text1 = words.slice(0, splitWordIndex).join(' ');
+    const text2 = words.slice(splitWordIndex).join(' ');
+
+    // Calculate proportional timecodes
+    const charTotal = text1.length + text2.length;
+    const splitTime = cue.start + Math.round(cueDur * (text1.length / charTotal));
+
+    if (text1.trim()) {
+      result.push({ start: cue.start, end: splitTime, text: text1.trim(), speaker: firstSpeaker });
+    }
+    if (text2.trim()) {
+      result.push({ start: splitTime, end: cue.end, text: text2.trim(), speaker: secondSpeaker });
+    }
+  }
+  return result;
 }
 
 function findGaps(utterances, totalDurationMs) {
