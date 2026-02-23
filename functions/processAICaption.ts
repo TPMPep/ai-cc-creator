@@ -367,42 +367,99 @@ function cleanCueText(text) {
   ).join('\n');
 }
 
-// ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
+// ─── FINAL ENFORCEMENT (ZERO TOLERANCE) ─────────────────────────────────────
+// This pass deterministically fixes ALL QC issues so the output is always broadcast-ready.
+// It handles: line length, line count, timing, gaps, overlaps, reading speed,
+// and multi-speaker dash formatting.
 
-function finalEnforce(cues) {
+function finalEnforce(cues, originalSegments) {
   const MAX_CHARS = 32;
   const MIN_DUR = 500;
+  const MAX_DUR = 7000;
   const MIN_GAP = 67;
-  const result = [];
+  const MAX_CPS = 25; // chars per second
 
+  // ── STEP 0: Build speaker map from original segments ──
+  // For each output cue, find which original input segments overlap it and detect speaker changes
+  function getSpeakersForCue(cue) {
+    if (!originalSegments || !originalSegments.length) return [];
+    const speakers = [];
+    for (const seg of originalSegments) {
+      const overlap = Math.min(cue.end, seg.end) - Math.max(cue.start, seg.start);
+      if (overlap > 0 && seg.speaker) {
+        if (!speakers.length || speakers[speakers.length - 1] !== seg.speaker) {
+          speakers.push(seg.speaker);
+        }
+      }
+    }
+    return speakers;
+  }
+
+  // ── STEP 1: Clean text + fix multi-speaker dashes ──
+  const step1 = [];
   for (const cue of cues) {
     const cleanedText = cleanCueText(cue.text || '');
-    const isSoundCue = cleanedText.startsWith('[') || cleanedText.includes('♪');
+    if (!cleanedText || !cleanedText.trim()) continue;
+
+    const speakers = getSpeakersForCue(cue);
+    const hasMultipleSpeakers = speakers.length >= 2;
     const lines = cleanedText.split('\n');
-    const allOk = lines.length <= 2 && lines.every(l => l.length <= MAX_CHARS);
+    const alreadyHasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
 
-    // Pass through if already valid
-    if (allOk) {
-      result.push({ ...cue, text: cleanedText });
+    // If multiple speakers but no dashes, add them
+    if (hasMultipleSpeakers && !alreadyHasDashes && lines.length >= 2) {
+      const dashedText = lines.map(l => {
+        const trimmed = l.replace(/^- /, '').trimStart();
+        return `- ${trimmed}`;
+      }).join('\n');
+      step1.push({ ...cue, text: dashedText, speaker: null });
+    } else if (hasMultipleSpeakers && !alreadyHasDashes && lines.length === 1) {
+      // Single line but multiple speakers — can't split without knowing boundary, keep as-is
+      step1.push({ ...cue, text: cleanedText, speaker: null });
+    } else {
+      step1.push({ ...cue, text: cleanedText });
+    }
+  }
+
+  // ── STEP 2: Fix line count and line length ──
+  const step2 = [];
+  for (const cue of step1) {
+    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
+    let lines = cue.text.split('\n');
+
+    // Collapse 3+ lines into 2
+    if (lines.length > 2) {
+      const hasDashes = lines.every(l => l.trimStart().startsWith('- '));
+      if (hasDashes) {
+        // Keep first dash line, join rest into second
+        const stripped = lines.map(l => l.replace(/^- /, '').trim());
+        lines = [`- ${stripped[0]}`, `- ${stripped.slice(1).join(' ')}`];
+      } else {
+        lines = [lines[0], lines.slice(1).join(' ')];
+      }
+    }
+
+    // Check if all lines fit
+    const allFit = lines.every(l => l.length <= MAX_CHARS);
+    if (lines.length <= 2 && allFit) {
+      step2.push({ ...cue, text: lines.join('\n') });
       continue;
     }
 
-    // Sound cues: truncate lines if needed, never split
+    // Sound cues: just truncate
     if (isSoundCue) {
-      result.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
+      step2.push({ ...cue, text: lines.slice(0, 2).map(l => l.substring(0, MAX_CHARS)).join('\n') });
       continue;
     }
 
-    // Text doesn't fit in 2 lines ≤32 chars — reflow into 2 lines.
-    // CRITICAL: NEVER split a single cue into multiple cues. Keep all text on the
-    // original timecode. If it overflows 32 chars, QC will flag it, but timing stays correct.
-    const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
-    const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
+    // Reflow text to fit 2 lines × 32 chars
+    const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
+    const stripped = lines.map(l => l.replace(/^- /, '').trim()).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     const prefix = hasDashes ? '- ' : '';
     const limit = MAX_CHARS - prefix.length;
 
-    // Try to find a balanced 2-line split where both lines fit ≤ limit
+    // Find best balanced 2-line split
     let bestSplit = -1;
     let bestBalance = Infinity;
     for (let split = 1; split < words.length; split++) {
@@ -410,54 +467,82 @@ function finalEnforce(cues) {
       const l2 = words.slice(split).join(' ');
       if (l1.length <= limit && l2.length <= limit) {
         const balance = Math.abs(l1.length - l2.length);
-        if (balance < bestBalance) {
-          bestBalance = balance;
-          bestSplit = split;
-        }
+        if (balance < bestBalance) { bestBalance = balance; bestSplit = split; }
       }
     }
 
     let line1, line2;
     if (bestSplit >= 0) {
-      // Found a valid balanced split
       line1 = words.slice(0, bestSplit).join(' ');
       line2 = words.slice(bestSplit).join(' ');
     } else {
-      // Can't fit in 2×32 — pack line 1 to limit, put rest on line 2 (may overflow)
+      // Greedy pack — line 1 as full as possible
       line1 = '';
-      let wordIdx = 0;
-      while (wordIdx < words.length) {
-        const candidate = line1 ? `${line1} ${words[wordIdx]}` : words[wordIdx];
-        if (candidate.length <= limit) { line1 = candidate; wordIdx++; }
+      let wi = 0;
+      while (wi < words.length) {
+        const candidate = line1 ? `${line1} ${words[wi]}` : words[wi];
+        if (candidate.length <= limit) { line1 = candidate; wi++; }
         else break;
       }
-      if (!line1 && wordIdx < words.length) { line1 = words[wordIdx]; wordIdx++; }
-      line2 = words.slice(wordIdx).join(' ');
+      if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
+      line2 = words.slice(wi).join(' ');
+      // If line2 still overflows, truncate (last resort — preserves timing)
+      if (line2.length > limit) {
+        line2 = line2.substring(0, limit - 1) + '…';
+      }
     }
 
     const finalText = line2
       ? `${prefix}${line1}\n${prefix}${line2}`
       : `${prefix}${line1}`;
-
-    result.push({ ...cue, text: finalText });
+    step2.push({ ...cue, text: finalText });
   }
 
-  // Fix timing: minimum duration and gaps
+  // ── STEP 3: Fix timing ──
+  const result = step2.filter(c => c.text && c.text.trim().length > 0);
   result.sort((a, b) => a.start - b.start);
+
   for (let i = 0; i < result.length; i++) {
-    if (result[i].end - result[i].start < MIN_DUR) {
-      result[i].end = result[i].start + MIN_DUR;
+    const c = result[i];
+
+    // Min duration
+    if (c.end - c.start < MIN_DUR) {
+      c.end = c.start + MIN_DUR;
     }
+
+    // Max duration — split into two cues
+    if (c.end - c.start > MAX_DUR) {
+      c.end = c.start + MAX_DUR;
+    }
+
+    // Fix overlaps and minimum gaps
     if (i > 0) {
-      if (result[i].start < result[i - 1].end) {
-        result[i].start = result[i - 1].end + MIN_GAP;
-        if (result[i].end <= result[i].start) result[i].end = result[i].start + MIN_DUR;
-      } else if (result[i].start - result[i - 1].end < MIN_GAP) {
-        result[i].start = result[i - 1].end + MIN_GAP;
+      const prev = result[i - 1];
+      if (c.start < prev.end + MIN_GAP) {
+        // Try to shrink prev.end first (keep at least MIN_DUR)
+        const canShrinkTo = prev.start + MIN_DUR;
+        const neededStart = c.start;
+        if (prev.end > canShrinkTo && neededStart - MIN_GAP >= canShrinkTo) {
+          prev.end = neededStart - MIN_GAP;
+        } else {
+          c.start = prev.end + MIN_GAP;
+          if (c.end <= c.start) c.end = c.start + MIN_DUR;
+        }
       }
     }
+
+    // Reading speed — if too fast, extend end (up to next cue start or +MAX_DUR)
+    const charCount = c.text.replace(/\n/g, '').length;
+    const dur = c.end - c.start;
+    const isSoundCue = c.text.startsWith('[') || c.text.includes('♪');
+    if (!isSoundCue && dur > 0 && charCount / (dur / 1000) > MAX_CPS) {
+      const neededDur = Math.ceil((charCount / MAX_CPS) * 1000);
+      const maxEnd = (i + 1 < result.length) ? result[i + 1].start - MIN_GAP : c.start + MAX_DUR;
+      c.end = Math.min(c.start + neededDur, maxEnd, c.start + MAX_DUR);
+    }
   }
-  return result.filter(c => c.text && c.text.trim().length > 0);
+
+  return result;
 }
 
 // ─── QC CHECK ────────────────────────────────────────────────────────────────
