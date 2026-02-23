@@ -486,10 +486,7 @@ function finalEnforce(cues, originalSegments) {
       }
       if (!line1 && wi < words.length) { line1 = words[wi]; wi++; }
       line2 = words.slice(wi).join(' ');
-      // If line2 still overflows, truncate (last resort — preserves timing)
-      if (line2.length > limit) {
-        line2 = line2.substring(0, limit - 1) + '…';
-      }
+      // If line2 still overflows, keep it as-is — QC will flag it but content is preserved
     }
 
     const finalText = line2
