@@ -36,6 +36,11 @@ async function fetchTextFromUrl(url) {
   return res.text();
 }
 
+function joinChunks(chunks) {
+  if (!Array.isArray(chunks)) return "";
+  return chunks.join("");
+}
+
 export default function ExportPanel({ result, title, jobId }) {
   const [copiedSrt, setCopiedSrt] = useState(false);
   const [copiedVtt, setCopiedVtt] = useState(false);
@@ -45,10 +50,10 @@ export default function ExportPanel({ result, title, jobId }) {
 
   const safeName = sanitizeFilename(title || "export");
 
-  // Support both URL-based and inline data
-  const hasScc = result.scc_url || result.scc || result.scc_text;
-  const hasSrt = result.srt_url || result.srt || result.srt_text;
-  const hasVtt = result.vtt_url || result.vtt || result.vtt_text;
+  // Support URL-based, inline data, and chunked data
+  const hasScc = result.scc_url || result.scc || result.scc_text || result.scc_chunks;
+  const hasSrt = result.srt_url || result.srt || result.srt_text || result.srt_chunks;
+  const hasVtt = result.vtt_url || result.vtt || result.vtt_text || result.vtt_chunks;
 
   const handleDownload = async (urlOrContent, isUrl, filename) => {
     setDownloading(filename);

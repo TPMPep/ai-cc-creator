@@ -1,5 +1,30 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
+// ─── INTERNAL CHAIN SECRET & HELPERS ────────────────────────────────────────
+
+const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
+
+/** Break large strings into chunks to avoid entity/field size limits */
+function chunkString(str, size = 75000) {
+  const chunks = [];
+  for (let i = 0; i < str.length; i += size) {
+    chunks.push(str.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/** Generate a unique runId */
+function newRunId() {
+  return (globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+}
+
+/** True if this request is an internal chained call (not user-auth) */
+function isInternalChain(payload) {
+  if (!INTERNAL_CHAIN_SECRET) return false;
+  return payload?.chain_secret === INTERNAL_CHAIN_SECRET;
+}
+
 // ─── TIMECODE UTILITIES ──────────────────────────────────────────────────────
 
 function msToSCCTimecode(ms) {
