@@ -856,7 +856,7 @@ Deno.serve(async (req) => {
       }));
       // Use utterances if available, fall back to SRT-mapped segments
       const speakerSource = utteranceSegments.length > 0 ? utteranceSegments : allOriginalSegments;
-      const cues = finalEnforce(newPolishedCues, allOriginalSegments);
+      const cues = finalEnforce(newPolishedCues, speakerSource);
       const srt = buildSRT(cues);
       const vtt = buildVTT(cues);
       const scc = buildSCC(cues);
