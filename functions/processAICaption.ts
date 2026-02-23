@@ -323,49 +323,111 @@ ${highlightDump}`;
 
   const parsed = JSON.parse(jsonMatch[0]);
 
-  // Post-GPT merge: combine adjacent spoken cues that form incomplete phrases
-  // (e.g. "Previously on Love" + "Island" + "USA." should be one cue)
+  // ── Post-GPT cleanup pass 1: Strip dashes from single-speaker cues ──
+  for (const cue of parsed) {
+    if (!cue.text) continue;
+    const lines = cue.text.split('\n');
+    const hasDashes = lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- '));
+    if (hasDashes) {
+      // Check if it's actually a single-speaker cue (same speaker on both lines)
+      // If the cue has a non-null speaker, it's single-speaker — remove dashes
+      if (cue.speaker) {
+        cue.text = lines.map(l => l.replace(/^- /, '')).join('\n');
+      }
+    }
+    // Also fix single-line cues that start with "- " (should never happen for single speaker)
+    if (lines.length === 1 && lines[0].startsWith('- ') && cue.speaker) {
+      cue.text = cue.text.replace(/^- /, '');
+    }
+  }
+
+  // ── Post-GPT cleanup pass 2: Merge orphan cues ──
+  // Any spoken cue with ≤3 words that doesn't appear to be a complete sentence
+  // should be merged with its neighbor
+  const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
+  const isCompleteSentence = (text) => {
+    const trimmed = text.replace(/\n/g, ' ').trim();
+    return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
+  };
+
+  const repackLines = (text) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    let line1 = '';
+    let line2 = '';
+    for (const w of words) {
+      if (!line1 || (line1 + ' ' + w).length <= 32) {
+        line1 = line1 ? line1 + ' ' + w : w;
+      } else if (!line2 || (line2 + ' ' + w).length <= 32) {
+        line2 = line2 ? line2 + ' ' + w : w;
+      } else {
+        return null; // doesn't fit
+      }
+    }
+    const result = line2 ? line1 + '\n' + line2 : line1;
+    if (result.split('\n').every(l => l.length <= 32)) return result;
+    return null;
+  };
+
   const merged = [];
   for (let i = 0; i < parsed.length; i++) {
     const cue = parsed[i];
-    const isSoundCue = cue.text.startsWith('[') || cue.text.includes('♪');
-    if (isSoundCue) { merged.push(cue); continue; }
+    if (!cue.text || !cue.text.trim()) continue;
+    if (isSoundCueFn(cue.text)) { merged.push(cue); continue; }
 
-    // Check if this cue is a short fragment that should merge with the previous spoken cue
     const plainText = cue.text.replace(/\n/g, ' ').trim();
+    const wordCount = plainText.split(/\s+/).length;
     const prevIdx = merged.length - 1;
     const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
-    const prevIsSoundCue = prevCue && (prevCue.text.startsWith('[') || prevCue.text.includes('♪'));
+    const prevIsSound = prevCue && isSoundCueFn(prevCue.text);
 
-    if (prevCue && !prevIsSoundCue && plainText.length < 15) {
-      // Check if combined text still fits (2 lines × 32 chars)
+    // If this cue has ≤3 words and is NOT a self-contained sentence, merge with previous
+    if (wordCount <= 3 && !isCompleteSentence(plainText) && prevCue && !prevIsSound) {
       const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
-      if (combinedText.length <= 64) {
-        // Repack into ≤32 char lines
-        const words = combinedText.split(/\s+/);
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1 || (line1 + ' ' + w).length <= 32) {
-            line1 = line1 ? line1 + ' ' + w : w;
-          } else if (!line2 || (line2 + ' ' + w).length <= 32) {
-            line2 = line2 ? line2 + ' ' + w : w;
-          } else {
-            break; // doesn't fit, skip merge
-          }
-        }
-        const newText = line2 ? line1 + '\n' + line2 : line1;
-        const allFit = newText.split('\n').every(l => l.length <= 32);
-        if (allFit) {
-          merged[prevIdx] = { ...prevCue, end: cue.end, text: newText };
-          continue;
-        }
+      const repacked = repackLines(combinedText);
+      if (repacked) {
+        merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked };
+        continue;
       }
     }
+
+    // Also try merging short fragments (< 20 chars) that don't end a sentence
+    if (plainText.length < 20 && !/[.?!]$/.test(plainText) && prevCue && !prevIsSound) {
+      const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
+      const repacked = repackLines(combinedText);
+      if (repacked) {
+        merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked };
+        continue;
+      }
+    }
+
     merged.push(cue);
   }
 
-  return merged;
+  // ── Post-GPT cleanup pass 3: Forward-merge orphans that couldn't merge backward ──
+  const finalMerged = [];
+  for (let i = 0; i < merged.length; i++) {
+    const cue = merged[i];
+    if (isSoundCueFn(cue.text)) { finalMerged.push(cue); continue; }
+
+    const plainText = cue.text.replace(/\n/g, ' ').trim();
+    const wordCount = plainText.split(/\s+/).length;
+    const nextCue = i + 1 < merged.length ? merged[i + 1] : null;
+    const nextIsSound = nextCue && isSoundCueFn(nextCue.text);
+
+    // If this is a ≤2 word orphan and there's a next spoken cue, merge forward
+    if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound) {
+      const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').trim();
+      const repacked = repackLines(combinedText);
+      if (repacked) {
+        merged[i + 1] = { ...nextCue, start: cue.start, text: repacked };
+        continue; // skip adding this cue
+      }
+    }
+
+    finalMerged.push(cue);
+  }
+
+  return finalMerged;
 }
 
 // ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
