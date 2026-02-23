@@ -430,22 +430,23 @@ CRITICAL: Audio events are SUPPLEMENTARY INFORMATION. Dialogue text is ALWAYS th
 
 21. You are provided DETECTED AUDIO EVENTS from actual audio analysis — these are REAL detected sounds.
 22. Audio event placement rules (in order of priority):
-    a. If a sound event falls in a SILENCE GAP (no dialogue), insert a standalone sound cue:
+    a. If a MUSIC event overlaps with or immediately precedes a dialogue segment (within 2 seconds), insert a [♪ MUSIC ♪] cue BEFORE that dialogue cue. Place it in the nearest gap. Music is important context for the viewer.
+    b. If a sound event falls in a SILENCE GAP (no dialogue), insert a standalone sound cue:
        - Music/singing → [♪ MUSIC ♪] (≤32 chars)
        - Laughter → [LAUGHTER]
        - Applause → [APPLAUSE]
        - Other → [SOUND IN CAPS] (≤32 chars)
        - Use the gap's start/end or the event's start/end, whichever is shorter.
-    b. If a sound event OVERLAPS with dialogue, do NOT create a separate cue. Instead:
-       - SHORT events (< 5 seconds): IGNORE them. Do not caption brief background sounds during speech.
-       - LONG events (≥ 5 seconds, e.g. sustained applause or music): Insert ONE sound cue BEFORE the dialogue starts or AFTER the dialogue ends, in the nearest available gap. Do NOT interrupt dialogue.
-    c. If sustained applause/music plays THROUGHOUT a long dialogue section:
-       - Caption [APPLAUSE] or [♪ MUSIC ♪] ONCE at the beginning (in a gap before dialogue starts)
-       - Do NOT repeat it on every cue or insert it between dialogue cues.
-       - Optionally caption it again when the sound ENDS if there's a gap.
+    c. If a non-music sound event OVERLAPS with dialogue:
+       - SHORT events (< 5 seconds): IGNORE them.
+       - LONG events (≥ 5 seconds): Insert ONE sound cue BEFORE or AFTER the dialogue, in the nearest gap.
+    d. If sustained music plays THROUGHOUT a long dialogue section:
+       - Caption [♪ MUSIC ♪] ONCE at the beginning (before dialogue starts)
+       - Do NOT repeat it on every cue.
+    e. CRITICAL: Every MUSIC audio event that appears in the DETECTED AUDIO EVENTS list MUST produce at least one [♪ MUSIC ♪] cue somewhere in the output. Do NOT silently drop music events.
 23. ONLY insert sound cues for events in the DETECTED AUDIO EVENTS list. NEVER guess or invent sounds.
 24. NEVER create a sound cue that causes a dialogue cue to be split, shortened, or displaced.
-25. The total number of dialogue output cues should match or exceed the input segments. Sound cues are ADDITIONS to gaps, not replacements for dialogue.
+25. The total number of dialogue output cues should match or exceed the input segments. Sound cues are ADDITIONS, not replacements.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT — STRICT JSON:
