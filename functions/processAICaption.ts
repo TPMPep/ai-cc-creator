@@ -388,12 +388,12 @@ function finalEnforce(cues, originalSegments) {
     const sources = originalSegments || [];
     if (!sources.length) return [];
 
-    // Find all segments that overlap this cue by at least 50ms
+    // Find all segments that overlap this cue (even by 1ms)
     const overlapping = [];
     for (const seg of sources) {
       const overlapStart = Math.max(cue.start, seg.start);
       const overlapEnd = Math.min(cue.end, seg.end);
-      if (overlapEnd - overlapStart >= 50 && seg.speaker) {
+      if (overlapEnd > overlapStart && seg.speaker) {
         overlapping.push(seg);
       }
     }
