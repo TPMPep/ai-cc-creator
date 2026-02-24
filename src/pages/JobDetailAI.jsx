@@ -106,7 +106,8 @@ export default function JobDetailAI() {
 
       if (latestJob.status === "done") {
         setJob(latestJob);
-        setCues(getCuesFromResult(latestJob.result));
+        const doneCues = await getCuesFromResultAsync(latestJob.result);
+        setCues(doneCues);
         toast.success("Captions ready!");
         if (pollingRef.current) clearTimeout(pollingRef.current);
         return;
