@@ -1,5 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
+// ─── INTERNAL CHAIN SECRET & HELPERS ────────────────────────────────────────
+
+const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
+
 /** Break large strings into chunks to avoid entity/field size limits */
 function chunkString(str, size = 75000) {
   const chunks = [];
@@ -578,10 +582,19 @@ Deno.serve(async (req) => {
     }
 
     const action = body?.action;
+    const internal = isInternalChain(body);
 
-    // All calls now come from the frontend with user auth
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Only require a real user for start/reprocess actions.
+    // process_batch is allowed for internal chain calls.
+    if (!internal) {
+      const user = await base44.auth.me();
+      if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Internal calls cannot start/reprocess jobs (safety guard).
+    if (internal && (action === 'start' || action === 'reprocess')) {
+      return Response.json({ error: 'Internal chain cannot perform start/reprocess' }, { status: 403 });
+    }
 
     const transcript_id = body.transcript_id;
     job_db_id = body.job_db_id;
@@ -593,7 +606,24 @@ Deno.serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
-    // No more self-chaining — frontend polling drives batch progression
+    // ── Helper: chain to next batch via internal secret (no user token needed) ──
+    function chainToSelf(payload) {
+      const selfUrl = reqClone.url;
+      const headers = { 'Content-Type': 'application/json' };
+      // Only forward app-id header, NOT Authorization
+      const appIdHeader = reqClone.headers.get('x-app-id');
+      if (appIdHeader) headers['x-app-id'] = appIdHeader;
+      
+      // Fire and forget — don't await
+      fetch(selfUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...payload,
+          chain_secret: INTERNAL_CHAIN_SECRET,
+        }),
+      }).catch(err => console.error('[CHAIN] HTTP self-call failed:', err.message));
+    }
 
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
@@ -632,7 +662,10 @@ Deno.serve(async (req) => {
         },
       });
 
-      return Response.json({ status: 'started', batches: batches.length, runId });
+      // Chain to process_batch using internal secret
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0, runId });
+
+      return Response.json({ status: 'started', batches: batches.length });
     }
 
     // ── ACTION: REPROCESS ────────────────────────────────────────────────────
@@ -680,7 +713,10 @@ Deno.serve(async (req) => {
 
       console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches, runId=${runId}`);
 
-      return Response.json({ status: 'reprocessing', batches: batches.length, runId });
+      // Chain to process_batch using internal secret
+      chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0, runId });
+
+      return Response.json({ status: 'reprocessing', batches: batches.length });
     }
 
     // ── ACTION: PROCESS_BATCH ────────────────────────────────────────────────
@@ -751,10 +787,11 @@ Deno.serve(async (req) => {
         processingPlan: { ...freshPlan, polishedCues: allPolished },
       });
 
-      // More batches remaining — return status so frontend can call next batch
+      // More batches remaining — chain to self with runId
       if (batchIndex < totalBatches) {
-        console.log(`[BATCH_CHUNK] Processed ${processedCount} batches, next is batch ${batchIndex}`);
-        return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches, runId: body.runId });
+        console.log(`[CHAIN] Processed ${processedCount} batches, chaining to batch ${batchIndex}...`);
+        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex, runId: body.runId });
+        return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
       }
 
       // ── FINALIZE ─────────────────────────────────────────────────────────
