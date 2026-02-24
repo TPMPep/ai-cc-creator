@@ -1,9 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // Jobs are "stuck" if updated_date hasn't moved in this long
-const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — fast recovery
 // Jobs with no processing plan at all get errored after this
 const NO_START_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
+const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
 
 Deno.serve(async (req) => {
   try {
@@ -24,13 +25,13 @@ Deno.serve(async (req) => {
     const details = [];
 
     for (const job of jobs) {
-      const updatedAt = new Date(job.updated_date).getTime();
-      const staleDuration = now - updatedAt;
-
-      // Only look at jobs whose DB record hasn't been touched recently
-      if (staleDuration < STUCK_THRESHOLD_MS) continue;
-
+      // Use lastActiveAt from processingPlan if available (more accurate than updated_date)
       const plan = job.processingPlan;
+      const lastActive = plan?.lastActiveAt ? new Date(plan.lastActiveAt).getTime() : new Date(job.updated_date).getTime();
+      const staleDuration = now - lastActive;
+
+      // Only look at jobs that haven't had worker activity recently
+      if (staleDuration < STUCK_THRESHOLD_MS) continue;
 
       // Case 1: Has a processing plan — GPT chain started but stalled
       if (plan && plan.batches && typeof plan.totalBatches === 'number') {
@@ -71,11 +72,12 @@ Deno.serve(async (req) => {
           ],
         });
 
-        // Invoke the WORKER function (not processAICaption) to avoid 508 loop detection
+        // Invoke the WORKER function with chain_secret (worker requires it, no auth.me())
         const payload = {
           job_db_id: job.id,
           action: nextAction,
           runId: newRunId,
+          chain_secret: INTERNAL_CHAIN_SECRET,
         };
         if (nextAction === 'process_batch') {
           payload.batch_index = nextBatch;

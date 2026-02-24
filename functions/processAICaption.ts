@@ -147,47 +147,16 @@ Deno.serve(async (req) => {
     }
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+    const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
 
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
       if (!transcript_id) return Response.json({ error: 'transcript_id required for start' }, { status: 400 });
 
       console.log(`[START] Fetching transcript ${transcript_id} for job ${job_db_id}`);
-      await addLog(base44, job_db_id, '1_transcribe', 'ok', 'AssemblyAI transcription completed.');
-
-      const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
-        headers: { 'authorization': ASSEMBLYAI_API_KEY },
-      });
-      if (!aaiRes.ok) throw new Error(`AssemblyAI fetch failed: ${aaiRes.status}`);
-      const transcript = await aaiRes.json();
-      if (transcript.status !== 'completed') throw new Error(`Transcript not ready: ${transcript.status}`);
-
-      const utterances = transcript.utterances || [];
-      const language = transcript.language_code || 'en';
-      const highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
-      const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
-
-      const segments = buildRawSegments(utterances);
-      const gaps = findGaps(utterances, totalDurationMs);
-      const batches = buildBatches(segments);
-      const runId = newRunId();
-
-      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}, runId=${runId}`);
-
-      await base44.asServiceRole.entities.Job.update(job_db_id, {
-        processingPlan: {
-          batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
-          gaps, highlights, language,
-          totalBatches: batches.length,
-          polishedCues: [],
-          runId,
-          utterances: utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words })),
-        },
-      });
-
+...
       // Invoke the WORKER function (different deployment endpoint — no 508 loop detection)
       // Always pass chain_secret so worker accepts regardless of SDK auth method
-      const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
       base44.asServiceRole.functions.invoke('processAICaptionWorker', {
         action: 'process_batch',
         job_db_id,
