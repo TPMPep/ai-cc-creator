@@ -1,12 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
+// Jobs are "stuck" if updated_date hasn't moved in this long
 const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+// Jobs with no processing plan at all get errored after this
+const NO_START_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (user?.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
 
-    // Find all AI pipeline jobs still in processing/queued state
     const jobs = await base44.asServiceRole.entities.Job.filter({
       status: 'processing',
       pipeline: 'ai',
@@ -15,76 +21,89 @@ Deno.serve(async (req) => {
     const now = Date.now();
     let recovered = 0;
     let errored = 0;
+    const details = [];
 
     for (const job of jobs) {
-      const createdAt = new Date(job.created_date).getTime();
-      const ageMs = now - createdAt;
+      const updatedAt = new Date(job.updated_date).getTime();
+      const staleDuration = now - updatedAt;
 
-      // Only look at jobs older than the stuck threshold
-      if (ageMs < STUCK_THRESHOLD_MS) continue;
+      // Only look at jobs whose DB record hasn't been touched recently
+      if (staleDuration < STUCK_THRESHOLD_MS) continue;
 
       const plan = job.processingPlan;
 
-      // Case 1: Has a processing plan — GPT chain started but stalled on a batch
+      // Case 1: Has a processing plan — GPT chain started but stalled
       if (plan && plan.batches && typeof plan.totalBatches === 'number') {
-        const completedBatches = (plan.polishedCues || []).length > 0
-          ? Math.floor((plan.polishedCues.length / Math.max(1, plan.batches.flat().length)) * plan.totalBatches)
-          : 0;
+        const completedCues = (plan.polishedCues || []).length;
+        const currentBatch = plan.currentBatchIndex ?? 0;
+        const totalBatches = plan.totalBatches;
 
-        // Find the next unprocessed batch by checking pipelineLog
-        const log = job.pipelineLog || [];
-        const completedBatchNums = log
-          .filter(e => e.step && e.step.startsWith('2_gpt_batch_'))
-          .map(e => {
-            const m = e.step.match(/2_gpt_batch_(\d+)_of_/);
-            return m ? parseInt(m[1]) - 1 : -1;
-          })
-          .filter(n => n >= 0);
+        // Determine what to do: resume from currentBatchIndex or finalize
+        let nextAction = 'process_batch';
+        let nextBatch = currentBatch;
 
-        let nextBatch = 0;
-        for (let i = 0; i < plan.totalBatches; i++) {
-          if (!completedBatchNums.includes(i)) { nextBatch = i; break; }
-          if (i === plan.totalBatches - 1) { nextBatch = -1; } // all done?
+        // If all batches seem done (polishedCues exist for all), try finalize
+        if (completedCues > 0 && currentBatch >= totalBatches - 1) {
+          // Check pipeline log to see if last batch completed
+          const log = job.pipelineLog || [];
+          const lastBatchDone = log.some(e =>
+            e.step === `2_gpt_batch_${totalBatches}_of_${totalBatches}` && e.status === 'ok'
+          );
+          if (lastBatchDone) {
+            nextAction = 'finalize';
+          }
         }
 
-        if (nextBatch === -1) {
-          // All batches logged but job not marked done — likely a finalize crash
-          // Re-trigger the last batch to re-finalize
-          nextBatch = plan.totalBatches - 1;
-        }
+        // Generate a fresh runId so the zombie guard accepts it
+        const newRunId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-        // Re-trigger the stalled batch
-        const recoveryLog = {
-          step: `recovery_batch_${nextBatch}`,
-          status: 'running',
-          detail: `Auto-recovery: re-triggering batch ${nextBatch + 1}/${plan.totalBatches} after ${Math.round(ageMs / 60000)}min stall.`,
-          ts: new Date().toISOString(),
-        };
-
+        // Update the plan with the new runId so the function accepts the call
         await base44.asServiceRole.entities.Job.update(job.id, {
-          pipelineLog: [...log, recoveryLog],
+          processingPlan: { ...plan, runId: newRunId },
+          pipelineLog: [
+            ...(job.pipelineLog || []),
+            {
+              step: `recovery_${nextAction}`,
+              status: 'running',
+              detail: `Auto-recovery: ${nextAction} at batch ${nextBatch + 1}/${totalBatches} after ${Math.round(staleDuration / 60000)}min stall. New runId assigned.`,
+              ts: new Date().toISOString(),
+            },
+          ],
         });
 
-        base44.asServiceRole.functions.invoke('processAICaption', {
+        // Invoke processAICaption with the correct action + fresh runId
+        const payload = {
           transcript_id: job.railwayJobId,
           job_db_id: job.id,
-          action: 'process_batch',
-          batch_index: nextBatch,
-        }).catch(() => {});
+          action: nextAction,
+          runId: newRunId,
+        };
+        if (nextAction === 'process_batch') {
+          payload.batch_index = nextBatch;
+        }
+
+        base44.asServiceRole.functions.invoke('processAICaption', payload).catch(() => {});
 
         recovered++;
+        details.push({
+          jobId: job.id,
+          title: job.title,
+          action: nextAction,
+          batch: nextBatch,
+          staleMins: Math.round(staleDuration / 60000),
+        });
 
       } else if (!plan && (!job.pipelineLog || job.pipelineLog.length === 0)) {
         // Case 2: No plan, no log — AssemblyAI never finished or start never ran
-        // If job is very old (>20 min) with nothing started, mark as error
-        if (ageMs > 20 * 60 * 1000) {
+        const createdAt = new Date(job.created_date).getTime();
+        if (now - createdAt > NO_START_THRESHOLD_MS) {
           await base44.asServiceRole.entities.Job.update(job.id, {
             status: 'error',
             error: 'Job timed out waiting for transcription after 20 minutes.',
           });
           errored++;
+          details.push({ jobId: job.id, title: job.title, action: 'errored_no_start' });
         }
-        // Otherwise leave it — AssemblyAI may still be working
       }
     }
 
@@ -92,6 +111,7 @@ Deno.serve(async (req) => {
       checked: jobs.length,
       recovered,
       errored,
+      details,
       ts: new Date().toISOString(),
     });
 

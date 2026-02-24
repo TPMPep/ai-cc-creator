@@ -592,8 +592,8 @@ Deno.serve(async (req) => {
     }
 
     // Internal calls cannot start/reprocess jobs (safety guard).
-    if (internal && (action === 'start' || action === 'reprocess')) {
-      return Response.json({ error: 'Internal chain cannot perform start/reprocess' }, { status: 403 });
+    if (internal && !['process_batch', 'finalize'].includes(action)) {
+      return Response.json({ error: `Internal chain cannot perform ${action}` }, { status: 403 });
     }
 
     const transcript_id = body.transcript_id;
