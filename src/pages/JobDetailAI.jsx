@@ -426,6 +426,11 @@ export default function JobDetailAI() {
                   <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 overflow-auto flex-1">
                     <QCPanel qc={job.result?.qc} onJumpToCue={handleJumpToCue} />
                   </div>
+                  {job.costEstimate && (
+                    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
+                      <CostEstimate costEstimate={job.costEstimate} />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
