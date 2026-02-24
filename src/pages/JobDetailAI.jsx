@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles, FlaskConical, RotateCcw } from "lucide-react";
 
 import PipelineLog from "../components/jobdetail/PipelineLog";
+import CostEstimate from "../components/jobdetail/CostEstimate";
 import { getCuesFromResult, getCuesFromResultAsync } from "../components/shared/CueUtils";
 import moment from "moment";
 import { toast } from "sonner";
