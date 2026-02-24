@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Copy, Check, Loader2 } from "lucide-react";
+import { getCuesFromResult } from "../shared/CueUtils";
 
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
@@ -123,7 +124,8 @@ export default function ExportPanel({ result, title, jobId }) {
           </DownloadBtn>
         )}
         <DownloadBtn onClick={() => {
-          downloadBlob(JSON.stringify(result.cues || result, null, 2), `${safeName}_${jobId}.json`, "application/json");
+          const cues = getCuesFromResult(result);
+          downloadBlob(JSON.stringify(cues, null, 2), `${safeName}_${jobId}.json`, "application/json");
         }}>
           JSON (Cues)
         </DownloadBtn>

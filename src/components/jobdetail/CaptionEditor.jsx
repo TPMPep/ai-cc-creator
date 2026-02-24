@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle, Music, Volume2, Languages } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
+import { getCuesFromResult } from "../shared/CueUtils";
 
 // Timecode conversion utilities
 const msToTimecode = (ms) => {
@@ -108,8 +109,14 @@ export default function CaptionEditor({
   const handleSaveCues = async () => {
     setSaving(true);
     try {
-      // Update job result with new cues
-      const updatedResult = { ...job.result, cues };
+      // Update job result with chunked cues to avoid payload size limits
+      const cueChunks = [];
+      const cueStr = JSON.stringify(cues);
+      for (let i = 0; i < cueStr.length; i += 75000) {
+        cueChunks.push(cueStr.slice(i, i + 75000));
+      }
+      const updatedResult = { ...job.result, cue_chunks: cueChunks };
+      delete updatedResult.cues; // remove old format if present
       await base44.entities.Job.update(job.id, { result: updatedResult });
       onCuesChanged?.(cues);
       toast.success("Captions saved successfully");

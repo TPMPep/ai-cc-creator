@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, Sparkles, FlaskConical, RotateCcw } from "lucide-react";
 
 import PipelineLog from "../components/jobdetail/PipelineLog";
+import { getCuesFromResult } from "../components/shared/CueUtils";
 import moment from "moment";
 import { toast } from "sonner";
 
@@ -42,7 +43,7 @@ export default function JobDetailAI() {
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
-        setCues(jobs[0].result?.cues || []);
+        setCues(getCuesFromResult(jobs[0].result));
         // Kick off polling if job is still processing
         if (jobs[0].status === "processing" || jobs[0].status === "queued") {
           jobRef.current = jobs[0];
@@ -104,7 +105,7 @@ export default function JobDetailAI() {
 
       if (latestJob.status === "done") {
         setJob(latestJob);
-        setCues(latestJob.result?.cues || []);
+        setCues(getCuesFromResult(latestJob.result));
         toast.success("Captions ready!");
         if (pollingRef.current) clearTimeout(pollingRef.current);
         return;
