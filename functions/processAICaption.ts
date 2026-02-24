@@ -607,7 +607,7 @@ Deno.serve(async (req) => {
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
 
     // ── Helper: chain to next batch via internal secret (no user token needed) ──
-    function chainToSelf(payload) {
+    async function chainToSelf(payload) {
       const selfUrl = reqClone.url;
       const headers = { 'Content-Type': 'application/json' };
       // Forward SDK-required headers (NOT Authorization) so createClientFromRequest works
@@ -615,16 +615,32 @@ Deno.serve(async (req) => {
         const val = reqClone.headers.get(h);
         if (val) headers[h] = val;
       }
-      
-      // Fire and forget — don't await
-      fetch(selfUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...payload,
-          chain_secret: INTERNAL_CHAIN_SECRET,
-        }),
-      }).catch(err => console.error('[CHAIN] HTTP self-call failed:', err.message));
+
+      try {
+        const res = await fetch(selfUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            ...payload,
+            chain_secret: INTERNAL_CHAIN_SECRET,
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(`[CHAIN ERROR] ${res.status}: ${text}`);
+          // Mark job as error so it doesn't stay stuck
+          await base44.asServiceRole.entities.Job.update(job_db_id, {
+            status: 'error',
+            error: `Chain call failed (${res.status}): ${text.substring(0, 200)}`,
+          });
+        }
+      } catch (err) {
+        console.error('[CHAIN NETWORK ERROR]', err.message);
+        await base44.asServiceRole.entities.Job.update(job_db_id, {
+          status: 'error',
+          error: `Chain network error: ${err.message}`,
+        });
+      }
     }
 
     // ── ACTION: START ────────────────────────────────────────────────────────
