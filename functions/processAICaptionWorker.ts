@@ -546,12 +546,15 @@ Deno.serve(async (req) => {
         await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'running',
           `GPT-4o processing batch ${batchIndex + 1}/${totalBatches} (${batchSegments.length} segments)`);
 
-        const polishedBatch = await polishBatchWithGPT(
+        const batchResult = await polishBatchWithGPT(
           batchSegments, batchGaps, language, highlights, OPENAI_API_KEY, batchIndex, totalBatches
         );
 
-        allNewCues.push(...polishedBatch);
-        console.log(`[WORKER BATCH ${batchIndex + 1}/${totalBatches}] Got ${polishedBatch.length} cues`);
+        allNewCues.push(...batchResult.cues);
+        // Accumulate token usage
+        totalInputTokens += batchResult.tokens.inputTokens;
+        totalOutputTokens += batchResult.tokens.outputTokens;
+        console.log(`[WORKER BATCH ${batchIndex + 1}/${totalBatches}] Got ${batchResult.cues.length} cues, tokens: in=${batchResult.tokens.inputTokens} out=${batchResult.tokens.outputTokens}`);
 
         await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'ok',
           `Batch ${batchIndex + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
