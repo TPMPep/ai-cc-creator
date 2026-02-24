@@ -59,12 +59,32 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [videoRef]);
 
-  const fontSize = captionSettings?.fontSize || 16;
+  const baseFontSize = captionSettings?.fontSize || 16;
   const opacity = captionSettings?.opacity ?? 0.8;
   const position = captionSettings?.position || "bottom";
 
+  // Scale caption font size proportionally to container width
+  // Base reference: 800px wide = full font size
+  const scale = Math.min(1, containerWidth / 800);
+  const fontSize = Math.max(9, Math.round(baseFontSize * scale));
+  const padX = Math.max(2, Math.round(16 * scale));
+  const padY = Math.max(1, Math.round(8 * scale));
+  const bottomOffset = Math.max(6, Math.round(48 * scale));
+
+  // Track container size
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div className="relative rounded-lg overflow-hidden bg-black group">
+    <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black group">
       <video
         ref={videoRef}
         src={`${API_BASE}/v1/proxy?url=${encodeURIComponent(mediaUrl)}`}
@@ -75,9 +95,12 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
       />
       {/* Caption overlay */}
       {activeCue && (
-        <div className={`absolute left-0 right-0 flex justify-center pointer-events-none px-4 ${position === "top" ? "top-12" : "bottom-12"}`}>
-          <div className="rounded-md px-4 py-2 max-w-[80%] border border-zinc-700/30" style={{ backgroundColor: `rgba(0, 0, 0, ${opacity})`, backdropFilter: "blur(4px)" }}>
-            <p className="text-white font-medium text-center leading-relaxed whitespace-pre-line" style={{ fontSize: `${fontSize}px` }}>
+        <div
+          className="absolute left-0 right-0 flex justify-center pointer-events-none"
+          style={{ [position === "top" ? "top" : "bottom"]: `${bottomOffset}px`, padding: `0 ${padX}px` }}
+        >
+          <div className="rounded max-w-[80%] border border-zinc-700/30" style={{ backgroundColor: `rgba(0, 0, 0, ${opacity})`, backdropFilter: "blur(4px)", padding: `${padY}px ${padX}px` }}>
+            <p className="text-white font-medium text-center leading-snug whitespace-pre-line" style={{ fontSize: `${fontSize}px` }}>
               {activeCue.text}
             </p>
           </div>
