@@ -474,12 +474,10 @@ Deno.serve(async (req) => {
     const action = body?.action;
     const internal = isInternalChain(body);
 
-    // This worker only accepts internal chain calls (from processAICaption or from itself via SDK invoke)
+    // SECURITY: Worker ONLY accepts calls with valid chain_secret.
+    // No auth.me() — this avoids 403 from expired user tokens or service role edge cases.
     if (!internal) {
-      // Also allow calls from asServiceRole.functions.invoke (they carry a valid service token)
-      // Verify by checking auth — service role calls will succeed
-      const user = await base44.auth.me();
-      if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      return Response.json({ error: 'Forbidden: missing or invalid chain_secret' }, { status: 403 });
     }
 
     // Only allow process_batch and finalize actions
@@ -515,9 +513,9 @@ Deno.serve(async (req) => {
         return Response.json({ status: 'stale_ignored' });
       }
 
-      // Persist currentBatchIndex so recovery knows where we are
+      // Persist currentBatchIndex + lastActiveAt BEFORE processing so recovery knows where we are
       await base44.asServiceRole.entities.Job.update(job_db_id, {
-        processingPlan: { ...plan, currentBatchIndex: batchIndex },
+        processingPlan: { ...plan, currentBatchIndex: batchIndex, lastActiveAt: new Date().toISOString() },
       });
 
       const totalBatches = plan.totalBatches;
@@ -570,6 +568,7 @@ Deno.serve(async (req) => {
       });
 
       // More batches remaining — invoke THIS worker again via SDK (different endpoint, no loop detection)
+      // Always pass chain_secret so the worker accepts the call regardless of SDK auth method
       if (batchIndex < totalBatches) {
         console.log(`[WORKER CHAIN] Processed ${processedCount} batches, invoking worker for batch ${batchIndex}...`);
         base44.asServiceRole.functions.invoke('processAICaptionWorker', {
@@ -578,6 +577,7 @@ Deno.serve(async (req) => {
           transcript_id,
           batch_index: batchIndex,
           runId: body.runId,
+          chain_secret: INTERNAL_CHAIN_SECRET,
         }).catch(err => {
           console.error('[WORKER CHAIN ERROR]', err.message);
           base44.asServiceRole.entities.Job.update(job_db_id, {
@@ -588,12 +588,13 @@ Deno.serve(async (req) => {
         return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
       }
 
-      // All batches done — invoke finalize
+      // All batches done — invoke finalize as separate action (avoids timeout)
       console.log(`[WORKER CHAIN] All ${totalBatches} batches done. Invoking finalize...`);
       base44.asServiceRole.functions.invoke('processAICaptionWorker', {
         action: 'finalize',
         job_db_id,
         runId: body.runId,
+        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[WORKER FINALIZE CHAIN ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {

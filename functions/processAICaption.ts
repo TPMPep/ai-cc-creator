@@ -186,12 +186,15 @@ Deno.serve(async (req) => {
       });
 
       // Invoke the WORKER function (different deployment endpoint — no 508 loop detection)
+      // Always pass chain_secret so worker accepts regardless of SDK auth method
+      const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
       base44.asServiceRole.functions.invoke('processAICaptionWorker', {
         action: 'process_batch',
         job_db_id,
         transcript_id,
         batch_index: 0,
         runId,
+        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[START WORKER INVOKE ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {
@@ -255,6 +258,7 @@ Deno.serve(async (req) => {
         transcript_id: job.railwayJobId,
         batch_index: 0,
         runId,
+        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[REPROCESS WORKER INVOKE ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {
