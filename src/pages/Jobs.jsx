@@ -49,10 +49,15 @@ export default function Jobs() {
           const data = res.data;
 
           if (data.status === "completed") {
+            const cueStr = JSON.stringify(data.cues || []);
+            const cueChunks = [];
+            for (let i = 0; i < cueStr.length; i += 75000) {
+              cueChunks.push(cueStr.slice(i, i + 75000));
+            }
             const updates = {
               status: "done",
               result: {
-                cues: data.cues,
+                cue_chunks: cueChunks,
                 srt: data.exports?.srt,
                 vtt: data.exports?.vtt,
                 scc: data.exports?.scc,
