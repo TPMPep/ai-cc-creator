@@ -610,9 +610,11 @@ Deno.serve(async (req) => {
     function chainToSelf(payload) {
       const selfUrl = reqClone.url;
       const headers = { 'Content-Type': 'application/json' };
-      // Only forward app-id header, NOT Authorization
-      const appIdHeader = reqClone.headers.get('x-app-id');
-      if (appIdHeader) headers['x-app-id'] = appIdHeader;
+      // Forward SDK-required headers (NOT Authorization) so createClientFromRequest works
+      for (const h of ['x-app-id', 'x-workspace-id', 'x-project-id']) {
+        const val = reqClone.headers.get(h);
+        if (val) headers[h] = val;
+      }
       
       // Fire and forget — don't await
       fetch(selfUrl, {
