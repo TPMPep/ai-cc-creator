@@ -706,8 +706,8 @@ Deno.serve(async (req) => {
       const audioDurationSec = durationMs / 1000;
       const openaiInputTokens = plan.openaiInputTokens || 0;
       const openaiOutputTokens = plan.openaiOutputTokens || 0;
-      // AssemblyAI: $0.65 per hour (with speaker labels, language detection, auto highlights)
-      const assemblyaiCost = (audioDurationSec / 3600) * 0.65;
+      // AssemblyAI: $0.65 per hour = ~$0.01083 per minute
+      const assemblyaiCost = (audioDurationSec / 60) * (0.65 / 60);
       // OpenAI GPT-4o: $2.50/1M input, $10.00/1M output
       const openaiCost = (openaiInputTokens / 1_000_000) * 2.50 + (openaiOutputTokens / 1_000_000) * 10.00;
       const costEstimate = {
