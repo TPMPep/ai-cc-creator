@@ -59,16 +59,48 @@ export default function JobDetailAI() {
 
   const isPollingRef = useRef(false);
 
-  // Trigger server-side processing when AssemblyAI is done
-  // Fire-and-forget: the function processes all batches in one call (can take minutes).
-  // We don't await it — the polling loop will detect when status changes to 'done'.
-  const startServerProcessing = useCallback(async (currentJob) => {
-    base44.functions.invoke("processAICaption", {
-      transcript_id: currentJob.railwayJobId,
-      job_db_id: currentJob.id,
-      action: "start",
-    }).catch(err => console.error("startServerProcessing error:", err));
+  // Drive server-side batch processing: start → then loop process_batch calls until done
+  const driveProcessing = useCallback(async (currentJob, action, startBatch = 0, runId = null) => {
+    try {
+      let res;
+      if (action === "start" || action === "reprocess") {
+        res = await base44.functions.invoke("processAICaption", {
+          transcript_id: currentJob.railwayJobId,
+          job_db_id: currentJob.id,
+          action,
+        });
+        runId = res.data.runId;
+        startBatch = 0;
+      }
+
+      // Now loop process_batch calls from the frontend
+      let batchIndex = startBatch;
+      while (true) {
+        const batchRes = await base44.functions.invoke("processAICaption", {
+          action: "process_batch",
+          job_db_id: currentJob.id,
+          transcript_id: currentJob.railwayJobId,
+          batch_index: batchIndex,
+          runId,
+        });
+        const data = batchRes.data;
+        if (data.status === "done") break;
+        if (data.status === "stale_ignored") break;
+        if (data.status === "batch_chunk_done") {
+          batchIndex = data.next_batch;
+          continue;
+        }
+        // Any other status (error etc) — break
+        break;
+      }
+    } catch (err) {
+      console.error("driveProcessing error:", err);
+    }
   }, []);
+
+  const startServerProcessing = useCallback(async (currentJob) => {
+    driveProcessing(currentJob, "start").catch(err => console.error("startServerProcessing error:", err));
+  }, [driveProcessing]);
 
   const reprocessStartRef = useRef(null);
 
