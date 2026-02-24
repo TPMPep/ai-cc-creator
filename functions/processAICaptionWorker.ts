@@ -217,6 +217,13 @@ ${highlightDump}`;
   const jsonMatch = content.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error(`OpenAI did not return valid JSON (batch ${batchIndex + 1})`);
 
+  // Track token usage for cost estimation
+  const usage = data.usage || {};
+  const batchTokens = {
+    inputTokens: usage.prompt_tokens || 0,
+    outputTokens: usage.completion_tokens || 0,
+  };
+
   const parsed = JSON.parse(jsonMatch[0]);
 
   // ── Post-GPT cleanup: Strip dashes from single-speaker cues ──
