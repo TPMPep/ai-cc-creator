@@ -32,6 +32,8 @@ export default function PipelineLog({ pipelineLog = [], jobStatus }) {
   const hasError = pipelineLog.some(l => l.status === "error");
   const allOk = pipelineLog.every(l => l.status === "ok");
   const latestStep = pipelineLog[pipelineLog.length - 1];
+  // If job is done, treat pipeline as complete regardless of stale "running" entries
+  const isComplete = jobStatus === "done" || (allOk && jobStatus === "done");
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
@@ -40,15 +42,15 @@ export default function PipelineLog({ pipelineLog = [], jobStatus }) {
         className="w-full flex items-center justify-between px-4 py-2.5 text-xs hover:bg-zinc-800/40 transition-colors"
       >
         <div className="flex items-center gap-2">
-          {hasError ? (
+          {hasError && jobStatus !== "done" ? (
             <XCircle className="w-3.5 h-3.5 text-red-400" />
-          ) : allOk && jobStatus === "done" ? (
+          ) : isComplete ? (
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
           ) : (
             <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />
           )}
-          <span className={hasError ? "text-red-300" : allOk && jobStatus === "done" ? "text-emerald-300" : "text-blue-300"}>
-            {hasError ? "Pipeline error detected" : allOk && jobStatus === "done" ? "All pipeline steps completed ✓" : `Running: ${getLabel(latestStep.step)}`}
+          <span className={hasError && jobStatus !== "done" ? "text-red-300" : isComplete ? "text-emerald-300" : "text-blue-300"}>
+            {hasError && jobStatus !== "done" ? "Pipeline error detected" : isComplete ? "All pipeline steps completed ✓" : `Running: ${getLabel(latestStep.step)}`}
           </span>
           <span className="text-zinc-600">({pipelineLog.length} steps logged)</span>
         </div>
