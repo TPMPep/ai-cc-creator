@@ -533,6 +533,8 @@ Deno.serve(async (req) => {
       // Process up to BATCHES_PER_INVOCATION batches in this call
       let processedCount = 0;
       let allNewCues = [];
+      let totalInputTokens = plan.openaiInputTokens || 0;
+      let totalOutputTokens = plan.openaiOutputTokens || 0;
 
       while (batchIndex < totalBatches && processedCount < BATCHES_PER_INVOCATION) {
         const batchSegments = plan.batches[batchIndex];
