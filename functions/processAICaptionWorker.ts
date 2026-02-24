@@ -632,7 +632,9 @@ Deno.serve(async (req) => {
       const scc = buildSCC(enforced);
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
-      const cueChunks = chunkString(JSON.stringify(enforced), 75000);
+      const cueJson = JSON.stringify(enforced);
+      console.log("[WORKER FINALIZE] Cue JSON size:", cueJson.length);
+      const cueChunks = chunkString(cueJson, 75000);
       const srtChunks = chunkString(srt);
       const vttChunks = chunkString(vtt);
       const sccChunks = chunkString(scc);
