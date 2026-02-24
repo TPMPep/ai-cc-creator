@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
       const allPolished = [...(freshPlan.polishedCues || []), ...allNewCues];
 
       // Strip batches and utterances from plan before saving to reduce field size
-      const slimPlan = { ...freshPlan, polishedCues: allPolished };
+      const slimPlan = { ...freshPlan, polishedCues: allPolished, openaiInputTokens: totalInputTokens, openaiOutputTokens: totalOutputTokens };
       // Only keep batches/utterances if we still have batches to process
       if (batchIndex >= totalBatches) {
         delete slimPlan.batches;
