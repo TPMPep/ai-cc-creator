@@ -137,20 +137,20 @@ export default function ExportPanel({ result, title, jobId }) {
       </div>
       <div className="flex gap-2">
         {hasSrt && (
-          <Button variant="ghost" size="sm" onClick={() => {
+          <Button variant="ghost" size="sm" onClick={async () => {
             const content = result.srt_url || result.srt_text || result.srt || (result.srt_chunks ? joinChunks(result.srt_chunks) : null);
             const isUrl = !!result.srt_url;
-            handleCopy(content, isUrl, setCopiedSrt);
+            await handleCopy(content, isUrl, setCopiedSrt);
           }} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedSrt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedSrt ? "Copied" : "Copy SRT"}
           </Button>
         )}
         {hasVtt && (
-          <Button variant="ghost" size="sm" onClick={() => {
+          <Button variant="ghost" size="sm" onClick={async () => {
             const content = result.vtt_url || result.vtt_text || result.vtt || (result.vtt_chunks ? joinChunks(result.vtt_chunks) : null);
             const isUrl = !!result.vtt_url;
-            handleCopy(content, isUrl, setCopiedVtt);
+            await handleCopy(content, isUrl, setCopiedVtt);
           }} className="text-zinc-500 hover:text-white text-[11px] h-7">
             {copiedVtt ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
             {copiedVtt ? "Copied" : "Copy VTT"}
