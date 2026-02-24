@@ -386,21 +386,23 @@ export default function JobDetailAI() {
               <PipelineLog pipelineLog={job?.pipelineLog} jobStatus={job?.status} />
             </div>
 
-            {/* Sticky top section: video + sidebar — never scrolls away */}
-            <div className="sticky top-14 z-20 bg-zinc-950 pb-2">
-              <div className="grid grid-cols-10 gap-6">
-                <div className="col-span-7 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
-                    <div className="flex items-center gap-3">
-                      {job.result?.language && (
-                        <span className="text-xs text-zinc-500">Detected: <span className="text-zinc-300">{job.result.language}</span></span>
-                      )}
-                      <p className="text-[10px] text-zinc-600">
-                        Space (play/pause) · ←/→ (±5s) · J/K/L
-                      </p>
+            {/* Sticky top section: video + sidebar — shrinks on scroll */}
+            <div className="sticky top-14 z-20 bg-zinc-950 pb-2 transition-all duration-300">
+              <div className={`grid gap-4 transition-all duration-300 ${videoCompact ? "grid-cols-12" : "grid-cols-10"}`}>
+                <div className={`transition-all duration-300 ${videoCompact ? "col-span-4" : "col-span-7"} space-y-1`}>
+                  {!videoCompact && (
+                    <div className="flex items-center justify-between">
+                      <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
+                      <div className="flex items-center gap-3">
+                        {job.result?.language && (
+                          <span className="text-xs text-zinc-500">Detected: <span className="text-zinc-300">{job.result.language}</span></span>
+                        )}
+                        <p className="text-[10px] text-zinc-600">
+                          Space (play/pause) · ←/→ (±5s) · J/K/L
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <VideoPlayer
                     mediaUrl={job.mediaUrl}
                     cues={cues}
@@ -408,9 +410,15 @@ export default function JobDetailAI() {
                     onTimeUpdate={setCurrentTimeMs}
                     captionSettings={captionSettings}
                   />
+                  {videoCompact && (
+                    <div className="flex items-center justify-between px-1">
+                      <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
+                      <p className="text-[10px] text-zinc-600">Space · ←/→ · J/K/L</p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="col-span-3 flex flex-col gap-4" style={{ maxHeight: "calc(9/16 * (100vw * 0.7) + 2rem)", overflowY: "auto" }}>
+                <div className={`transition-all duration-300 ${videoCompact ? "col-span-8" : "col-span-3"} flex flex-col gap-3`} style={{ maxHeight: videoCompact ? "200px" : "calc(9/16 * (100vw * 0.7) + 2rem)", overflowY: "auto" }}>
                   <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
                     <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId} />
                   </div>
