@@ -681,7 +681,7 @@ Deno.serve(async (req) => {
       });
 
       // Chain to process_batch using internal secret
-      chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0, runId });
+      await chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: 0, runId });
 
       return Response.json({ status: 'started', batches: batches.length });
     }
@@ -732,7 +732,7 @@ Deno.serve(async (req) => {
       console.log(`[REPROCESS] ${segments.length} segments, ${batches.length} batches, runId=${runId}`);
 
       // Chain to process_batch using internal secret
-      chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0, runId });
+      await chainToSelf({ action: 'process_batch', job_db_id, transcript_id: job.railwayJobId, batch_index: 0, runId });
 
       return Response.json({ status: 'reprocessing', batches: batches.length });
     }
@@ -755,6 +755,11 @@ Deno.serve(async (req) => {
         console.log(`[process_batch] Ignoring stale chain call. payload runId=${body?.runId} current runId=${plan?.runId}`);
         return Response.json({ status: 'stale_ignored' });
       }
+
+      // Persist currentBatchIndex so recovery knows where we are
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        processingPlan: { ...plan, currentBatchIndex: batchIndex },
+      });
 
       const totalBatches = plan.totalBatches;
       const gaps = plan.gaps || [];
@@ -808,12 +813,34 @@ Deno.serve(async (req) => {
       // More batches remaining — chain to self with runId
       if (batchIndex < totalBatches) {
         console.log(`[CHAIN] Processed ${processedCount} batches, chaining to batch ${batchIndex}...`);
-        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex, runId: body.runId });
+        await chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex, runId: body.runId });
         return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
       }
 
-      // ── FINALIZE ─────────────────────────────────────────────────────────
-      console.log(`[FINALIZE] All ${totalBatches} batches done. Enforcing rules on ${allPolished.length} cues...`);
+      // All batches done — chain to finalize in its own invocation to avoid timeout
+      console.log(`[CHAIN] All ${totalBatches} batches done. Chaining to finalize...`);
+      await chainToSelf({ action: 'finalize', job_db_id, runId: body.runId });
+      return Response.json({ status: 'finalizing', total: totalBatches });
+    }
+
+    // ── ACTION: FINALIZE ───────────────────────────────────────────────────
+    if (action === 'finalize') {
+      const job = await base44.asServiceRole.entities.Job.get(job_db_id);
+      if (job.status === 'done') return Response.json({ status: 'already_done' });
+
+      const plan = job.processingPlan;
+      if (!plan) return Response.json({ error: 'No processing plan' }, { status: 400 });
+
+      // Zombie guard
+      if (!plan.runId || body.runId !== plan.runId) {
+        console.log(`[finalize] Ignoring stale call. payload runId=${body?.runId} current runId=${plan?.runId}`);
+        return Response.json({ status: 'stale_ignored' });
+      }
+
+      const allPolished = plan.polishedCues || [];
+      const language = plan.language || 'en';
+
+      console.log(`[FINALIZE] Enforcing rules on ${allPolished.length} cues...`);
       await addLog(base44, job_db_id, '3_finalize', 'running', 'Applying final formatting rules and QC...');
 
       const enforced = finalEnforce(allPolished);
