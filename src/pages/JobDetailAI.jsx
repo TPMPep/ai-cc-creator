@@ -43,7 +43,8 @@ export default function JobDetailAI() {
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
-        setCues(getCuesFromResult(jobs[0].result));
+        const loadedCues = await getCuesFromResultAsync(jobs[0].result);
+        setCues(loadedCues);
         // Kick off polling if job is still processing
         if (jobs[0].status === "processing" || jobs[0].status === "queued") {
           jobRef.current = jobs[0];
