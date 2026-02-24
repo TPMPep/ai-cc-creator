@@ -632,6 +632,7 @@ Deno.serve(async (req) => {
       const scc = buildSCC(enforced);
       const durationMs = enforced.length > 0 ? enforced[enforced.length - 1].end : 0;
 
+      const cueChunks = chunkString(JSON.stringify(enforced), 75000);
       const srtChunks = chunkString(srt);
       const vttChunks = chunkString(vtt);
       const sccChunks = chunkString(scc);
@@ -639,7 +640,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: {
-          cues: enforced,
+          cue_chunks: cueChunks,
           srt_chunks: srtChunks,
           vtt_chunks: vttChunks,
           scc_chunks: sccChunks,
