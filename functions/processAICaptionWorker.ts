@@ -297,7 +297,7 @@ ${highlightDump}`;
     finalMerged.push(cue);
   }
 
-  return finalMerged;
+  return { cues: finalMerged, tokens: batchTokens };
 }
 
 // ─── FINAL ENFORCEMENT ───────────────────────────────────────────────────────
