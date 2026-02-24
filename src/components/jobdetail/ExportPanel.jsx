@@ -55,6 +55,7 @@ export default function ExportPanel({ result, title, jobId }) {
   const hasScc = result.scc_url || result.scc || result.scc_text || result.scc_chunks;
   const hasSrt = result.srt_url || result.srt || result.srt_text || result.srt_chunks;
   const hasVtt = result.vtt_url || result.vtt || result.vtt_text || result.vtt_chunks;
+  const hasCueUrl = !!result.cue_url;
 
   const handleDownload = async (urlOrContent, isUrl, filename) => {
     setDownloading(filename);
