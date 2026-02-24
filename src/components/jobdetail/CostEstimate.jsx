@@ -32,8 +32,10 @@ export default function CostEstimate({ costEstimate }) {
 
         {audioDurationSec > 0 && (
           <>
-            <span className="text-zinc-600 pl-2">Audio</span>
-            <span className="text-zinc-500 text-right font-mono">{Math.floor(audioDurationSec / 60)}m {Math.round(audioDurationSec % 60)}s</span>
+            <span className="text-zinc-600 pl-2">Duration</span>
+            <span className="text-zinc-500 text-right font-mono">{(audioDurationSec / 60).toFixed(1)} min</span>
+            <span className="text-zinc-600 pl-2">Rate</span>
+            <span className="text-zinc-500 text-right font-mono">$0.0108/min</span>
           </>
         )}
 
