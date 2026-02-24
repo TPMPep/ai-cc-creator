@@ -31,9 +31,19 @@ export default function JobDetailAI() {
   const [cues, setCues] = useState([]);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
+  const [videoCompact, setVideoCompact] = useState(false);
 
   const [elapsedSec, setElapsedSec] = useState(0);
   const jobId = searchParams.get("jobId"); // This is the AssemblyAI transcript_id
+
+  // Shrink video player on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      setVideoCompact(window.scrollY > 80);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Load job from DB
   useEffect(() => {
