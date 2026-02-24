@@ -645,22 +645,51 @@ Deno.serve(async (req) => {
 
       const cueJson = JSON.stringify(enforced);
       console.log("[WORKER FINALIZE] Cue JSON size:", cueJson.length);
-      const cueChunks = chunkString(cueJson);
-      const srtChunks = chunkString(srt);
-      const vttChunks = chunkString(vtt);
-      const sccChunks = chunkString(scc);
+
+      // Upload large text content as files to avoid DB field size limits
+      async function uploadText(text, filename) {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file: blob });
+        return file_url;
+      }
+
+      let resultPayload;
+
+      // If cue JSON is large (>30K), upload all content as files instead of chunking
+      if (cueJson.length > 30000) {
+        console.log("[WORKER FINALIZE] Large output — uploading as files");
+        const [cueUrl, srtUrl, vttUrl, sccUrl] = await Promise.all([
+          uploadText(cueJson, `job_${job_db_id}_cues.json`),
+          uploadText(srt, `job_${job_db_id}.srt`),
+          uploadText(vtt, `job_${job_db_id}.vtt`),
+          uploadText(scc, `job_${job_db_id}.scc`),
+        ]);
+
+        resultPayload = {
+          cue_url: cueUrl,
+          srt_url: srtUrl,
+          vtt_url: vttUrl,
+          scc_url: sccUrl,
+          qc, language,
+        };
+      } else {
+        resultPayload = {
+          cue_chunks: [cueJson],
+          srt_chunks: chunkString(srt),
+          vtt_chunks: chunkString(vtt),
+          scc_chunks: chunkString(scc),
+          qc, language,
+        };
+      }
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
-        result: {
-          cue_chunks: cueChunks,
-          srt_chunks: srtChunks,
-          vtt_chunks: vttChunks,
-          scc_chunks: sccChunks,
-          qc, language,
-        },
+        result: resultPayload,
         durationMs,
         issuesCount: qc.issuesCount,
+        processingPlan: null,
       });
 
       await addLog(base44, job_db_id, '3_finalize', 'ok',
