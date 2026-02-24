@@ -1,9 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// ─── INTERNAL CHAIN SECRET & HELPERS ────────────────────────────────────────
-
-const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
-
 /** Break large strings into chunks to avoid entity/field size limits */
 function chunkString(str, size = 75000) {
   const chunks = [];
