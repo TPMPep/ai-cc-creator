@@ -764,11 +764,10 @@ Deno.serve(async (req) => {
         processingPlan: { ...freshPlan, polishedCues: allPolished },
       });
 
-      // More batches remaining — chain to self with runId
+      // More batches remaining — return status so frontend can call next batch
       if (batchIndex < totalBatches) {
-        console.log(`[CHAIN] Processed ${processedCount} batches, chaining to batch ${batchIndex}...`);
-        chainToSelf({ action: 'process_batch', job_db_id, transcript_id, batch_index: batchIndex, runId: body.runId });
-        return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches });
+        console.log(`[BATCH_CHUNK] Processed ${processedCount} batches, next is batch ${batchIndex}`);
+        return Response.json({ status: 'batch_chunk_done', next_batch: batchIndex, total: totalBatches, runId: body.runId });
       }
 
       // ── FINALIZE ─────────────────────────────────────────────────────────
