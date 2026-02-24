@@ -5,6 +5,8 @@ const API_BASE = "https://web-production-eba27.up.railway.app";
 export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, captionSettings }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [activeCue, setActiveCue] = useState(null);
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(800);
 
   const handleTimeUpdate = useCallback(() => {
     if (!videoRef.current) return;
