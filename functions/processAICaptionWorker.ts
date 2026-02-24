@@ -702,12 +702,31 @@ Deno.serve(async (req) => {
         };
       }
 
+      // Calculate cost estimate
+      const audioDurationSec = durationMs / 1000;
+      const openaiInputTokens = plan.openaiInputTokens || 0;
+      const openaiOutputTokens = plan.openaiOutputTokens || 0;
+      // AssemblyAI: $0.65 per hour (with speaker labels, language detection, auto highlights)
+      const assemblyaiCost = (audioDurationSec / 3600) * 0.65;
+      // OpenAI GPT-4o: $2.50/1M input, $10.00/1M output
+      const openaiCost = (openaiInputTokens / 1_000_000) * 2.50 + (openaiOutputTokens / 1_000_000) * 10.00;
+      const costEstimate = {
+        assemblyai: Math.round(assemblyaiCost * 10000) / 10000,
+        openai: Math.round(openaiCost * 10000) / 10000,
+        total: Math.round((assemblyaiCost + openaiCost) * 10000) / 10000,
+        audioDurationSec: Math.round(audioDurationSec),
+        openaiInputTokens,
+        openaiOutputTokens,
+      };
+      console.log(`[WORKER FINALIZE] Cost estimate:`, JSON.stringify(costEstimate));
+
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'done',
         result: resultPayload,
         durationMs,
         issuesCount: qc.issuesCount,
         processingPlan: null,
+        costEstimate,
       });
 
       await addLog(base44, job_db_id, '3_finalize', 'ok',
