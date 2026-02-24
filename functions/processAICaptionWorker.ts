@@ -563,8 +563,16 @@ Deno.serve(async (req) => {
       const freshPlan = freshJob.processingPlan;
       const allPolished = [...(freshPlan.polishedCues || []), ...allNewCues];
 
+      // Strip batches and utterances from plan before saving to reduce field size
+      const slimPlan = { ...freshPlan, polishedCues: allPolished };
+      // Only keep batches/utterances if we still have batches to process
+      if (batchIndex >= totalBatches) {
+        delete slimPlan.batches;
+        delete slimPlan.utterances;
+      }
+
       await base44.asServiceRole.entities.Job.update(job_db_id, {
-        processingPlan: { ...freshPlan, polishedCues: allPolished },
+        processingPlan: slimPlan,
       });
 
       // More batches remaining — invoke THIS worker again via SDK (different endpoint, no loop detection)
