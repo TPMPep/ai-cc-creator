@@ -250,6 +250,11 @@ export default function JobDetailAI() {
               <Sparkles className="w-3 h-3" /> AI Pipeline
             </span>
             <span className="text-xs text-zinc-600">{moment(job.created_date).format("MMM D, YYYY h:mm A")}</span>
+            <div className="w-full mt-1 flex items-center gap-3 text-xs text-zinc-500">
+              <span className="font-mono">Job: {job.railwayJobId}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="truncate max-w-md" title={job.mediaUrl}>{decodeURIComponent(job.mediaUrl?.split('/').pop() || '')}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {isDone && (
