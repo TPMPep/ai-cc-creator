@@ -562,8 +562,9 @@ async function addLog(base44, jobId, step, status, detail) {
 // sequential. No asServiceRole.functions.invoke (which causes 403).
 //
 // Actions:
-//   "start"         — fetch transcript, pre-segment, start processing batches
-//   "process_batch" — process up to 3 batches, chain or finalize
+//   "start"         — fetch transcript, pre-segment, chain to process_batch
+//   "process_batch" — process up to 3 batches, chain to next chunk or finalize
+//   "finalize"      — enforce rules, build exports, QC, mark done
 //   "reprocess"     — reset job, re-run GPT on saved transcript data
 
 const BATCHES_PER_INVOCATION = 3;
