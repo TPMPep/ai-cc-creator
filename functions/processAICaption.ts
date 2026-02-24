@@ -582,19 +582,10 @@ Deno.serve(async (req) => {
     }
 
     const action = body?.action;
-    const internal = isInternalChain(body);
 
-    // Only require a real user for start/reprocess actions.
-    // process_batch is allowed for internal chain calls.
-    if (!internal) {
-      const user = await base44.auth.me();
-      if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Internal calls cannot start/reprocess jobs (safety guard).
-    if (internal && (action === 'start' || action === 'reprocess')) {
-      return Response.json({ error: 'Internal chain cannot perform start/reprocess' }, { status: 403 });
-    }
+    // All calls now come from the frontend with user auth
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const transcript_id = body.transcript_id;
     job_db_id = body.job_db_id;
