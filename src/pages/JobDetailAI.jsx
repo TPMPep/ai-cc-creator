@@ -110,13 +110,9 @@ export default function JobDetailAI() {
     // Reset local state immediately to show processing UI
     setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], result: null, created_date: new Date(reprocessStartRef.current).toISOString() }));
     setCues([]);
-    // Fire-and-forget — polling will pick up progress
-    base44.functions.invoke("processAICaption", {
-      transcript_id: job.railwayJobId,
-      job_db_id: job.id,
-      action: "reprocess",
-    }).catch(err => console.error("handleReprocess error:", err));
-  }, [job]);
+    // Drive the full batch loop from the frontend
+    driveProcessing(job, "reprocess").catch(err => console.error("handleReprocess error:", err));
+  }, [job, driveProcessing]);
 
   const doPoll = useCallback(async () => {
     const currentJob = jobRef.current;
