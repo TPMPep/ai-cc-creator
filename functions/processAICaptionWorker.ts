@@ -622,6 +622,17 @@ Deno.serve(async (req) => {
       const allPolished = plan.polishedCues || [];
       const language = plan.language || 'en';
 
+      // GUARD: Never mark a job as done with zero cues
+      if (!allPolished.length) {
+        console.error(`[WORKER FINALIZE] Zero polished cues for job ${job_db_id}. Marking as error.`);
+        await addLog(base44, job_db_id, '3_finalize', 'error', 'Finalize attempted with zero polished cues.');
+        await base44.asServiceRole.entities.Job.update(job_db_id, {
+          status: 'error',
+          error: 'Finalize attempted with zero polished cues. Batches may not have run.',
+        });
+        return Response.json({ error: 'No polished cues to finalize' }, { status: 500 });
+      }
+
       console.log(`[WORKER FINALIZE] Enforcing rules on ${allPolished.length} cues...`);
       await addLog(base44, job_db_id, '3_finalize', 'running', 'Applying final formatting rules and QC...');
 
