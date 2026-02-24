@@ -656,10 +656,8 @@ Deno.serve(async (req) => {
 
       // Upload large text content as files to avoid DB field size limits
       async function uploadText(text, filename) {
-        const blob = new Blob([text], { type: 'text/plain' });
-        const formData = new FormData();
-        formData.append('file', blob, filename);
-        const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file: blob });
+        const file = new File([text], filename, { type: 'text/plain' });
+        const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file });
         return file_url;
       }
 
