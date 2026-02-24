@@ -124,9 +124,13 @@ export default function ExportPanel({ result, title, jobId }) {
             VTT
           </DownloadBtn>
         )}
-        <DownloadBtn onClick={() => {
-          const cues = getCuesFromResult(result);
-          downloadBlob(JSON.stringify(cues, null, 2), `${safeName}_${jobId}.json`, "application/json");
+        <DownloadBtn onClick={async () => {
+          if (result.cue_url) {
+            await handleDownload(result.cue_url, true, `${safeName}_${jobId}.json`);
+          } else {
+            const cues = getCuesFromResult(result);
+            downloadBlob(JSON.stringify(cues, null, 2), `${safeName}_${jobId}.json`, "application/json");
+          }
         }}>
           JSON (Cues)
         </DownloadBtn>
