@@ -71,18 +71,18 @@ Deno.serve(async (req) => {
           ],
         });
 
-        // Invoke processAICaption with the correct action + fresh runId
+        // Invoke the WORKER function (not processAICaption) to avoid 508 loop detection
         const payload = {
-          transcript_id: job.railwayJobId,
           job_db_id: job.id,
           action: nextAction,
           runId: newRunId,
         };
         if (nextAction === 'process_batch') {
           payload.batch_index = nextBatch;
+          payload.transcript_id = job.railwayJobId;
         }
 
-        base44.asServiceRole.functions.invoke('processAICaption', payload).catch(() => {});
+        base44.asServiceRole.functions.invoke('processAICaptionWorker', payload).catch(() => {});
 
         recovered++;
         details.push({
