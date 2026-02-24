@@ -259,11 +259,11 @@ export default function JobDetailAI() {
           <div className="flex items-center gap-2">
             {isDone && (
               <>
-                <Button size="sm" variant="outline" onClick={handleReprocess} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                <Button size="sm" variant="outline" onClick={handleReprocess} className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white">
                   <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reprocess
                 </Button>
                 <Link to={createPageUrl("DiagnosticAI") + `?jobId=${job.id}`}>
-                  <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                  <Button size="sm" variant="outline" className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white">
                     <FlaskConical className="w-3.5 h-3.5 mr-1.5" /> Diagnostic
                   </Button>
                 </Link>
@@ -335,11 +335,11 @@ export default function JobDetailAI() {
 
                 {/* Actions */}
             <div className="flex items-center justify-center gap-3">
-              <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-800 text-zinc-400 hover:text-white">
+              <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check now
               </Button>
               <Link to={createPageUrl("NewJobAI")}>
-                <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Plus className="w-3.5 h-3.5 mr-1.5" /> Start another job
                 </Button>
               </Link>
