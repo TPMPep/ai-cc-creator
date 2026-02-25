@@ -1,8 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-// v4 - redeploy with INTERNAL_CHAIN_SECRET check
-// deployed: 2026-02-25
+// processAICaption v5 — 2026-02-25T12:00:00Z
+// Handles START and REPROCESS actions, delegates to processAICaptionWorker
 
 /** Generate a unique runId */
 function newRunId() {
@@ -150,9 +149,9 @@ Deno.serve(async (req) => {
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET");
-    console.log(`[ENV CHECK v4] INTERNAL_CHAIN_SECRET defined: ${!!INTERNAL_CHAIN_SECRET}, length: ${INTERNAL_CHAIN_SECRET?.length || 0}`);
+    console.log(`[v5 ENV] CHAIN_SECRET present: ${!!INTERNAL_CHAIN_SECRET}, len: ${INTERNAL_CHAIN_SECRET?.length || 0}, AAI present: ${!!ASSEMBLYAI_API_KEY}`);
     if (!INTERNAL_CHAIN_SECRET) {
-      return Response.json({ error: 'INTERNAL_CHAIN_SECRET is not defined' }, { status: 500 });
+      throw new Error("INTERNAL_CHAIN_SECRET is not defined — check Settings > Secrets");
     }
 
     // ── ACTION: START ────────────────────────────────────────────────────────
