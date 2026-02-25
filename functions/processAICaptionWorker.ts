@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // ─── INTERNAL CHAIN SECRET ───────────────────────────────────────────────────
+// v2 - force redeploy
 
 const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
 
