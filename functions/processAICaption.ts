@@ -150,6 +150,7 @@ Deno.serve(async (req) => {
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET");
+    console.log(`[ENV CHECK v4] INTERNAL_CHAIN_SECRET defined: ${!!INTERNAL_CHAIN_SECRET}, length: ${INTERNAL_CHAIN_SECRET?.length || 0}`);
     if (!INTERNAL_CHAIN_SECRET) {
       return Response.json({ error: 'INTERNAL_CHAIN_SECRET is not defined' }, { status: 500 });
     }
