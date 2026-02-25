@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import VideoPlayer from "../components/jobdetail/VideoPlayer";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
-import { getCuesFromResult } from "../components/shared/CueUtils";
+import { getCuesFromResult, getCuesFromResultAsync } from "../components/shared/CueUtils";
 
 const API_BASE = "https://web-production-eba27.up.railway.app";
 
