@@ -718,6 +718,9 @@ Deno.serve(async (req) => {
           srt_chunks: chunkString(srt),
           vtt_chunks: chunkString(vtt),
           scc_chunks: chunkString(scc),
+          assemblyRawCues: diagnosticData.assemblyRawCues,
+          assemblyUtterances: diagnosticData.assemblyUtterances,
+          openaiReformattedCues: diagnosticData.openaiReformattedCues,
           qc, language,
         };
       }
