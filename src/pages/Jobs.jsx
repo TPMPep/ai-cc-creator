@@ -28,7 +28,7 @@ export default function Jobs() {
     const load = async () => {
       const u = await base44.auth.me();
       setUser(u);
-      const allJobs = await base44.entities.Job.filter({ userId: u.email }, "-created_date", 200);
+      const allJobs = await base44.entities.Job.list("-created_date", 200);
       setJobs(allJobs);
       setLoading(false);
     };
@@ -115,7 +115,7 @@ export default function Jobs() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white">Jobs</h1>
-            <p className="text-sm text-zinc-500 mt-1">Your caption generation history.</p>
+            <p className="text-sm text-zinc-500 mt-1">All caption generation jobs.</p>
           </div>
           <Link to={createPageUrl("NewJob")}>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -170,6 +170,7 @@ export default function Jobs() {
               <TableHeader>
                 <TableRow className="border-zinc-800/60 hover:bg-transparent">
                   <TableHead className="text-zinc-500 text-xs font-medium">Title</TableHead>
+                  <TableHead className="text-zinc-500 text-xs font-medium">Created By</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Job ID</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Created</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Status</TableHead>
@@ -187,6 +188,9 @@ export default function Jobs() {
                       >
                         {job.title || "Untitled"}
                       </Link>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-zinc-400">{job.userId || "—"}</span>
                     </TableCell>
                     <TableCell>
                       <span className="text-xs text-zinc-500 font-mono">{job.railwayJobId || job.jobId}</span>
