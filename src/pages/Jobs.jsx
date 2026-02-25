@@ -19,6 +19,7 @@ export default function Jobs() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [user, setUser] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(null);
+  const [userNames, setUserNames] = useState({});
   const pollTimerRef = useRef(null);
   const jobsRef = useRef([]);
 
@@ -29,6 +30,11 @@ export default function Jobs() {
       const u = await base44.auth.me();
       setUser(u);
       const allJobs = await base44.entities.Job.list("-created_date", 200);
+      // Fetch all users to map emails to names
+      const allUsers = await base44.entities.User.list();
+      const userMap = {};
+      allUsers.forEach(u2 => { userMap[u2.email] = u2.full_name || u2.email; });
+      setUserNames(userMap);
       setJobs(allJobs);
       setLoading(false);
     };
@@ -190,7 +196,7 @@ export default function Jobs() {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <span className="text-xs text-zinc-400">{job.userId || "—"}</span>
+                      <span className="text-xs text-zinc-400">{userNames[job.userId] || job.userId || "—"}</span>
                     </TableCell>
                     <TableCell>
                       <span className="text-xs text-zinc-500 font-mono">{job.railwayJobId || job.jobId}</span>
