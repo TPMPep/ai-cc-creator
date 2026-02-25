@@ -660,6 +660,17 @@ Deno.serve(async (req) => {
       console.log(`[WORKER FINALIZE] Enforcing rules on ${allPolished.length} cues...`);
       await addLog(base44, job_db_id, '3_finalize', 'running', 'Applying final formatting rules and QC...');
 
+      // Capture intermediate data for diagnostics before enforcement
+      const diagnosticData = {
+        assemblyUtterances: plan.utterances || [],
+        assemblyRawCues: plan.utterances ? plan.utterances.map(u => ({
+          start: u.start, end: u.end, text: u.text, speaker: u.speaker
+        })) : [],
+        openaiReformattedCues: allPolished.map(c => ({
+          start: c.start, end: c.end, text: c.text, speaker: c.speaker
+        })),
+      };
+
       const enforced = finalEnforce(allPolished);
       const qc = runQC(enforced);
       const srt = buildSRT(enforced);
