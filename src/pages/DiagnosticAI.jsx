@@ -76,8 +76,15 @@ export default function DiagnosticAI() {
 
   useEffect(() => {
     if (!jobId) { setLoading(false); return; }
-    base44.entities.Job.filter({ id: jobId }, "-created_date", 1).then(jobs => {
-      if (jobs.length > 0) setJob(jobs[0]);
+    // Try by DB id first, then by railwayJobId
+    base44.entities.Job.filter({ id: jobId }, "-created_date", 1).then(async (jobs) => {
+      if (jobs.length > 0) {
+        setJob(jobs[0]);
+      } else {
+        // Fallback: jobId might be a railwayJobId
+        const byRailway = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
+        if (byRailway.length > 0) setJob(byRailway[0]);
+      }
       setLoading(false);
     });
   }, [jobId]);
