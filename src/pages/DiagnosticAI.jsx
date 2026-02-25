@@ -112,7 +112,13 @@ export default function DiagnosticAI() {
     }
   }, [job?.result]);
 
-  const finalCues = getCuesFromResult(job?.result);
+  const [finalCues, setFinalCues] = useState([]);
+
+  useEffect(() => {
+    if (!job?.result) { setFinalCues([]); return; }
+    getCuesFromResultAsync(job.result).then(setFinalCues);
+  }, [job?.result]);
+
   const assemblyCues = diagnosticData?.assemblyCues || [];
   const assemblyUtterances = diagnosticData?.assemblyUtterances || [];
   const openaiCues = diagnosticData?.openaiCues || [];
