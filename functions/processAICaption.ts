@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-// v2 - force redeploy
+// v3 - force redeploy after secret set
 
 /** Generate a unique runId */
 function newRunId() {
