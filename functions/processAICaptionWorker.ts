@@ -559,7 +559,7 @@ Deno.serve(async (req) => {
         console.log(`[WORKER BATCH ${batchIndex + 1}/${totalBatches}] Got ${batchResult.cues.length} cues, tokens: in=${batchResult.tokens.inputTokens} out=${batchResult.tokens.outputTokens}`);
 
         await addLog(base44, job_db_id, `2_gpt_batch_${batchIndex + 1}_of_${totalBatches}`, 'ok',
-          `Batch ${batchIndex + 1}/${totalBatches} done — ${polishedBatch.length} cues`);
+          `Batch ${batchIndex + 1}/${totalBatches} done — ${batchResult.cues.length} cues`);
 
         batchIndex++;
         processedCount++;
