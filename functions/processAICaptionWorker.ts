@@ -700,11 +700,16 @@ Deno.serve(async (req) => {
           uploadText(scc, `job_${job_db_id}.scc`),
         ]);
 
+        // Upload diagnostic data as a file too
+        const diagJson = JSON.stringify(diagnosticData);
+        const diagUrl = await uploadText(diagJson, `job_${job_db_id}_diagnostic.json`);
+
         resultPayload = {
           cue_url: cueUrl,
           srt_url: srtUrl,
           vtt_url: vttUrl,
           scc_url: sccUrl,
+          diagnostic_url: diagUrl,
           qc, language,
         };
       } else {
