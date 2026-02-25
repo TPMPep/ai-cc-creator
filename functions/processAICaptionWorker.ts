@@ -5,7 +5,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
 
 function isInternalChain(payload) {
-  if (!INTERNAL_CHAIN_SECRET) return false;
+  // If secret is not configured, log a warning but still reject
+  if (!INTERNAL_CHAIN_SECRET) {
+    console.error("[WORKER] INTERNAL_CHAIN_SECRET env var is not set!");
+    return false;
+  }
   return payload?.chain_secret === INTERNAL_CHAIN_SECRET;
 }
 
