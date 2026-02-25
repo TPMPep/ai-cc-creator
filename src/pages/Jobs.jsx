@@ -41,56 +41,28 @@ export default function Jobs() {
     load();
   }, []);
 
-  // Poll processing AI jobs so the list stays accurate when user navigates back
+  // Poll processing AI jobs — just re-fetch from DB to pick up status changes from server-side worker
   useEffect(() => {
     const pollProcessing = async () => {
-      const processingAIJobs = jobsRef.current.filter(
-        j => (j.status === "processing" || j.status === "queued") && j.pipeline === "ai"
+      const processingJobs = jobsRef.current.filter(
+        j => j.status === "processing" || j.status === "queued"
       );
-      if (processingAIJobs.length === 0) return;
+      if (processingJobs.length === 0) return;
 
-      for (const job of processingAIJobs) {
-        try {
-          const res = await base44.functions.invoke("pollAICaption", { transcript_id: job.railwayJobId });
-          const data = res.data;
+      // Re-fetch all jobs to get latest status
+      const allJobs = await base44.entities.Job.list("-created_date", 200);
+      setJobs(allJobs);
 
-          if (data.status === "completed") {
-            const cueStr = JSON.stringify(data.cues || []);
-            const cueChunks = [];
-            for (let i = 0; i < cueStr.length; i += 75000) {
-              cueChunks.push(cueStr.slice(i, i + 75000));
-            }
-            const updates = {
-              status: "done",
-              result: {
-                cue_chunks: cueChunks,
-                srt: data.exports?.srt,
-                vtt: data.exports?.vtt,
-                scc: data.exports?.scc,
-                qc: data.qc,
-                language: data.language,
-                diagnostic: data.diagnostic || null,
-              },
-              durationMs: data.cues?.length > 0 ? data.cues[data.cues.length - 1].end : 0,
-              issuesCount: data.qc?.issuesCount || 0,
-              lastPolledAt: new Date().toISOString(),
-            };
-            await base44.entities.Job.update(job.id, updates);
-            setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j));
-            toast.success(`"${job.title || "Job"}" is ready!`);
-          } else if (data.status === "error") {
-            const updates = { status: "error", error: data.error || "Transcription failed" };
-            await base44.entities.Job.update(job.id, updates);
-            setJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...updates } : j));
-          }
-        } catch (err) {
-          console.error("Background poll error for job", job.id, err);
+      // Notify if any just finished
+      for (const oldJob of processingJobs) {
+        const updated = allJobs.find(j => j.id === oldJob.id);
+        if (updated?.status === "done") {
+          toast.success(`"${updated.title || "Job"}" is ready!`);
         }
       }
     };
 
-    // Poll every 20s — GPT-4o takes time, no need to hammer it
-    pollTimerRef.current = setInterval(pollProcessing, 20000);
+    pollTimerRef.current = setInterval(pollProcessing, 15000);
     return () => clearInterval(pollTimerRef.current);
   }, []);
 
