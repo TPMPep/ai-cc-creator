@@ -684,11 +684,9 @@ Deno.serve(async (req) => {
 
       // Upload large text content as files to avoid DB field size limits
       async function uploadText(text, filename) {
-        // Write to /tmp and read back as a proper File object
-        const tmpPath = `/tmp/${filename}`;
-        await Deno.writeTextFile(tmpPath, text);
-        const bytes = await Deno.readFile(tmpPath);
-        const file = new File([bytes], filename, { type: 'text/plain' });
+        const encoder = new TextEncoder();
+        const uint8 = encoder.encode(text);
+        const file = new File([uint8], filename, { type: 'text/plain' });
         const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file });
         return file_url;
       }
