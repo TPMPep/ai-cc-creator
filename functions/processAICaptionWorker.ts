@@ -1,18 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// ─── INTERNAL CHAIN SECRET ───────────────────────────────────────────────────
-// processAICaptionWorker v6 — 2026-02-26T10:00:00Z
-
-const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
-
-function isInternalChain(payload) {
-  // If secret is not configured, log a warning but still reject
-  if (!INTERNAL_CHAIN_SECRET) {
-    console.error("[WORKER] INTERNAL_CHAIN_SECRET env var is not set!");
-    return false;
-  }
-  return payload?.chain_secret === INTERNAL_CHAIN_SECRET;
-}
+// processAICaptionWorker v8 — 2026-02-26
+// Authentication: Uses SDK service-role auth instead of chain_secret.
 
 // ─── SHARED HELPERS ──────────────────────────────────────────────────────────
 
@@ -484,13 +473,6 @@ Deno.serve(async (req) => {
     }
 
     const action = body?.action;
-    const internal = isInternalChain(body);
-
-    // SECURITY: Worker ONLY accepts calls with valid chain_secret.
-    // No auth.me() — this avoids 403 from expired user tokens or service role edge cases.
-    if (!internal) {
-      return Response.json({ error: 'Forbidden: missing or invalid chain_secret' }, { status: 403 });
-    }
 
     // Only allow process_batch and finalize actions
     if (!['process_batch', 'finalize'].includes(action)) {
