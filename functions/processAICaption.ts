@@ -148,8 +148,7 @@ Deno.serve(async (req) => {
     }
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
-    const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET");
-    console.log(`[v7 processAICaption] CHAIN_SECRET present: ${!!INTERNAL_CHAIN_SECRET}, AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
+    console.log(`[v8 processAICaption] AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
 
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
@@ -165,7 +164,6 @@ Deno.serve(async (req) => {
         transcript_id,
         batch_index: 0,
         runId,
-        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[START WORKER INVOKE ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {
@@ -229,7 +227,6 @@ Deno.serve(async (req) => {
         transcript_id: job.railwayJobId,
         batch_index: 0,
         runId,
-        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[REPROCESS WORKER INVOKE ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {
