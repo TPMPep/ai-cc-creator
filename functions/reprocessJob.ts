@@ -420,17 +420,32 @@ Deno.serve(async (req) => {
       return file_url;
     }
 
+    // Build diagnostic data
+    const diagnosticData = {
+      assemblyRawCues: segments.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker })),
+      assemblyUtterances: utterances.map(u => ({ start: u.start, end: u.end, text: u.text, speaker: u.speaker })),
+      openaiReformattedCues: allCues.map(c => ({ start: c.start, end: c.end, text: c.text, speaker: c.speaker })),
+    };
+
     let resultPayload;
     if (cueJson.length > 30000) {
-      const [cueUrl, srtUrl, vttUrl, sccUrl] = await Promise.all([
+      const diagJson = JSON.stringify(diagnosticData);
+      const [cueUrl, srtUrl, vttUrl, sccUrl, diagUrl] = await Promise.all([
         uploadText(cueJson, `job_${job_db_id}_cues.json`),
         uploadText(srt, `job_${job_db_id}.srt`),
         uploadText(vtt, `job_${job_db_id}.vtt`),
         uploadText(scc, `job_${job_db_id}.scc`),
+        uploadText(diagJson, `job_${job_db_id}_diagnostic.json`),
       ]);
-      resultPayload = { cue_url: cueUrl, srt_url: srtUrl, vtt_url: vttUrl, scc_url: sccUrl, qc, language };
+      resultPayload = { cue_url: cueUrl, srt_url: srtUrl, vtt_url: vttUrl, scc_url: sccUrl, diagnostic_url: diagUrl, qc, language };
     } else {
-      resultPayload = { cue_chunks: [cueJson], srt_chunks: chunkString(srt), vtt_chunks: chunkString(vtt), scc_chunks: chunkString(scc), qc, language };
+      resultPayload = {
+        cue_chunks: [cueJson], srt_chunks: chunkString(srt), vtt_chunks: chunkString(vtt), scc_chunks: chunkString(scc),
+        assemblyRawCues: diagnosticData.assemblyRawCues,
+        assemblyUtterances: diagnosticData.assemblyUtterances,
+        openaiReformattedCues: diagnosticData.openaiReformattedCues,
+        qc, language,
+      };
     }
 
     const audioDurationSec = durationMs / 1000;
