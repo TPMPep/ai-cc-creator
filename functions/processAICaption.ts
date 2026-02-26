@@ -149,14 +149,7 @@ Deno.serve(async (req) => {
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
     const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET");
-    console.log(`[v6 processAICaption] CHAIN_SECRET present: ${!!INTERNAL_CHAIN_SECRET}, len: ${INTERNAL_CHAIN_SECRET?.length || 0}, AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
-    if (!INTERNAL_CHAIN_SECRET) {
-      // Fallback: try reading it again in case of cold-start race
-      const retrySecret = Deno.env.get("INTERNAL_CHAIN_SECRET");
-      if (!retrySecret) {
-        throw new Error("INTERNAL_CHAIN_SECRET is not defined — check Settings > Secrets (v6)");
-      }
-    }
+    console.log(`[v7 processAICaption] CHAIN_SECRET present: ${!!INTERNAL_CHAIN_SECRET}, AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
 
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
