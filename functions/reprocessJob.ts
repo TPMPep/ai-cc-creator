@@ -412,10 +412,10 @@ Deno.serve(async (req) => {
     const cueJson = JSON.stringify(enforced);
 
     async function uploadText(text, filename) {
-      const tmpPath = `/tmp/${filename}`;
-      await Deno.writeTextFile(tmpPath, text);
-      const bytes = await Deno.readFile(tmpPath);
-      const file = new File([bytes], filename, { type: 'text/plain' });
+      // Use File constructor directly from text (no /tmp needed)
+      const encoder = new TextEncoder();
+      const uint8 = encoder.encode(text);
+      const file = new File([uint8], filename, { type: 'text/plain' });
       const { file_url } = await base44.asServiceRole.integrations.Core.UploadFile({ file });
       return file_url;
     }
