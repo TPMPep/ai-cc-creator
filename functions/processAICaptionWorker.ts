@@ -584,7 +584,6 @@ Deno.serve(async (req) => {
           transcript_id,
           batch_index: batchIndex,
           runId: body.runId,
-          chain_secret: INTERNAL_CHAIN_SECRET,
         }).catch(err => {
           console.error('[WORKER CHAIN ERROR]', err.message);
           base44.asServiceRole.entities.Job.update(job_db_id, {
@@ -601,7 +600,6 @@ Deno.serve(async (req) => {
         action: 'finalize',
         job_db_id,
         runId: body.runId,
-        chain_secret: INTERNAL_CHAIN_SECRET,
       }).catch(err => {
         console.error('[WORKER FINALIZE CHAIN ERROR]', err.message);
         base44.asServiceRole.entities.Job.update(job_db_id, {
