@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// processAICaption v5 — 2026-02-25T12:00:00Z
+// processAICaption v6 — 2026-02-26T10:00:00Z
 // Handles START and REPROCESS actions, delegates to processAICaptionWorker
 
 /** Generate a unique runId */

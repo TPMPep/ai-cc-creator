@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // ─── INTERNAL CHAIN SECRET ───────────────────────────────────────────────────
-// processAICaptionWorker v5 — 2026-02-25T12:00:00Z
+// processAICaptionWorker v6 — 2026-02-26T10:00:00Z
 
 const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
 
