@@ -562,12 +562,12 @@ Deno.serve(async (req) => {
       const freshPlan = freshJob.processingPlan;
       const allPolished = [...(freshPlan.polishedCues || []), ...allNewCues];
 
-      // Strip batches and utterances from plan before saving to reduce field size
+      // Strip batches from plan before saving to reduce field size
+      // KEEP utterances — they are needed by finalize for diagnostic data
       const slimPlan = { ...freshPlan, polishedCues: allPolished, openaiInputTokens: totalInputTokens, openaiOutputTokens: totalOutputTokens };
-      // Only keep batches/utterances if we still have batches to process
+      // Only strip batches if we're done processing them
       if (batchIndex >= totalBatches) {
         delete slimPlan.batches;
-        delete slimPlan.utterances;
       }
 
       await base44.asServiceRole.entities.Job.update(job_db_id, {
