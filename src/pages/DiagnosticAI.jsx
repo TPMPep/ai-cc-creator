@@ -18,7 +18,7 @@ function msToTimecode(ms) {
 }
 
 // Align rows: assign each assembly/openai cue to the final cue it overlaps MOST with (no duplicates)
-function alignRows(assemblyCues, openaiCues, finalCues, utterances, audioEvents) {
+function alignRows(assemblyCues, openaiCues, finalCues, utterances) {
     function assignBestMatch(sourceCues) {
       const assignments = new Array(finalCues.length).fill(null).map(() => []);
       for (const src of sourceCues) {
@@ -34,33 +34,15 @@ function alignRows(assemblyCues, openaiCues, finalCues, utterances, audioEvents)
       return assignments;
     }
 
-    // For audio events, assign to the final cue whose time range overlaps or is closest
-    function assignAudioEvents(events) {
-      const assignments = new Array(finalCues.length).fill(null).map(() => []);
-      for (const ev of events) {
-        let bestIdx = -1;
-        let bestOverlap = -Infinity;
-        for (let i = 0; i < finalCues.length; i++) {
-          const f = finalCues[i];
-          const overlap = Math.min(ev.end, f.end) - Math.max(ev.start, f.start);
-          if (overlap > bestOverlap) { bestOverlap = overlap; bestIdx = i; }
-        }
-        if (bestIdx >= 0) assignments[bestIdx].push(ev);
-      }
-      return assignments;
-    }
-
     const utteranceAssigned = assignBestMatch(utterances || []);
     const assemblyAssigned = assignBestMatch(assemblyCues);
     const openaiAssigned = assignBestMatch(openaiCues);
-    const audioEventAssigned = assignAudioEvents(audioEvents || []);
 
     return finalCues.map((final, i) => ({
       final,
       utterances: utteranceAssigned[i],
       assembly: assemblyAssigned[i],
       openai: openaiAssigned[i],
-      audioEvents: audioEventAssigned[i],
     }));
   }
 
