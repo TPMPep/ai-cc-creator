@@ -72,12 +72,11 @@ Deno.serve(async (req) => {
           ],
         });
 
-        // Invoke the WORKER function with chain_secret (worker requires it, no auth.me())
+        // Invoke the WORKER function via SDK service role
         const payload = {
           job_db_id: job.id,
           action: nextAction,
           runId: newRunId,
-          chain_secret: INTERNAL_CHAIN_SECRET,
         };
         if (nextAction === 'process_batch') {
           payload.batch_index = nextBatch;
