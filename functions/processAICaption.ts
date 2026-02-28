@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// processAICaption v6 — 2026-02-26T10:00:00Z
+// processAICaption v9 — 2026-02-28
 // Handles START and REPROCESS actions, delegates to processAICaptionWorker
 
 /** Generate a unique runId */
@@ -148,16 +148,74 @@ Deno.serve(async (req) => {
     }
 
     const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
-    console.log(`[v8 processAICaption] AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
+    console.log(`[v9 processAICaption] AAI present: ${!!ASSEMBLYAI_API_KEY}, ts: ${Date.now()}`);
 
     // ── ACTION: START ────────────────────────────────────────────────────────
     if (action === 'start') {
       if (!transcript_id) return Response.json({ error: 'transcript_id required for start' }, { status: 400 });
 
       console.log(`[START] Fetching transcript ${transcript_id} for job ${job_db_id}`);
-...
+
+      // Fetch transcript from AssemblyAI
+      const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
+        headers: { 'authorization': ASSEMBLYAI_API_KEY },
+      });
+      if (!aaiRes.ok) return Response.json({ error: `AssemblyAI fetch failed: ${aaiRes.status}` }, { status: 500 });
+      const transcript = await aaiRes.json();
+      if (transcript.status !== 'completed') return Response.json({ error: `Transcript not ready: ${transcript.status}` }, { status: 400 });
+
+      // Extract utterances
+      const utterances = (transcript.utterances || []).map(u => ({
+        start: u.start, end: u.end, text: u.text, speaker: u.speaker, words: u.words,
+      }));
+      const language = transcript.language_code || 'en';
+      const highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
+      const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
+      const gaps = findGaps(utterances, totalDurationMs);
+
+      // Extract content safety labels as rawAudioEvents for diagnostic
+      const rawAudioEvents = [];
+      const safetyResults = transcript.content_safety_labels?.results || [];
+      for (const r of safetyResults) {
+        for (const label of (r.labels || [])) {
+          rawAudioEvents.push({
+            label: label.label,
+            confidence: label.confidence,
+            severity: label.severity,
+            start: r.timestamp?.start || 0,
+            end: r.timestamp?.end || 0,
+            text: r.text || '',
+          });
+        }
+      }
+
+      // Build segments and batches
+      const segments = buildRawSegments(utterances);
+      const batches = buildBatches(segments);
+      const runId = newRunId();
+
+      await addLog(base44, job_db_id, '1_transcribe', 'ok',
+        `Transcript ready: ${utterances.length} utterances, lang=${language}, ${gaps.length} gaps`);
+
+      await base44.asServiceRole.entities.Job.update(job_db_id, {
+        status: 'processing',
+        pipelineLog: (await base44.asServiceRole.entities.Job.get(job_db_id)).pipelineLog || [],
+        processingPlan: {
+          utterances,
+          batches: batches.map(b => b.map(s => ({ start: s.start, end: s.end, text: s.text, speaker: s.speaker }))),
+          totalBatches: batches.length,
+          polishedCues: [],
+          gaps,
+          language,
+          highlights,
+          rawAudioEvents,
+          runId,
+        },
+      });
+
+      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}, runId=${runId}`);
+
       // Invoke the WORKER function (different deployment endpoint — no 508 loop detection)
-      // Always pass chain_secret so worker accepts regardless of SDK auth method
       base44.asServiceRole.functions.invoke('processAICaptionWorker', {
         action: 'process_batch',
         job_db_id,
@@ -197,6 +255,23 @@ Deno.serve(async (req) => {
         plan.highlights = (transcript.auto_highlights_result?.results || []).map(h => h.text);
         const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
         plan.gaps = findGaps(utterances, totalDurationMs);
+
+        // Extract content safety labels as rawAudioEvents for diagnostic
+        const rawAudioEvents = [];
+        const safetyResults = transcript.content_safety_labels?.results || [];
+        for (const r of safetyResults) {
+          for (const label of (r.labels || [])) {
+            rawAudioEvents.push({
+              label: label.label,
+              confidence: label.confidence,
+              severity: label.severity,
+              start: r.timestamp?.start || 0,
+              end: r.timestamp?.end || 0,
+              text: r.text || '',
+            });
+          }
+        }
+        plan.rawAudioEvents = rawAudioEvents;
       }
 
       const segments = buildRawSegments(utterances);
