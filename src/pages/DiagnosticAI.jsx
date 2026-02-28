@@ -121,7 +121,8 @@ export default function DiagnosticAI() {
   const assemblyCues = diagnosticData?.assemblyCues || [];
   const assemblyUtterances = diagnosticData?.assemblyUtterances || [];
   const openaiCues = diagnosticData?.openaiCues || [];
-  const rows = alignRows(assemblyCues, openaiCues, finalCues, assemblyUtterances);
+  const rawAudioEvents = diagnosticData?.rawAudioEvents || [];
+  const rows = alignRows(assemblyCues, openaiCues, finalCues, assemblyUtterances, rawAudioEvents);
   const activeFinalIndex = finalCues.findIndex(c => c.start <= currentTimeMs && currentTimeMs <= c.end);
 
   if (loading) return (
