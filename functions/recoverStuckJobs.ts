@@ -4,7 +4,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — fast recovery
 // Jobs with no processing plan at all get errored after this
 const NO_START_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
-const INTERNAL_CHAIN_SECRET = Deno.env.get("INTERNAL_CHAIN_SECRET") || "";
+// No longer needs INTERNAL_CHAIN_SECRET — SDK asServiceRole handles auth
 
 Deno.serve(async (req) => {
   try {
