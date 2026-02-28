@@ -226,6 +226,22 @@ export default function DiagnosticAI() {
                         )}
                       </div>
                     </td>
+                    {/* Audio Events */}
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="bg-pink-950/20 border border-pink-800/20 rounded p-2 min-h-[36px]">
+                        {row.audioEvents.length === 0 ? (
+                          <span className="text-zinc-700 italic">—</span>
+                        ) : (
+                          row.audioEvents.map((ev, j) => (
+                            <p key={j} className="text-pink-200 leading-relaxed mb-1 last:mb-0 text-[11px]">
+                              <span className="text-pink-400 font-medium">{ev.label}</span>
+                              <span className="text-pink-600 ml-1.5">{msToTimecode(ev.start)} → {msToTimecode(ev.end)}</span>
+                              {ev.confidence && <span className="text-pink-700 ml-1">({Math.round(ev.confidence * 100)}%)</span>}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    </td>
                     {/* AssemblyAI SRT */}
                     <td className="px-3 py-2.5 align-top">
                       <div className="bg-zinc-800/40 rounded p-2 min-h-[36px]">
