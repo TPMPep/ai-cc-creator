@@ -375,11 +375,16 @@ export default function JobDetailAI() {
               <div className="flex-1">
                 <h2 className="text-base font-semibold text-red-300 mb-1">Processing failed.</h2>
                 <p className="text-xs text-red-400/70 font-mono mt-2">{job.error || "Unknown error"}</p>
-                <Link to={createPageUrl("NewJobAI")}>
-                  <Button variant="outline" size="sm" className="border-red-500/30 text-red-300 hover:bg-red-500/10 mt-4">
-                    Try Again
+                <div className="flex items-center gap-3 mt-4">
+                  <Button variant="outline" size="sm" onClick={handleReprocess} className="border-blue-500/30 text-blue-300 hover:bg-blue-500/10">
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reprocess
                   </Button>
-                </Link>
+                  <Link to={createPageUrl("NewJobAI")}>
+                    <Button variant="outline" size="sm" className="border-red-500/30 text-red-300 hover:bg-red-500/10">
+                      Start New Job
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
