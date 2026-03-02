@@ -502,6 +502,14 @@ function finalEnforce(cues) {
     return r.split('\n').every(l => l.length <= MAX_CHARS) ? r : null;
   };
 
+  // Build dual-speaker cue helper for finalEnforce
+  const buildDual = (textA, textB) => {
+    const lineA = '- ' + textA.replace(/\n/g, ' ').replace(/^- /, '').trim();
+    const lineB = '- ' + textB.replace(/\n/g, ' ').replace(/^- /, '').trim();
+    if (lineA.length > MAX_CHARS || lineB.length > MAX_CHARS) return null;
+    return lineA + '\n' + lineB;
+  };
+
   for (let i = result.length - 1; i >= 0; i--) {
     const c = result[i];
     if (!c.text || isSndCue(c.text)) continue;
@@ -509,26 +517,50 @@ function finalEnforce(cues) {
     if (isMultiSpk(c)) continue;
     const plain = c.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const wc = plain.split(/\s+/).length;
-    if (wc > 2) continue;
+    const cDur = c.end - c.start;
+    const isShortCue = wc <= 4 || cDur < 1500;
+    if (!isShortCue) continue;
 
-    // Try backward merge — only if same speaker or no speaker info
+    // Try backward merge
     if (i > 0 && !isSndCue(result[i-1].text) && !isMultiSpk(result[i-1])) {
-      const sameSpeaker = c.speaker && result[i-1].speaker && c.speaker === result[i-1].speaker;
-      const noSpeakerInfo = !c.speaker || !result[i-1].speaker;
-      if (sameSpeaker || noSpeakerInfo) {
-        const combo = result[i-1].text.replace(/\n/g, ' ').replace(/^- /, '').trim() + ' ' + plain;
+      const prev = result[i-1];
+      const sameSpeaker = c.speaker && prev.speaker && c.speaker === prev.speaker;
+      const differentSpeaker = c.speaker && prev.speaker && c.speaker !== prev.speaker;
+      const noSpeakerInfo = !c.speaker || !prev.speaker;
+      const gapFromPrev = c.start - prev.end;
+
+      // Different speaker + close proximity → dual-speaker cue
+      if (differentSpeaker && (gapFromPrev < 500 || cDur < 1500 || wc <= 4)) {
+        const prevPlain = prev.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+        const dual = buildDual(prevPlain, plain);
+        if (dual) { result[i-1] = { ...prev, end: c.end, text: dual, speaker: null }; result.splice(i, 1); continue; }
+      }
+      // Same speaker → plain merge
+      if ((sameSpeaker || noSpeakerInfo) && wc <= 2) {
+        const combo = prev.text.replace(/\n/g, ' ').replace(/^- /, '').trim() + ' ' + plain;
         const repacked = repack(combo);
-        if (repacked) { result[i-1] = { ...result[i-1], end: c.end, text: repacked }; result.splice(i, 1); continue; }
+        if (repacked) { result[i-1] = { ...prev, end: c.end, text: repacked }; result.splice(i, 1); continue; }
       }
     }
-    // Try forward merge — only if same speaker or no speaker info
+    // Try forward merge
     if (i < result.length - 1 && !isSndCue(result[i+1].text) && !isMultiSpk(result[i+1])) {
-      const sameSpeaker = c.speaker && result[i+1].speaker && c.speaker === result[i+1].speaker;
-      const noSpeakerInfo = !c.speaker || !result[i+1].speaker;
-      if (sameSpeaker || noSpeakerInfo) {
-        const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+      const next = result[i+1];
+      const sameSpeaker = c.speaker && next.speaker && c.speaker === next.speaker;
+      const differentSpeaker = c.speaker && next.speaker && c.speaker !== next.speaker;
+      const noSpeakerInfo = !c.speaker || !next.speaker;
+      const gapToNext = next.start - c.end;
+
+      // Different speaker + close proximity → dual-speaker cue
+      if (differentSpeaker && (gapToNext < 500 || cDur < 1500 || wc <= 4)) {
+        const nextPlain = next.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+        const dual = buildDual(plain, nextPlain);
+        if (dual) { result[i+1] = { ...next, start: c.start, text: dual, speaker: null }; result.splice(i, 1); continue; }
+      }
+      // Same speaker → plain merge
+      if ((sameSpeaker || noSpeakerInfo) && wc <= 2) {
+        const combo = plain + ' ' + next.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
         const repacked = repack(combo);
-        if (repacked) { result[i+1] = { ...result[i+1], start: c.start, text: repacked }; result.splice(i, 1); continue; }
+        if (repacked) { result[i+1] = { ...next, start: c.start, text: repacked }; result.splice(i, 1); continue; }
       }
     }
   }
