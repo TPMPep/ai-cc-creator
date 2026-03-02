@@ -418,7 +418,9 @@ function finalEnforce(cues) {
   }
 
   const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
+  const hasSndCue = (t) => /\[[^\]]*\]/.test(t) || t.includes('♪');
   const repack = (text) => {
+    if (hasSndCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
     let l1 = '', l2 = '';
     for (const w of words) {
@@ -432,16 +434,16 @@ function finalEnforce(cues) {
 
   for (let i = result.length - 1; i >= 0; i--) {
     const c = result[i];
-    if (!c.text || isSndCue(c.text)) continue;
+    if (!c.text || isSndCue(c.text) || hasSndCue(c.text)) continue;
     const plain = c.text.replace(/\n/g, ' ').trim();
     const wc = plain.split(/\s+/).length;
     if (wc > 2) continue;
-    if (i > 0 && !isSndCue(result[i-1].text)) {
+    if (i > 0 && !isSndCue(result[i-1].text) && !hasSndCue(result[i-1].text)) {
       const combo = result[i-1].text.replace(/\n/g, ' ').trim() + ' ' + plain;
       const repacked = repack(combo);
       if (repacked) { result[i-1] = { ...result[i-1], end: c.end, text: repacked }; result.splice(i, 1); continue; }
     }
-    if (i < result.length - 1 && !isSndCue(result[i+1].text)) {
+    if (i < result.length - 1 && !isSndCue(result[i+1].text) && !hasSndCue(result[i+1].text)) {
       const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').trim();
       const repacked = repack(combo);
       if (repacked) { result[i+1] = { ...result[i+1], start: c.start, text: repacked }; result.splice(i, 1); continue; }
