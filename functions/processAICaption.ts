@@ -341,6 +341,58 @@ ${highlightDump}`;
     }
   }
 
+  // ── Post-GPT: Split cues that mix sound cues with dialogue ──
+  // GPT often returns "[APPLAUSE] And then..." as one cue — we split those.
+  const splitMixed = [];
+  const SOUND_CUE_RE = /(\[(?:[^\]]{1,30})\]|♪[^♪]*♪|\[[\s]*♪[^♪]*♪[\s]*\])/g;
+  for (const cue of parsed) {
+    if (!cue.text) continue;
+    // Check if cue contains both sound cues AND dialogue text
+    const soundMatches = [...cue.text.matchAll(SOUND_CUE_RE)];
+    if (soundMatches.length === 0) { splitMixed.push(cue); continue; }
+    
+    // Strip all sound cues to see what dialogue remains
+    const dialogueOnly = cue.text.replace(SOUND_CUE_RE, '').replace(/\s+/g, ' ').trim();
+    if (!dialogueOnly) { splitMixed.push(cue); continue; } // Pure sound cue — keep as-is
+    
+    // Has both sound cues and dialogue — split them
+    // Collect all sound cue text parts
+    const soundParts = soundMatches.map(m => m[0].trim()).filter(s => s.length > 0);
+    const soundText = soundParts.join(' ');
+    
+    // Determine time split: sound cues get first portion, dialogue gets the rest
+    const totalDur = cue.end - cue.start;
+    const soundFraction = Math.min(0.3, soundParts.length * 0.15); // 15% per sound cue, max 30%
+    const soundEnd = cue.start + Math.round(totalDur * soundFraction);
+    const soundDur = soundEnd - cue.start;
+    
+    // Only split if both parts would be ≥ 500ms and sound text fits on one cue
+    if (soundDur >= 500 && (cue.end - soundEnd) >= 500 && soundText.length <= 64) {
+      // Sound cue(s) — repack into ≤2 lines of ≤32 chars
+      const soundLines = [];
+      let sl = '';
+      for (const sp of soundParts) {
+        if (!sl) { sl = sp; }
+        else if ((sl + ' ' + sp).length <= 32) { sl += ' ' + sp; }
+        else { soundLines.push(sl); sl = sp; }
+      }
+      if (sl) soundLines.push(sl);
+      const soundCueText = soundLines.slice(0, 2).join('\n');
+      
+      splitMixed.push({ start: cue.start, end: soundEnd, text: soundCueText, speaker: null });
+      splitMixed.push({ start: soundEnd, end: cue.end, text: dialogueOnly, speaker: cue.speaker });
+    } else {
+      // Can't safely split (too short) — at least try to put sound cue on its own line
+      if (soundText.length <= 32 && dialogueOnly.length <= 32) {
+        cue.text = soundText + '\n' + dialogueOnly;
+      }
+      splitMixed.push(cue);
+    }
+  }
+
+  // Replace parsed with splitMixed for downstream processing
+  const parsedFinal = splitMixed;
+
   // Merge orphan cues — SPEAKER-AWARE: never plain-merge across different speakers
   const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
   const containsSoundCue = (text) => /\[[^\]]*\]/.test(text) || text.includes('♪');
