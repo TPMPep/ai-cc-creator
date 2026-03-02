@@ -354,6 +354,8 @@ ${highlightDump}`;
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
   };
   const repackLines = (text) => {
+    // NEVER repack text that contains sound cues — it destroys sound cue line separation
+    if (containsSoundCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
     let line1 = '', line2 = '';
     for (const w of words) {
@@ -367,6 +369,8 @@ ${highlightDump}`;
   };
   // Build a dual-speaker cue with dashes on each line
   const buildDualSpeakerCue = (textA, textB) => {
+    // Never merge if either side contains sound cues
+    if (containsSoundCue(textA) || containsSoundCue(textB)) return null;
     const lineA = '- ' + textA.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const lineB = '- ' + textB.replace(/\n/g, ' ').replace(/^- /, '').trim();
     if (lineA.length > 32 || lineB.length > 32) return null;
@@ -377,7 +381,8 @@ ${highlightDump}`;
   for (let i = 0; i < parsed.length; i++) {
     const cue = parsed[i];
     if (!cue.text || !cue.text.trim()) continue;
-    if (isSoundCueFn(cue.text)) { merged.push(cue); continue; }
+    // Never merge sound cues or cues containing sound cues
+    if (isSoundCueFn(cue.text) || containsSoundCue(cue.text)) { merged.push(cue); continue; }
     // Never merge multi-speaker cues
     if (isMultiSpeakerCue(cue)) { merged.push(cue); continue; }
 
@@ -385,13 +390,12 @@ ${highlightDump}`;
     const wordCount = plainText.split(/\s+/).length;
     const prevIdx = merged.length - 1;
     const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
-    const prevIsSound = prevCue && isSoundCueFn(prevCue.text);
+    const prevIsSound = prevCue && (isSoundCueFn(prevCue.text) || containsSoundCue(prevCue.text));
     const prevIsMultiSpeaker = prevCue && isMultiSpeakerCue(prevCue);
     const sameSpeaker = prevCue && cue.speaker && prevCue.speaker && cue.speaker === prevCue.speaker;
     const differentSpeaker = prevCue && cue.speaker && prevCue.speaker && cue.speaker !== prevCue.speaker;
 
     // If different speaker from prev, try to build a dual-speaker cue with dashes
-    // Merge if: short cue (≤4 words) OR short duration (< 1500ms) OR tiny gap from prev (< 500ms)
     const cueDuration = cue.end - cue.start;
     const gapFromPrev = prevCue ? cue.start - prevCue.end : Infinity;
     const shouldMergeDiffSpeaker = differentSpeaker && !prevIsSound && !prevIsMultiSpeaker && (
@@ -423,12 +427,12 @@ ${highlightDump}`;
   const finalMerged = [];
   for (let i = 0; i < merged.length; i++) {
     const cue = merged[i];
-    if (isSoundCueFn(cue.text)) { finalMerged.push(cue); continue; }
+    if (isSoundCueFn(cue.text) || containsSoundCue(cue.text)) { finalMerged.push(cue); continue; }
     if (isMultiSpeakerCue(cue)) { finalMerged.push(cue); continue; }
     const plainText = cue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const wordCount = plainText.split(/\s+/).length;
     const nextCue = i + 1 < merged.length ? merged[i + 1] : null;
-    const nextIsSound = nextCue && isSoundCueFn(nextCue.text);
+    const nextIsSound = nextCue && (isSoundCueFn(nextCue.text) || containsSoundCue(nextCue.text));
     const nextIsMultiSpeaker = nextCue && isMultiSpeakerCue(nextCue);
     const sameSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker === nextCue.speaker;
     const differentSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker !== nextCue.speaker;
