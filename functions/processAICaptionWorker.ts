@@ -124,8 +124,10 @@ YOUR TASKS:
 ═══════════════════════════════════════
 SPEAKER DASHES — CRITICAL:
 ═══════════════════════════════════════
-- ONLY use "- " prefix when TWO DIFFERENT SPEAKERS share the SAME cue
-- NEVER put a dash on a single-speaker cue.
+- When TWO DIFFERENT SPEAKERS share the SAME cue, EACH speaker's text MUST start on its own line with "- " prefix.
+- Example of correct dual-speaker cue: "- Speaker A's text\\n- Speaker B's text"
+- The second speaker MUST ALWAYS start on a NEW LINE. Never put two speakers on the same line.
+- NEVER put a dash on a single-speaker cue (only one speaker in the cue = no dashes).
 
 ═══════════════════════════════════════
 ORPHAN WORDS — CRITICAL:
