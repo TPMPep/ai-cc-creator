@@ -327,7 +327,15 @@ ${highlightDump}`;
     const differentSpeaker = prevCue && cue.speaker && prevCue.speaker && cue.speaker !== prevCue.speaker;
 
     // If different speaker from prev, try to build a dual-speaker cue with dashes
-    if (differentSpeaker && !prevIsSound && !prevIsMultiSpeaker && wordCount <= 3 && !isCompleteSentence(plainText)) {
+    // Merge if: short cue (≤4 words) OR short duration (< 1500ms) OR tiny gap from prev (< 500ms)
+    const cueDuration = cue.end - cue.start;
+    const gapFromPrev = prevCue ? cue.start - prevCue.end : Infinity;
+    const shouldMergeDiffSpeaker = differentSpeaker && !prevIsSound && !prevIsMultiSpeaker && (
+      (wordCount <= 4) ||
+      (cueDuration < 1500) ||
+      (gapFromPrev < 500)
+    );
+    if (shouldMergeDiffSpeaker) {
       const prevPlain = prevCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
       const dual = buildDualSpeakerCue(prevPlain, plainText);
       if (dual) { merged[prevIdx] = { ...prevCue, end: cue.end, text: dual, speaker: null }; continue; }
