@@ -173,8 +173,9 @@ Deno.serve(async (req) => {
       const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
       const gaps = findGaps(utterances, totalDurationMs);
 
-      // Extract real audio events ([NOISE], [MUSIC], [LAUGHTER], etc.) from utterance text
-      const AUDIO_EVENT_PATTERN = /\[(NOISE|MUSIC|LAUGHTER|APPLAUSE|SILENCE|COUGH|SIGH|CROSSTALK|INAUDIBLE|BACKGROUND NOISE|BACKGROUND MUSIC)\]/gi;
+      // Extract real audio events ([noise], [music], [laughter], [beep], [hold music], etc.) from utterance text
+      // AssemblyAI Universal-3 Pro emits 50+ tags — use a broad pattern to catch any bracketed tag
+      const AUDIO_EVENT_PATTERN = /\[([^\]]{1,40})\]/gi;
       const rawAudioEvents = [];
       for (const utt of utterances) {
         const matches = [...(utt.text || '').matchAll(AUDIO_EVENT_PATTERN)];
@@ -273,18 +274,18 @@ Deno.serve(async (req) => {
         const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
         plan.gaps = findGaps(utterances, totalDurationMs);
 
-        // Extract content safety labels as rawAudioEvents for diagnostic
+        // Extract real audio events from utterance text (same as START path)
+        const AUDIO_EVENT_PATTERN_R = /\[([^\]]{1,40})\]/gi;
         const rawAudioEvents = [];
-        const safetyResults = transcript.content_safety_labels?.results || [];
-        for (const r of safetyResults) {
-          for (const label of (r.labels || [])) {
+        for (const utt of utterances) {
+          const matches = [...(utt.text || '').matchAll(AUDIO_EVENT_PATTERN_R)];
+          for (const match of matches) {
             rawAudioEvents.push({
-              label: label.label,
-              confidence: label.confidence,
-              severity: label.severity,
-              start: r.timestamp?.start || 0,
-              end: r.timestamp?.end || 0,
-              text: r.text || '',
+              label: match[1].toUpperCase(),
+              start: utt.start,
+              end: utt.end,
+              text: utt.text,
+              speaker: utt.speaker,
             });
           }
         }
