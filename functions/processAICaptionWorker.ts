@@ -185,7 +185,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues.',
+            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues. When two speakers share a cue, each speaker MUST start on a separate line prefixed with "- ".',
           },
           { role: 'user', content: prompt },
         ],
