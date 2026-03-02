@@ -173,12 +173,28 @@ Deno.serve(async (req) => {
       const totalDurationMs = transcript.audio_duration ? transcript.audio_duration * 1000 : null;
       const gaps = findGaps(utterances, totalDurationMs);
 
-      // Extract content safety labels as rawAudioEvents for diagnostic
+      // Extract real audio events ([NOISE], [MUSIC], [LAUGHTER], etc.) from utterance text
+      const AUDIO_EVENT_PATTERN = /\[(NOISE|MUSIC|LAUGHTER|APPLAUSE|SILENCE|COUGH|SIGH|CROSSTALK|INAUDIBLE|BACKGROUND NOISE|BACKGROUND MUSIC)\]/gi;
       const rawAudioEvents = [];
+      for (const utt of utterances) {
+        const matches = [...(utt.text || '').matchAll(AUDIO_EVENT_PATTERN)];
+        for (const match of matches) {
+          rawAudioEvents.push({
+            label: match[1].toUpperCase(),
+            start: utt.start,
+            end: utt.end,
+            text: utt.text,
+            speaker: utt.speaker,
+          });
+        }
+      }
+
+      // Extract content safety labels separately for diagnostic reference
+      const contentSafetyLabels = [];
       const safetyResults = transcript.content_safety_labels?.results || [];
       for (const r of safetyResults) {
         for (const label of (r.labels || [])) {
-          rawAudioEvents.push({
+          contentSafetyLabels.push({
             label: label.label,
             confidence: label.confidence,
             severity: label.severity,
