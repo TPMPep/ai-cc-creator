@@ -73,13 +73,15 @@ export default function JobDetailAI() {
   const isPollingRef = useRef(false);
 
   // Trigger server-side processing when AssemblyAI is done
-  // Fire-and-forget: the function processes all batches in one call (can take minutes).
-  // We don't await it — the polling loop will detect when status changes to 'done'.
+  // Fire-and-forget: the function processes all batches inline (can take minutes).
+  // The polling loop will detect progress via pipeline log updates.
   const startServerProcessing = useCallback(async (currentJob) => {
     base44.functions.invoke("processAICaption", {
       transcript_id: currentJob.railwayJobId,
       job_db_id: currentJob.id,
       action: "start",
+    }).then(res => {
+      console.log("Processing complete:", res.data);
     }).catch(err => console.error("startServerProcessing error:", err));
   }, []);
 
