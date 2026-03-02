@@ -398,13 +398,15 @@ function finalEnforce(cues) {
     }
   }
 
+  // Strip dashes from SINGLE-speaker cues only. Keep dashes for multi-speaker cues.
   for (const c of result) {
     if (!c.text || isSndCue(c.text)) continue;
     const lines = c.text.split('\n');
-    if (lines.length >= 2 && lines.every(l => l.startsWith('- ')) && c.speaker) {
-      c.text = lines.map(l => l.replace(/^- /, '')).join('\n');
-    }
-    if (lines.length === 1 && lines[0].startsWith('- ') && c.speaker) {
+    const dashedLines = lines.filter(l => l.startsWith('- '));
+    // Multi-speaker: 2+ dashed lines — keep dashes
+    if (dashedLines.length >= 2) continue;
+    // Single line with dash — strip it
+    if (lines.length === 1 && lines[0].startsWith('- ')) {
       c.text = c.text.replace(/^- /, '');
     }
   }
