@@ -278,8 +278,13 @@ ${highlightDump}`;
     }
   }
 
-  // Merge orphan cues
+  // Merge orphan cues — SPEAKER-AWARE: never plain-merge across different speakers
   const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
+  const isMultiSpeakerCue = (cue) => {
+    if (!cue.text) return false;
+    const lines = cue.text.split('\n');
+    return lines.length >= 2 && lines.filter(l => l.startsWith('- ')).length >= 2;
+  };
   const isCompleteSentence = (text) => {
     const trimmed = text.replace(/\n/g, ' ').trim();
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
@@ -296,44 +301,79 @@ ${highlightDump}`;
     if (result.split('\n').every(l => l.length <= 32)) return result;
     return null;
   };
+  // Build a dual-speaker cue with dashes on each line
+  const buildDualSpeakerCue = (textA, textB) => {
+    const lineA = '- ' + textA.replace(/\n/g, ' ').replace(/^- /, '').trim();
+    const lineB = '- ' + textB.replace(/\n/g, ' ').replace(/^- /, '').trim();
+    if (lineA.length > 32 || lineB.length > 32) return null;
+    return lineA + '\n' + lineB;
+  };
 
   const merged = [];
   for (let i = 0; i < parsed.length; i++) {
     const cue = parsed[i];
     if (!cue.text || !cue.text.trim()) continue;
     if (isSoundCueFn(cue.text)) { merged.push(cue); continue; }
-    const plainText = cue.text.replace(/\n/g, ' ').trim();
+    // Never merge multi-speaker cues
+    if (isMultiSpeakerCue(cue)) { merged.push(cue); continue; }
+
+    const plainText = cue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const wordCount = plainText.split(/\s+/).length;
     const prevIdx = merged.length - 1;
     const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
     const prevIsSound = prevCue && isSoundCueFn(prevCue.text);
+    const prevIsMultiSpeaker = prevCue && isMultiSpeakerCue(prevCue);
+    const sameSpeaker = prevCue && cue.speaker && prevCue.speaker && cue.speaker === prevCue.speaker;
+    const differentSpeaker = prevCue && cue.speaker && prevCue.speaker && cue.speaker !== prevCue.speaker;
 
-    if (wordCount <= 3 && !isCompleteSentence(plainText) && prevCue && !prevIsSound) {
-      const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
+    // If different speaker from prev, try to build a dual-speaker cue with dashes
+    if (differentSpeaker && !prevIsSound && !prevIsMultiSpeaker && wordCount <= 3 && !isCompleteSentence(plainText)) {
+      const prevPlain = prevCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+      const dual = buildDualSpeakerCue(prevPlain, plainText);
+      if (dual) { merged[prevIdx] = { ...prevCue, end: cue.end, text: dual, speaker: null }; continue; }
+    }
+
+    // Only plain-merge if SAME speaker (or no speaker info)
+    if (wordCount <= 3 && !isCompleteSentence(plainText) && prevCue && !prevIsSound && !prevIsMultiSpeaker && (sameSpeaker || !cue.speaker || !prevCue.speaker)) {
+      const combinedText = prevCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim() + ' ' + plainText;
       const repacked = repackLines(combinedText);
       if (repacked) { merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked }; continue; }
     }
-    if (plainText.length < 20 && !/[.?!]$/.test(plainText) && prevCue && !prevIsSound) {
-      const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
+    if (plainText.length < 20 && !/[.?!]$/.test(plainText) && prevCue && !prevIsSound && !prevIsMultiSpeaker && (sameSpeaker || !cue.speaker || !prevCue.speaker)) {
+      const combinedText = prevCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim() + ' ' + plainText;
       const repacked = repackLines(combinedText);
       if (repacked) { merged[prevIdx] = { ...prevCue, end: cue.end, text: repacked }; continue; }
     }
     merged.push(cue);
   }
 
-  // Forward merge
+  // Forward merge — also speaker-aware
   const finalMerged = [];
   for (let i = 0; i < merged.length; i++) {
     const cue = merged[i];
     if (isSoundCueFn(cue.text)) { finalMerged.push(cue); continue; }
-    const plainText = cue.text.replace(/\n/g, ' ').trim();
+    if (isMultiSpeakerCue(cue)) { finalMerged.push(cue); continue; }
+    const plainText = cue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const wordCount = plainText.split(/\s+/).length;
     const nextCue = i + 1 < merged.length ? merged[i + 1] : null;
     const nextIsSound = nextCue && isSoundCueFn(nextCue.text);
-    if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound) {
-      const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').trim();
-      const repacked = repackLines(combinedText);
-      if (repacked) { merged[i + 1] = { ...nextCue, start: cue.start, text: repacked }; continue; }
+    const nextIsMultiSpeaker = nextCue && isMultiSpeakerCue(nextCue);
+    const sameSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker === nextCue.speaker;
+    const differentSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker !== nextCue.speaker;
+
+    if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound && !nextIsMultiSpeaker) {
+      // Different speaker? Build dual-speaker cue
+      if (differentSpeaker) {
+        const nextPlain = nextCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+        const dual = buildDualSpeakerCue(plainText, nextPlain);
+        if (dual) { merged[i + 1] = { ...nextCue, start: cue.start, text: dual, speaker: null }; continue; }
+      }
+      // Same speaker — plain merge
+      if (sameSpeaker || !cue.speaker || !nextCue.speaker) {
+        const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+        const repacked = repackLines(combinedText);
+        if (repacked) { merged[i + 1] = { ...nextCue, start: cue.start, text: repacked }; continue; }
+      }
     }
     finalMerged.push(cue);
   }
