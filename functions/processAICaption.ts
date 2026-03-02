@@ -409,17 +409,41 @@ function finalEnforce(cues) {
       continue;
     }
 
-    const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
+    const hasDashes = lines.length >= 2 && lines.filter(l => l.startsWith('- ')).length >= 2;
+
+    // Multi-speaker cues with dashes: repack each speaker's line independently
+    if (hasDashes) {
+      const repackedLines = lines.map(l => {
+        if (l.length <= MAX_CHARS) return l;
+        // Truncate the speaker line to fit (rare, but safety)
+        return l.substring(0, MAX_CHARS);
+      });
+      // If it still fits in ≤2 lines, emit as-is
+      if (repackedLines.length <= 2) {
+        result.push({ ...cue, text: repackedLines.join('\n'), speaker: cue.speaker });
+      } else {
+        // More than 2 dashed lines — split into multiple cues
+        const totalDur = cue.end - cue.start;
+        const chunkCount = Math.ceil(repackedLines.length / 2);
+        for (let ci = 0; ci < chunkCount; ci++) {
+          const chunk = repackedLines.slice(ci * 2, ci * 2 + 2);
+          const chunkStart = cue.start + Math.round((ci / chunkCount) * totalDur);
+          const chunkEnd = ci === chunkCount - 1 ? cue.end : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
+          result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.join('\n'), speaker: cue.speaker });
+        }
+      }
+      continue;
+    }
+
+    // Single-speaker cue that's too long — repack without dashes
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
-    const prefix = hasDashes ? '- ' : '';
-    const limit = MAX_CHARS - prefix.length;
     const packed = [];
     let cur = '';
     for (const word of words) {
       const candidate = cur ? `${cur} ${word}` : word;
-      if (candidate.length <= limit) { cur = candidate; }
+      if (candidate.length <= MAX_CHARS) { cur = candidate; }
       else { if (cur) packed.push(cur); cur = word; }
     }
     if (cur) packed.push(cur);
@@ -432,7 +456,7 @@ function finalEnforce(cues) {
       const ci = Math.floor(i / 2);
       const chunkStart = cue.start + Math.round((ci / chunkCount) * totalDur);
       const chunkEnd = ci === chunkCount - 1 ? cue.end : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
-      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.map(l => prefix + l).join('\n'), speaker: cue.speaker });
+      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.join('\n'), speaker: cue.speaker });
     }
   }
 
