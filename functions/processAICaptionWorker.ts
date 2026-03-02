@@ -243,27 +243,57 @@ ${highlightDump}`;
   const parsed = JSON.parse(jsonMatch[0]);
 
   // ── Post-GPT cleanup: Strip dashes from SINGLE-speaker cues only ──
-  // Keep dashes when two different speakers share the same cue.
   for (const cue of parsed) {
     if (!cue.text) continue;
     const lines = cue.text.split('\n');
     const dashedLines = lines.filter(l => l.trimStart().startsWith('- '));
-    const isMultiSpeaker = dashedLines.length >= 2;
-    // If multi-speaker (2+ dashed lines), leave dashes intact
-    if (isMultiSpeaker) continue;
-    // Single line with dash on a single-speaker cue — strip it
+    if (dashedLines.length >= 2) continue;
     if (lines.length === 1 && lines[0].startsWith('- ')) {
       cue.text = cue.text.replace(/^- /, '');
     }
   }
 
+  // ── Post-GPT: Split cues that mix sound cues with dialogue ──
+  const SOUND_CUE_RE = /(\[(?:[^\]]{1,30})\]|♪[^♪]*♪|\[[\s]*♪[^♪]*♪[\s]*\])/g;
+  const splitMixed = [];
+  for (const cue of parsed) {
+    if (!cue.text) continue;
+    const soundMatches = [...cue.text.matchAll(SOUND_CUE_RE)];
+    if (soundMatches.length === 0) { splitMixed.push(cue); continue; }
+    const dialogueOnly = cue.text.replace(SOUND_CUE_RE, '').replace(/\s+/g, ' ').trim();
+    if (!dialogueOnly) { splitMixed.push(cue); continue; }
+    const soundParts = soundMatches.map(m => m[0].trim()).filter(s => s.length > 0);
+    const soundText = soundParts.join(' ');
+    const totalDur = cue.end - cue.start;
+    const soundFraction = Math.min(0.3, soundParts.length * 0.15);
+    const soundEnd = cue.start + Math.round(totalDur * soundFraction);
+    const soundDur = soundEnd - cue.start;
+    if (soundDur >= 500 && (cue.end - soundEnd) >= 500 && soundText.length <= 64) {
+      const soundLines = [];
+      let sl = '';
+      for (const sp of soundParts) {
+        if (!sl) { sl = sp; } else if ((sl + ' ' + sp).length <= 32) { sl += ' ' + sp; } else { soundLines.push(sl); sl = sp; }
+      }
+      if (sl) soundLines.push(sl);
+      splitMixed.push({ start: cue.start, end: soundEnd, text: soundLines.slice(0, 2).join('\n'), speaker: null });
+      splitMixed.push({ start: soundEnd, end: cue.end, text: dialogueOnly, speaker: cue.speaker });
+    } else {
+      if (soundText.length <= 32 && dialogueOnly.length <= 32) {
+        cue.text = soundText + '\n' + dialogueOnly;
+      }
+      splitMixed.push(cue);
+    }
+  }
+
   // ── Merge orphan cues ──
   const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
+  const containsSoundCue = (text) => /\[[^\]]*\]/.test(text) || text.includes('♪');
   const isCompleteSentence = (text) => {
     const trimmed = text.replace(/\n/g, ' ').trim();
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
   };
   const repackLines = (text) => {
+    if (containsSoundCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
     let line1 = '', line2 = '';
     for (const w of words) {
@@ -277,15 +307,15 @@ ${highlightDump}`;
   };
 
   const merged = [];
-  for (let i = 0; i < parsed.length; i++) {
-    const cue = parsed[i];
+  for (let i = 0; i < splitMixed.length; i++) {
+    const cue = splitMixed[i];
     if (!cue.text || !cue.text.trim()) continue;
-    if (isSoundCueFn(cue.text)) { merged.push(cue); continue; }
+    if (isSoundCueFn(cue.text) || containsSoundCue(cue.text)) { merged.push(cue); continue; }
     const plainText = cue.text.replace(/\n/g, ' ').trim();
     const wordCount = plainText.split(/\s+/).length;
     const prevIdx = merged.length - 1;
     const prevCue = prevIdx >= 0 ? merged[prevIdx] : null;
-    const prevIsSound = prevCue && isSoundCueFn(prevCue.text);
+    const prevIsSound = prevCue && (isSoundCueFn(prevCue.text) || containsSoundCue(prevCue.text));
 
     if (wordCount <= 3 && !isCompleteSentence(plainText) && prevCue && !prevIsSound) {
       const combinedText = prevCue.text.replace(/\n/g, ' ').trim() + ' ' + plainText;
@@ -303,11 +333,11 @@ ${highlightDump}`;
   const finalMerged = [];
   for (let i = 0; i < merged.length; i++) {
     const cue = merged[i];
-    if (isSoundCueFn(cue.text)) { finalMerged.push(cue); continue; }
+    if (isSoundCueFn(cue.text) || containsSoundCue(cue.text)) { finalMerged.push(cue); continue; }
     const plainText = cue.text.replace(/\n/g, ' ').trim();
     const wordCount = plainText.split(/\s+/).length;
     const nextCue = i + 1 < merged.length ? merged[i + 1] : null;
-    const nextIsSound = nextCue && isSoundCueFn(nextCue.text);
+    const nextIsSound = nextCue && (isSoundCueFn(nextCue.text) || containsSoundCue(nextCue.text));
     if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound) {
       const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').trim();
       const repacked = repackLines(combinedText);
