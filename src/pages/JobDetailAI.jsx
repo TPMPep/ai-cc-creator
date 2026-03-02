@@ -92,11 +92,18 @@ export default function JobDetailAI() {
     setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], result: null, created_date: new Date(reprocessStartRef.current).toISOString() }));
     setCues([]);
     // Fire-and-forget — polling will pick up progress
+    // Use processAICaption which delegates to the worker chain
     base44.functions.invoke("processAICaption", {
       transcript_id: job.railwayJobId,
       job_db_id: job.id,
       action: "reprocess",
-    }).catch(err => console.error("handleReprocess error:", err));
+    }).then(res => {
+      console.log("Reprocess started:", res.data);
+    }).catch(err => {
+      console.error("handleReprocess error:", err);
+      // If the chained worker approach fails, the job will show error status
+      // which polling will pick up
+    });
   }, [job]);
 
   const doPoll = useCallback(async () => {
