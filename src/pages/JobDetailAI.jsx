@@ -93,18 +93,15 @@ export default function JobDetailAI() {
     // Reset local state immediately to show processing UI
     setJob(prev => ({ ...prev, status: 'processing', pipelineLog: [], result: null, created_date: new Date(reprocessStartRef.current).toISOString() }));
     setCues([]);
-    // Fire-and-forget — polling will pick up progress
-    // Use processAICaption which delegates to the worker chain
+    // Fire-and-forget — processAICaption v10 handles everything inline (no worker chain)
     base44.functions.invoke("processAICaption", {
       transcript_id: job.railwayJobId,
       job_db_id: job.id,
       action: "reprocess",
     }).then(res => {
-      console.log("Reprocess started:", res.data);
+      console.log("Reprocess complete:", res.data);
     }).catch(err => {
       console.error("handleReprocess error:", err);
-      // If the chained worker approach fails, the job will show error status
-      // which polling will pick up
     });
   }, [job]);
 
