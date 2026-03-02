@@ -1,10 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
-// Jobs are "stuck" if updated_date hasn't moved in this long
-const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — fast recovery
-// Jobs with no processing plan at all get errored after this
+// recoverStuckJobs v2 — Works with processAICaption v10 (no worker chain)
+// Jobs are "stuck" if they've been processing for too long without progress.
+
+const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
 const NO_START_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
-// No longer needs INTERNAL_CHAIN_SECRET — SDK asServiceRole handles auth
 
 Deno.serve(async (req) => {
   try {
@@ -25,78 +25,33 @@ Deno.serve(async (req) => {
     const details = [];
 
     for (const job of jobs) {
-      // Use lastActiveAt from processingPlan if available (more accurate than updated_date)
-      const plan = job.processingPlan;
-      const lastActive = plan?.lastActiveAt ? new Date(plan.lastActiveAt).getTime() : new Date(job.updated_date).getTime();
-      const staleDuration = now - lastActive;
+      const updatedAt = new Date(job.updated_date).getTime();
+      const createdAt = new Date(job.created_date).getTime();
+      const staleDuration = now - updatedAt;
 
-      // Only look at jobs that haven't had worker activity recently
+      // Skip jobs that are still actively being updated
       if (staleDuration < STUCK_THRESHOLD_MS) continue;
 
-      // Case 1: Has a processing plan — GPT chain started but stalled
-      if (plan && plan.batches && typeof plan.totalBatches === 'number') {
-        const completedCues = (plan.polishedCues || []).length;
-        const currentBatch = plan.currentBatchIndex ?? 0;
-        const totalBatches = plan.totalBatches;
+      const plan = job.processingPlan;
+      const hasPipelineLog = job.pipelineLog && job.pipelineLog.length > 0;
 
-        // Determine what to do: resume from currentBatchIndex or finalize
-        let nextAction = 'process_batch';
-        let nextBatch = currentBatch;
-
-        // If all batches seem done (polishedCues exist for all), try finalize
-        if (completedCues > 0 && currentBatch >= totalBatches - 1) {
-          // Check pipeline log to see if last batch completed
-          const log = job.pipelineLog || [];
-          const lastBatchDone = log.some(e =>
-            e.step === `2_gpt_batch_${totalBatches}_of_${totalBatches}` && e.status === 'ok'
-          );
-          if (lastBatchDone) {
-            nextAction = 'finalize';
-          }
-        }
-
-        // Generate a fresh runId so the zombie guard accepts it
-        const newRunId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-        // Update the plan with the new runId so the function accepts the call
+      if (plan || hasPipelineLog) {
+        // Job started processing but stalled — mark as error so user can manually reprocess
         await base44.asServiceRole.entities.Job.update(job.id, {
-          processingPlan: { ...plan, runId: newRunId },
-          pipelineLog: [
-            ...(job.pipelineLog || []),
-            {
-              step: `recovery_${nextAction}`,
-              status: 'running',
-              detail: `Auto-recovery: ${nextAction} at batch ${nextBatch + 1}/${totalBatches} after ${Math.round(staleDuration / 60000)}min stall. New runId assigned.`,
-              ts: new Date().toISOString(),
-            },
-          ],
+          status: 'error',
+          error: `Processing stalled after ${Math.round(staleDuration / 60000)} minutes. Click "Reprocess" to try again.`,
+          processingPlan: null,
         });
-
-        // Invoke the WORKER function via SDK service role
-        const payload = {
-          job_db_id: job.id,
-          action: nextAction,
-          runId: newRunId,
-        };
-        if (nextAction === 'process_batch') {
-          payload.batch_index = nextBatch;
-          payload.transcript_id = job.railwayJobId;
-        }
-
-        base44.asServiceRole.functions.invoke('processAICaptionWorker', payload).catch(() => {});
-
-        recovered++;
+        errored++;
         details.push({
           jobId: job.id,
           title: job.title,
-          action: nextAction,
-          batch: nextBatch,
+          action: 'errored_stalled',
           staleMins: Math.round(staleDuration / 60000),
         });
 
-      } else if (!plan && (!job.pipelineLog || job.pipelineLog.length === 0)) {
-        // Case 2: No plan, no log — AssemblyAI never finished or start never ran
-        const createdAt = new Date(job.created_date).getTime();
+      } else if (!plan && !hasPipelineLog) {
+        // No plan, no log — never started
         if (now - createdAt > NO_START_THRESHOLD_MS) {
           await base44.asServiceRole.entities.Job.update(job.id, {
             status: 'error',
