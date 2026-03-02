@@ -130,9 +130,28 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
   const highlightDump = highlights?.length > 0 ? 'KEY AUDIO TERMS: ' + highlights.slice(0, 20).map(h => typeof h === 'string' ? `"${h}"` : `"${h.text}"`).join(', ') : '';
   const batchNote = totalBatches > 1 ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches}.\n\n` : '';
 
-  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
-TASKS: 1) Be TRUE to spoken words. 2) Fix grammar/punctuation. 3) ≤32 chars/line, ≤2 lines/cue. 4) Smart line breaks. 5) Sound cues in gaps. 6) Timecodes match speech.
-SPEAKER DASHES: Only "- " when TWO speakers share a cue. Never on single-speaker cues.
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards) using intelligent linguistic segmentation.
+
+TASKS: 1) Be TRUE to spoken words — never drop/paraphrase. 2) Fix grammar/punctuation/homophones. 3) ≤32 chars/line, ≤2 lines/cue. 4) Smart line breaks per rules below. 5) Sound cues in gaps. 6) Timecodes match speech.
+
+PRIORITY 1 — NEVER SPLIT THESE ACROSS LINES:
+• Proper nouns (person/city/country/org/brand names): ❌ "Los\\nAngeles" ❌ "Andy\\nCohen"
+• Titles & named works (TV shows, films, songs, events): ❌ "Watch What\\nHappens Live" ❌ "Below\\nDeck Med" ❌ "Game of\\nThrones"
+• Contextual branded phrases — detect by context even if capitalization is wrong
+• Hyphenated/compound words: keep "award-winning" together
+• Speaker labels: never separate "- " from its dialogue
+
+PRIORITY 2 — SOUND CUE SEPARATION:
+Sound cues ([...] or ♪) are independent units. Prefer: "[LAUGHTER]\\nThat was so funny!" over "[LAUGHTER] That was\\nso funny!"
+
+PRIORITY 3 — SMART LINE BREAKS (in order):
+1. After full sentence (. ? !)  2. After comma  3. After complete clause  4. Natural phrase boundary
+NEVER break between: article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, inside idioms, number+unit.
+Favor semantic correctness over visual balance.
+
+PRIORITY 4 — EVENT SPLITTING: Split at sentence boundaries. Each cue must be semantically coherent. Only split mid-sentence when required by duration.
+
+SPEAKER DASHES: "- " prefix on each line only when TWO speakers share one cue. Never on single-speaker cues.
 ORPHAN WORDS: Never 1-3 word cues mid-sentence. Combine adjacent segments.
 HARD RULES: Never drop content. Timecodes locked. Max 32 chars/line, 2 lines/cue. Duration ≥500ms. End sentences with .?!
 SOUND CUES: [♪ DESC ♪] or [DESC] ALL CAPS, max 32 chars, only in gaps.
@@ -153,7 +172,7 @@ ${highlightDump}`;
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. ≤32 chars/line, ≤2 lines/cue. Never drop content.' },
+          { role: 'system', content: 'You are a broadcast caption editor using intelligent linguistic segmentation. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. ≤32 chars/line, ≤2 lines/cue. Never drop content. CRITICAL: NEVER split proper nouns, show/film/song titles, branded phrases, or hyphenated words across lines. NEVER break between article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, or number+unit. Prefer breaks after sentences, commas, clauses, then phrase boundaries. Sound cues get their own line. Favor semantic correctness over visual balance.' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.1,
