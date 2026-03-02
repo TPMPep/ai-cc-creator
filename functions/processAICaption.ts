@@ -369,7 +369,12 @@ ${highlightDump}`;
     const sameSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker === nextCue.speaker;
     const differentSpeaker = nextCue && cue.speaker && nextCue.speaker && cue.speaker !== nextCue.speaker;
 
-    if (wordCount <= 2 && !isCompleteSentence(plainText) && nextCue && !nextIsSound && !nextIsMultiSpeaker) {
+    const fwdCueDuration = cue.end - cue.start;
+    const fwdGapToNext = nextCue ? nextCue.start - cue.end : Infinity;
+    const shouldFwdMerge = nextCue && !nextIsSound && !nextIsMultiSpeaker && (
+      wordCount <= 2 || fwdCueDuration < 1500 || fwdGapToNext < 500
+    );
+    if (shouldFwdMerge && !isCompleteSentence(plainText)) {
       // Different speaker? Build dual-speaker cue
       if (differentSpeaker) {
         const nextPlain = nextCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
@@ -377,7 +382,7 @@ ${highlightDump}`;
         if (dual) { merged[i + 1] = { ...nextCue, start: cue.start, text: dual, speaker: null }; continue; }
       }
       // Same speaker — plain merge
-      if (sameSpeaker || !cue.speaker || !nextCue.speaker) {
+      if ((sameSpeaker || !cue.speaker || !nextCue.speaker) && wordCount <= 2) {
         const combinedText = plainText + ' ' + nextCue.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
         const repacked = repackLines(combinedText);
         if (repacked) { merged[i + 1] = { ...nextCue, start: cue.start, text: repacked }; continue; }
