@@ -155,7 +155,7 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
 
   const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
 
-You will receive pre-timed caption segments from a transcription API. Your job is to produce broadcast-quality closed captions.
+You will receive pre-timed caption segments from a transcription API. Your job is to produce broadcast-quality closed captions using intelligent, linguistically-aware segmentation.
 
 ═══════════════════════════════════════
 YOUR TASKS:
@@ -163,9 +163,72 @@ YOUR TASKS:
 1. Be TRUE to what is said. Every spoken word MUST appear in the output. NEVER drop, paraphrase, or summarize.
 2. Fix grammar, punctuation, and homophones — but preserve how people actually speak (gonna, wanna, don't, ain't, etc.)
 3. Format each cue: ≤32 characters per line, ≤2 lines per cue
-4. Choose SMART line breaks — keep meaning together, fill lines efficiently
+4. Choose SMART line breaks using the HIERARCHICAL RULES below
 5. Insert sound/music cues into SILENCE GAPS where appropriate
 6. Timecodes on screen must match when words are actually spoken
+
+═══════════════════════════════════════
+PRIORITY 1 — PRESERVE SEMANTIC UNITS
+(NON-NEGOTIABLE — NEVER SPLIT THESE):
+═══════════════════════════════════════
+A. PROPER NOUNS: Never split person names, city/country names, organization names, or brand names across lines.
+   ❌ "Los\\nAngeles"  ❌ "New\\nYork City"  ❌ "Andy\\nCohen"
+   ✓ Keep the full name on one line.
+
+B. TITLES & NAMED WORKS: Never split TV show names, film titles, book titles, episode names, song titles, franchise names, or event names.
+   ❌ "Watch What\\nHappens Live"  ❌ "Below\\nDeck Med"  ❌ "Game of\\nThrones"
+   ✓ Treat multi-word titles as single atomic units that must stay on one line.
+
+C. CONTEXTUAL TITLES & BRANDED PHRASES: Use contextual inference to detect when a phrase functions as a show title, program name, product name, or branded segment — even if capitalization is inconsistent in the transcript input.
+   Example: "Watch What Happens Live" must never be split even if transcript says "watch what happens live."
+
+D. SPEAKER LABELS: Never separate a speaker identifier (dash prefix) from its dialogue.
+
+E. HYPHENATED/COMPOUND WORDS: Never split hyphenated words across lines (e.g., "award-winning" stays together).
+
+═══════════════════════════════════════
+PRIORITY 2 — SOUND CUE SEPARATION:
+═══════════════════════════════════════
+When a cue contains BOTH a sound cue and dialogue, separate them:
+   ✓ Preferred: "[LAUGHTER]\\nThat was so funny!"
+   ❌ Avoid: "[LAUGHTER] That was\\nso funny!"
+Sound cues ([...] or ♪) are independent semantic units. Give them their own line when possible. Only merge mid-line if character constraints make separation impossible.
+
+═══════════════════════════════════════
+PRIORITY 3 — SMART LINE BREAKING
+(Linguistic Boundary Preference):
+═══════════════════════════════════════
+When splitting text into two lines within a cue, choose breakpoints in this order:
+  1. After a full sentence (. ? !)
+  2. After a comma
+  3. After a complete clause
+  4. At a natural phrase boundary
+
+NEVER break between:
+  • Article + noun ("the\\nshow" ❌)
+  • Adjective + noun ("beautiful\\nday" ❌)
+  • Auxiliary verb + main verb ("was\\ngoing" ❌)
+  • Inside verb phrases ("should have\\nbeen" ❌)
+  • Inside prepositional phrases ("in the\\nmorning" ❌)
+  • Inside idiomatic expressions
+  • Number + unit ("20\\nyears" ❌)
+
+FALLBACK ORDER when no ideal break exists:
+  1. Preserve named entities (hard constraint)
+  2. Preserve phrase integrity
+  3. Choose least disruptive grammatical boundary
+  4. Only then consider character symmetry
+
+Favor SEMANTIC CORRECTNESS over visual line balance.
+
+═══════════════════════════════════════
+PRIORITY 4 — EVENT SPLITTING:
+═══════════════════════════════════════
+If text must be split across multiple cues:
+  • Prefer splitting at sentence boundaries
+  • Avoid splitting mid-thought across cues
+  • Each cue must remain semantically coherent
+  • Only split mid-sentence when absolutely required by duration constraints
 
 ═══════════════════════════════════════
 SPEAKER DASHES — CRITICAL:
@@ -231,7 +294,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues. When two speakers share a cue, each speaker MUST start on a separate line prefixed with "- ".',
+            content: 'You are a broadcast caption editor using intelligent linguistic segmentation. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues. When two speakers share a cue, each speaker MUST start on a separate line prefixed with "- ". CRITICAL LINE-BREAK RULES: NEVER split proper nouns, show/film/song titles, branded phrases, or hyphenated words across lines. NEVER break between article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, or number+unit. Prefer breaks after sentences, commas, clauses, then phrase boundaries. Favor semantic correctness over visual balance. Sound cues get their own line when possible.',
           },
           { role: 'user', content: prompt },
         ],
