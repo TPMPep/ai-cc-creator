@@ -198,67 +198,59 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided.\n\n`
     : '';
 
-  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards) using intelligent linguistic segmentation.
 
 You will receive pre-timed caption segments. Your job is:
-1. Fix grammar, punctuation, and homophones in each segment's text
-2. Format the text to fit in ≤32 characters per line, ≤2 lines per cue
-3. Choose the SMARTEST possible line break — keep context together, fill lines efficiently
-4. If two adjacent segments have different speakers AND their combined text fits in 2 lines of ≤32 chars each, you MAY combine them into one cue with "- " prefix on each line
-5. Insert sound/music cues into SILENCE GAPS where appropriate
-6. Return ALL segments (you cannot skip any)
+1. Fix grammar, punctuation, and homophones — preserve how people speak (gonna, wanna, don't, etc.)
+2. Format: ≤32 characters per line, ≤2 lines per cue
+3. Choose SMART line breaks using the HIERARCHICAL RULES below
+4. If two adjacent segments have different speakers AND combined text fits in 2 lines of ≤32 chars, combine with "- " prefix
+5. Insert sound/music cues into SILENCE GAPS
+6. Return ALL segments
+
+═══════════════════════════════════════
+PRIORITY 1 — NEVER SPLIT ACROSS LINES:
+═══════════════════════════════════════
+• Proper nouns (person/city/country/org/brand names)
+• Titles & named works (TV shows, films, songs, events)
+• Contextual branded phrases — detect by context even if caps are wrong
+• Hyphenated/compound words (e.g., "award-winning")
+• Speaker labels — never separate "- " from dialogue
+
+PRIORITY 2 — SOUND CUE SEPARATION:
+Sound cues ([...] or ♪) get their own line when possible.
+✓ "[LAUGHTER]\\nThat was so funny!"  ❌ "[LAUGHTER] That was\\nso funny!"
+
+PRIORITY 3 — SMART LINE BREAKING:
+Break preference: 1. After sentence (. ? !)  2. After comma  3. After clause  4. Phrase boundary
+NEVER break between: article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, inside idioms, number+unit.
+Favor semantic correctness over visual balance.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
 ═══════════════════════════════════════
-- TIMECODES ARE LOCKED. Output the exact start/end ms from the input. Do NOT change them.
-  Exception: when combining two adjacent segments, use the first segment's start and the last segment's end.
-  Exception: sound cues in gaps get the gap's start/end times.
-- MAX 32 characters per line (count every char: letters, spaces, punctuation, brackets, dashes, ♪)
-- MAX 2 lines per cue
-- Cue duration must be ≥ 500ms. If a segment is very short (<500ms) and text is brief, keep it as-is.
-- When a cue has text from 2 different speakers, prefix EACH line with "- " (uses 2 of your 32 chars)
-- NEVER use >> or > for speaker changes
-- Every sentence must end with . ? or ! 
-- Fix homophones: to/too/two, there/their/they're, its/it's, your/you're, etc.
-- Preserve contractions as spoken: gonna, wanna, kinda, don't, can't, I'm, etc.
+- TIMECODES ARE LOCKED. Do NOT change start/end from input.
+  Exception: combining segments → use first start, last end.
+  Exception: sound cues in gaps → use gap's times.
+- MAX 32 chars/line, MAX 2 lines/cue
+- Duration ≥ 500ms
+- "- " prefix only for dual-speaker cues. Never on single-speaker.
+- Every sentence ends with . ? or !
+- Fix homophones. Preserve contractions as spoken.
 
 ═══════════════════════════════════════
 SOUND/MUSIC CUE RULES:
 ═══════════════════════════════════════
-- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS inside. Max 32 chars total.
-  e.g. [ ♪ UPBEAT MUSIC ♪ ] = 21 chars ✓
-- Sound effects: [DESCRIPTION] — ALL CAPS. Max 32 chars.
-  e.g. [ENGINE REVVING] = 16 chars ✓
-- Insert these into the silence gaps listed in your input where it makes sense contextually.
-- Infer sounds from context clues in the surrounding dialogue.
-- If a gap is pure silence with no context, use [AMBIENT SOUND] or omit it.
-
-═══════════════════════════════════════
-LINE BREAK STRATEGY:
-═══════════════════════════════════════
-- Prefer breaking at natural syntactic boundaries: after a comma, conjunction, or before a verb phrase
-- Fill lines efficiently — don't leave a 10-char line when a 25-char line is possible
-- Keep subjects with their verbs when possible
-- Keep adjectives with their nouns
-- BAD:  "I really think that we\nneed to"  (second line too short)
-- GOOD: "I really think that we need\nto take a look at that."
-
-EXAMPLES of correct 32-char formatting:
-"Every week, I get emails" = 24 chars ✓
-"from you guys about cheap cars." = 31 chars ✓
-"- Are you ready?" = 17 chars ✓  (with dash for speaker)
-"- I was born ready." = 20 chars ✓
+- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS. Max 32 chars.
+- Sound: [DESCRIPTION] — ALL CAPS. Max 32 chars.
+- Only in SILENCE GAPS. Omit if no context.
 
 ═══════════════════════════════════════
 OUTPUT FORMAT:
 ═══════════════════════════════════════
-Return ONLY a valid JSON array. No markdown. No explanation. No code fences.
-Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
-- Use \\n for line breaks within 2-line cues
-- speaker: "A"/"B"/"C" for single-speaker, null for multi-speaker or sound cues
-- Include ALL input segments in the output (same count or more if you added sound cues)
-- Verify EVERY line is ≤32 chars before outputting
+Return ONLY a valid JSON array. No markdown. No code fences.
+{"start": number, "end": number, "text": string, "speaker": string|null}
+Use \\n for line breaks. Verify EVERY line is ≤32 chars.
 
 ═══════════════════════════════════════
 INPUT SEGMENTS:
@@ -283,7 +275,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED — do not change start/end values from the input. Every text line must be ≤32 characters. Every cue must have ≤2 lines. Verify each cue before including it.',
+            content: 'You are a broadcast caption editor using intelligent linguistic segmentation. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. ≤32 chars/line, ≤2 lines/cue. Verify each cue. CRITICAL: NEVER split proper nouns, show/film/song titles, branded phrases, or hyphenated words across lines. NEVER break between article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, or number+unit. Sound cues get their own line. Favor semantic correctness over visual balance.',
           },
           { role: 'user', content: prompt },
         ],
