@@ -107,7 +107,7 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided.\n\n`
     : '';
 
-  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards) using intelligent linguistic segmentation.
 
 You will receive pre-timed caption segments from a transcription API. Your job is to produce broadcast-quality closed captions.
 
@@ -117,24 +117,44 @@ YOUR TASKS:
 1. Be TRUE to what is said. Every spoken word MUST appear in the output. NEVER drop, paraphrase, or summarize.
 2. Fix grammar, punctuation, and homophones — but preserve how people actually speak (gonna, wanna, don't, ain't, etc.)
 3. Format each cue: ≤32 characters per line, ≤2 lines per cue
-4. Choose SMART line breaks — keep meaning together, fill lines efficiently
+4. Choose SMART line breaks using the HIERARCHICAL RULES below
 5. Insert sound/music cues into SILENCE GAPS where appropriate
 6. Timecodes on screen must match when words are actually spoken
+
+═══════════════════════════════════════
+PRIORITY 1 — PRESERVE SEMANTIC UNITS
+(NON-NEGOTIABLE — NEVER SPLIT THESE):
+═══════════════════════════════════════
+A. PROPER NOUNS: Never split person names, city/country names, organization names, or brand names across lines.
+B. TITLES & NAMED WORKS: Never split TV show names, film titles, book titles, song titles, franchise names, or event names.
+C. CONTEXTUAL TITLES & BRANDED PHRASES: Use contextual inference to detect named entities even if capitalization is inconsistent.
+D. SPEAKER LABELS: Never separate a speaker identifier (dash prefix) from its dialogue.
+E. HYPHENATED/COMPOUND WORDS: Never split hyphenated words across lines.
+
+═══════════════════════════════════════
+PRIORITY 2 — SOUND CUE SEPARATION:
+═══════════════════════════════════════
+Sound cues ([...] or ♪) are independent semantic units. Give them their own line when possible.
+✓ "[LAUGHTER]\\nThat was so funny!"  ❌ "[LAUGHTER] That was\\nso funny!"
+
+═══════════════════════════════════════
+PRIORITY 3 — SMART LINE BREAKING:
+═══════════════════════════════════════
+Break preference: 1. After sentence (. ? !)  2. After comma  3. After clause  4. Phrase boundary
+NEVER break between: article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, inside idioms, number+unit.
+Favor semantic correctness over visual balance.
 
 ═══════════════════════════════════════
 SPEAKER DASHES — CRITICAL:
 ═══════════════════════════════════════
 - When TWO DIFFERENT SPEAKERS share the SAME cue, EACH speaker's text MUST start on its own line with "- " prefix.
-- Example of correct dual-speaker cue: "- Speaker A's text\\n- Speaker B's text"
-- The second speaker MUST ALWAYS start on a NEW LINE. Never put two speakers on the same line.
-- NEVER put a dash on a single-speaker cue (only one speaker in the cue = no dashes).
+- NEVER put a dash on a single-speaker cue.
 
 ═══════════════════════════════════════
 ORPHAN WORDS — CRITICAL:
 ═══════════════════════════════════════
 - NEVER create a cue with just 1-3 words if those words are part of a larger sentence.
 - Combine adjacent segments into one cue when the combined text fits in 2 lines × 32 chars.
-- After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
@@ -185,7 +205,7 @@ ${highlightDump}`;
         messages: [
           {
             role: 'system',
-            content: 'You are a broadcast caption editor. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues. When two speakers share a cue, each speaker MUST start on a separate line prefixed with "- ".',
+            content: 'You are a broadcast caption editor using intelligent linguistic segmentation. Output ONLY a valid JSON array. TIMECODES ARE LOCKED. Every line ≤32 chars, ≤2 lines per cue. Never drop content. Combine orphan cues. No dashes on single-speaker cues. When two speakers share a cue, each speaker MUST start on a separate line prefixed with "- ". CRITICAL: NEVER split proper nouns, show/film/song titles, branded phrases, or hyphenated words across lines. NEVER break between article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, or number+unit. Sound cues get their own line. Favor semantic correctness over visual balance.',
           },
           { role: 'user', content: prompt },
         ],
