@@ -222,14 +222,17 @@ ${highlightDump}`;
 
   const parsed = JSON.parse(jsonMatch[0]);
 
-  // ── Post-GPT cleanup: Strip dashes from single-speaker cues ──
+  // ── Post-GPT cleanup: Strip dashes from SINGLE-speaker cues only ──
+  // Keep dashes when two different speakers share the same cue.
   for (const cue of parsed) {
     if (!cue.text) continue;
     const lines = cue.text.split('\n');
-    if (lines.length >= 2 && lines.every(l => l.trimStart().startsWith('- ')) && cue.speaker) {
-      cue.text = lines.map(l => l.replace(/^- /, '')).join('\n');
-    }
-    if (lines.length === 1 && lines[0].startsWith('- ') && cue.speaker) {
+    const dashedLines = lines.filter(l => l.trimStart().startsWith('- '));
+    const isMultiSpeaker = dashedLines.length >= 2;
+    // If multi-speaker (2+ dashed lines), leave dashes intact
+    if (isMultiSpeaker) continue;
+    // Single line with dash on a single-speaker cue — strip it
+    if (lines.length === 1 && lines[0].startsWith('- ')) {
       cue.text = cue.text.replace(/^- /, '');
     }
   }
