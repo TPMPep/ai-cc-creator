@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
         auto_highlights: true,
         content_safety: true,
         speech_models: ["universal-3-pro", "universal-2"],
-        prompt: "Preserve non-speech audio in tags to indicate when the audio occurred. Tag sounds: [laughter], [applause], [music], [silence], [noise], [cough], [sigh].",
+        prompt: "Always: Transcribe speech with your best guess based on context in all possible scenarios where speech is present in the audio. Include: Tag sounds: [laughter], [applause], [music], [silence], [noise], [cough], [sigh], [beep], [hold music], [inaudible], [crosstalk]. Tag all non-speech audio events using bracketed tags.",
       }),
     });
 
