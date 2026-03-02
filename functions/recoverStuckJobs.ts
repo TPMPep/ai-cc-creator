@@ -3,8 +3,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 // recoverStuckJobs v2 — Works with processAICaption v10 (no worker chain)
 // Jobs are "stuck" if they've been processing for too long without progress.
 
-const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
-const NO_START_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
+const STUCK_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
+const NO_START_THRESHOLD_MS = 25 * 60 * 1000; // 25 minutes (waitAndProcess handles up to 15 min)
 
 Deno.serve(async (req) => {
   try {
