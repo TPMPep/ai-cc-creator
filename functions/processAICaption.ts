@@ -343,6 +343,7 @@ ${highlightDump}`;
 
   // Merge orphan cues — SPEAKER-AWARE: never plain-merge across different speakers
   const isSoundCueFn = (text) => text.startsWith('[') || text.includes('♪');
+  const containsSoundCue = (text) => /\[[^\]]*\]/.test(text) || text.includes('♪');
   const isMultiSpeakerCue = (cue) => {
     if (!cue.text) return false;
     const lines = cue.text.split('\n');
