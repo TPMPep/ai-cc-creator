@@ -448,6 +448,11 @@ function finalEnforce(cues) {
   }
 
   const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
+  const isMultiSpk = (c) => {
+    if (!c.text) return false;
+    const lines = c.text.split('\n');
+    return lines.length >= 2 && lines.filter(l => l.startsWith('- ')).length >= 2;
+  };
   const repack = (text) => {
     const words = text.split(/\s+/).filter(Boolean);
     let l1 = '', l2 = '';
@@ -463,18 +468,31 @@ function finalEnforce(cues) {
   for (let i = result.length - 1; i >= 0; i--) {
     const c = result[i];
     if (!c.text || isSndCue(c.text)) continue;
-    const plain = c.text.replace(/\n/g, ' ').trim();
+    // Never merge multi-speaker cues or merge INTO multi-speaker cues
+    if (isMultiSpk(c)) continue;
+    const plain = c.text.replace(/\n/g, ' ').replace(/^- /, '').trim();
     const wc = plain.split(/\s+/).length;
     if (wc > 2) continue;
-    if (i > 0 && !isSndCue(result[i-1].text)) {
-      const combo = result[i-1].text.replace(/\n/g, ' ').trim() + ' ' + plain;
-      const repacked = repack(combo);
-      if (repacked) { result[i-1] = { ...result[i-1], end: c.end, text: repacked }; result.splice(i, 1); continue; }
+
+    // Try backward merge — only if same speaker or no speaker info
+    if (i > 0 && !isSndCue(result[i-1].text) && !isMultiSpk(result[i-1])) {
+      const sameSpeaker = c.speaker && result[i-1].speaker && c.speaker === result[i-1].speaker;
+      const noSpeakerInfo = !c.speaker || !result[i-1].speaker;
+      if (sameSpeaker || noSpeakerInfo) {
+        const combo = result[i-1].text.replace(/\n/g, ' ').replace(/^- /, '').trim() + ' ' + plain;
+        const repacked = repack(combo);
+        if (repacked) { result[i-1] = { ...result[i-1], end: c.end, text: repacked }; result.splice(i, 1); continue; }
+      }
     }
-    if (i < result.length - 1 && !isSndCue(result[i+1].text)) {
-      const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').trim();
-      const repacked = repack(combo);
-      if (repacked) { result[i+1] = { ...result[i+1], start: c.start, text: repacked }; result.splice(i, 1); continue; }
+    // Try forward merge — only if same speaker or no speaker info
+    if (i < result.length - 1 && !isSndCue(result[i+1].text) && !isMultiSpk(result[i+1])) {
+      const sameSpeaker = c.speaker && result[i+1].speaker && c.speaker === result[i+1].speaker;
+      const noSpeakerInfo = !c.speaker || !result[i+1].speaker;
+      if (sameSpeaker || noSpeakerInfo) {
+        const combo = plain + ' ' + result[i+1].text.replace(/\n/g, ' ').replace(/^- /, '').trim();
+        const repacked = repack(combo);
+        if (repacked) { result[i+1] = { ...result[i+1], start: c.start, text: repacked }; result.splice(i, 1); continue; }
+      }
     }
   }
 
