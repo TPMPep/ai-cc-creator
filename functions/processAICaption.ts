@@ -225,11 +225,12 @@ Deno.serve(async (req) => {
           language,
           highlights,
           rawAudioEvents,
+          contentSafetyLabels,
           runId,
         },
       });
 
-      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, lang=${language}, runId=${runId}`);
+      console.log(`[START] ${segments.length} segments, ${batches.length} batches, ${gaps.length} gaps, ${rawAudioEvents.length} audio events, lang=${language}, runId=${runId}`);
 
       // Invoke the WORKER function (different deployment endpoint — no 508 loop detection)
       base44.asServiceRole.functions.invoke('processAICaptionWorker', {
