@@ -650,6 +650,7 @@ Deno.serve(async (req) => {
         openaiReformattedCues: allPolished.map(c => ({
           start: c.start, end: c.end, text: c.text, speaker: c.speaker
         })),
+        rawAudioEvents: plan.rawAudioEvents || [],
       };
 
       const enforced = finalEnforce(allPolished);
