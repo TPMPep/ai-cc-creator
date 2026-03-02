@@ -47,7 +47,7 @@ export default function NewJobAI() {
     setSubmitting(true);
 
     try {
-      // Start AssemblyAI transcription
+      // Start AssemblyAI transcription (first call without job_db_id to get transcript_id)
       const res = await base44.functions.invoke("startAICaption", { mediaUrl });
       const { transcript_id } = res.data;
       if (!transcript_id) throw new Error("No transcript ID returned");
@@ -61,6 +61,12 @@ export default function NewJobAI() {
         status: "processing",
         pipeline: "ai",
       });
+
+      // Kick off server-side polling so processing happens even if browser closes
+      base44.functions.invoke("waitAndProcess", {
+        transcript_id,
+        job_db_id: job.id,
+      }).catch(err => console.error("waitAndProcess fire-and-forget error:", err));
 
       navigate(createPageUrl("JobDetailAI") + `?jobId=${transcript_id}`);
     } catch (err) {
