@@ -430,8 +430,8 @@ ${highlightDump}`;
   };
 
   const merged = [];
-  for (let i = 0; i < parsed.length; i++) {
-    const cue = parsed[i];
+  for (let i = 0; i < parsedFinal.length; i++) {
+    const cue = parsedFinal[i];
     if (!cue.text || !cue.text.trim()) continue;
     // Never merge sound cues or cues containing sound cues
     if (isSoundCueFn(cue.text) || containsSoundCue(cue.text)) { merged.push(cue); continue; }
