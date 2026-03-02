@@ -705,6 +705,7 @@ Deno.serve(async (req) => {
           assemblyRawCues: diagnosticData.assemblyRawCues,
           assemblyUtterances: diagnosticData.assemblyUtterances,
           openaiReformattedCues: diagnosticData.openaiReformattedCues,
+          rawAudioEvents: diagnosticData.rawAudioEvents,
           qc, language,
         };
       }
