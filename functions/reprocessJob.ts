@@ -315,16 +315,29 @@ function finalEnforce(cues) {
   }
   // Merge remaining orphans
   const isSndCue = (t) => t.startsWith('[') || t.includes('♪');
+  const hasSndCue = (t) => /\[[^\]]*\]/.test(t) || t.includes('♪');
+  const FW_FE2 = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+  const endsFW2 = (ln) => { const w = ln.trim().split(/\s+/); return w.length > 0 && FW_FE2.has(w[w.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
   const repack2 = (text) => {
+    if (hasSndCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
-    let l1 = '', l2 = '';
-    for (const w of words) {
-      if (!l1 || (l1 + ' ' + w).length <= MAX_CHARS) l1 = l1 ? l1 + ' ' + w : w;
-      else if (!l2 || (l2 + ' ' + w).length <= MAX_CHARS) l2 = l2 ? l2 + ' ' + w : w;
-      else return null;
+    if (!words.length) return null;
+    const oneLine = words.join(' ');
+    if (oneLine.length <= MAX_CHARS) return oneLine;
+    let bestBp = -1, bestSc = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1 = words.slice(0, bp).join(' ');
+      const l2 = words.slice(bp).join(' ');
+      if (l1.length > MAX_CHARS || l2.length > MAX_CHARS) continue;
+      let sc = 0;
+      if (endsFW2(l1)) sc -= 100;
+      const lc = l1[l1.length - 1];
+      if ('.?!'.includes(lc)) sc += 50; else if (',;:'.includes(lc)) sc += 30;
+      sc -= Math.abs(l1.length - l2.length);
+      if (sc > bestSc) { bestSc = sc; bestBp = bp; }
     }
-    const r = l2 ? l1 + '\n' + l2 : l1;
-    return r.split('\n').every(l => l.length <= MAX_CHARS) ? r : null;
+    if (bestBp === -1) return null;
+    return words.slice(0, bestBp).join(' ') + '\n' + words.slice(bestBp).join(' ');
   };
   for (let i = result.length - 1; i >= 0; i--) {
     const c = result[i];
