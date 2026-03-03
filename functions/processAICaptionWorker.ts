@@ -107,84 +107,45 @@ async function polishBatchWithGPT(segments, gaps, language, highlights, apiKey, 
     ? `NOTE: This is batch ${batchIndex + 1} of ${totalBatches} from a longer video. Process only the segments provided.\n\n`
     : '';
 
-  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards) using intelligent linguistic segmentation.
+  const prompt = `${batchNote}You are a professional broadcast closed caption editor (NBCU CM-051 / FCC standards).
 
-You will receive pre-timed caption segments from a transcription API. Your job is to produce broadcast-quality closed captions.
+You will receive pre-timed caption segments. Produce broadcast-quality closed captions.
 
-═══════════════════════════════════════
-YOUR TASKS:
-═══════════════════════════════════════
-1. Be TRUE to what is said. Every spoken word MUST appear in the output. NEVER drop, paraphrase, or summarize.
-2. Fix grammar, punctuation, and homophones — but preserve how people actually speak (gonna, wanna, don't, ain't, etc.)
-3. Format each cue: ≤32 characters per line, ≤2 lines per cue
-4. Choose SMART line breaks using the HIERARCHICAL RULES below
-5. Insert sound/music cues into SILENCE GAPS where appropriate
-6. Timecodes on screen must match when words are actually spoken
+TASKS: 1) Be TRUE — never drop/paraphrase. 2) Fix grammar/punctuation. 3) ≤32 chars/line, ≤2 lines/cue. 4) Smart line breaks. 5) Sound cues in gaps. 6) Timecodes match speech.
 
 ═══════════════════════════════════════
-PRIORITY 1 — PRESERVE SEMANTIC UNITS
-(NON-NEGOTIABLE — NEVER SPLIT THESE):
+ABSOLUTE RULE — FUNCTION WORD LINE-END BAN:
 ═══════════════════════════════════════
-A. PROPER NOUNS: Never split person names, city/country names, organization names, or brand names across lines.
-B. TITLES & NAMED WORKS: Never split TV show names, film titles, book titles, song titles, franchise names, or event names.
-C. CONTEXTUAL TITLES & BRANDED PHRASES: Use contextual inference to detect named entities even if capitalization is inconsistent.
-D. SPEAKER LABELS: Never separate a speaker identifier (dash prefix) from its dialogue.
-E. HYPHENATED/COMPOUND WORDS: Never split hyphenated words across lines.
+A line must NEVER end with: a, an, the, of, to, and, or, but, with, from, in, on, at, for, that
+If needed, split into a new caption event instead.
+❌ "had a\\nfacelift" → ✓ "had\\na facelift"
+❌ "not even a\\nbrand label" → ✓ "not even\\na brand label"
+❌ "a lot of\\nclues" → ✓ "gave\\na lot of clues"
 
 ═══════════════════════════════════════
-PRIORITY 2 — SOUND CUE SEPARATION:
+PRIORITY 1 — NEVER SPLIT THESE:
 ═══════════════════════════════════════
-Sound cues ([...] or ♪) are independent semantic units. Give them their own line when possible.
-✓ "[LAUGHTER]\\nThat was so funny!"  ❌ "[LAUGHTER] That was\\nso funny!"
+• Proper nouns (names, places, orgs, brands) — atomic across lines AND cues
+• Titles & named works (TV shows, films, songs) — atomic. "Watch What Happens Live" must NEVER be split.
+  ❌ "Welcome to Watch\\nwhat Happens Live" → ✓ "Welcome to\\nWatch What Happens Live."
+  ❌ "for Watch What Happens\\nLive." → ✓ "for\\nWatch What Happens Live."
+• Detect titles by context even if capitalization is wrong
+• Hyphenated words stay together
+• Number + unit pairs ("20 years") stay together
+• Multi-word constructs: "a lot of", "kind of", "in front of"
 
-═══════════════════════════════════════
-PRIORITY 3 — SMART LINE BREAKING:
-═══════════════════════════════════════
-Break preference: 1. After sentence (. ? !)  2. After comma  3. After clause  4. Phrase boundary
-NEVER break between: article+noun, adjective+noun, auxiliary+main verb, inside verb/prepositional phrases, inside idioms, number+unit.
-Favor semantic correctness over visual balance.
+PRIORITY 2 — Sound cues on their own line when possible.
+PRIORITY 3 — Break after: sentences > commas > clauses > phrase boundaries. NEVER between article+noun, adjective+noun, aux+verb, inside phrases.
+PRIORITY 4 — If 2-line layout violates rules, create another cue. Semantic integrity > visual balance.
 
-═══════════════════════════════════════
-SPEAKER DASHES — CRITICAL:
-═══════════════════════════════════════
-- When TWO DIFFERENT SPEAKERS share the SAME cue, EACH speaker's text MUST start on its own line with "- " prefix.
-- NEVER put a dash on a single-speaker cue.
+SPEAKER DASHES: "- " prefix each line only for 2-speaker cues. Never on single-speaker.
+ORPHAN WORDS: Never 1-3 word cues mid-sentence.
+HARD: Never drop content. Timecodes locked. ≤32 chars, ≤2 lines. Duration ≥500ms. End sentences with .?!
+SOUND CUES: [DESC] ALL CAPS, max 32 chars, only in gaps.
+SELF-CHECK: Before outputting, verify no line ends with a/an/the/of/to/and/or/but/with/from/in/on/at/for/that, and no title/entity is split.
 
-═══════════════════════════════════════
-ORPHAN WORDS — CRITICAL:
-═══════════════════════════════════════
-- NEVER create a cue with just 1-3 words if those words are part of a larger sentence.
-- Combine adjacent segments into one cue when the combined text fits in 2 lines × 32 chars.
+OUTPUT: ONLY valid JSON array. {"start": number, "end": number, "text": string, "speaker": string|null}. Use \\n for line breaks.
 
-═══════════════════════════════════════
-HARD RULES — NEVER VIOLATE:
-═══════════════════════════════════════
-- NEVER DROP OR OMIT spoken content.
-- TIMECODES ARE LOCKED. Output the exact start/end ms from the input.
-  Exception: when combining adjacent segments, use first start and last end.
-  Exception: sound cues in gaps get the gap's start/end times.
-- MAX 32 characters per line, MAX 2 lines per cue
-- Cue duration must be ≥ 500ms
-- Every sentence must end with . ? or !
-- Preserve contractions as spoken. Do NOT censor.
-
-═══════════════════════════════════════
-SOUND/MUSIC CUE RULES:
-═══════════════════════════════════════
-- Music: [ ♪ DESCRIPTION ♪ ] — ALL CAPS. Max 32 chars.
-- Sound: [DESCRIPTION] — ALL CAPS. Max 32 chars.
-- Only insert into SILENCE GAPS. If no context, omit.
-
-═══════════════════════════════════════
-OUTPUT FORMAT:
-═══════════════════════════════════════
-Return ONLY a valid JSON array. No markdown. No code fences.
-Each element: {"start": number, "end": number, "text": string, "speaker": string|null}
-Use \\n for line breaks within 2-line cues.
-
-═══════════════════════════════════════
-INPUT SEGMENTS:
-═══════════════════════════════════════
 Language: ${language || 'en'}
 
 ${segmentInput}
