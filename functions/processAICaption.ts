@@ -436,19 +436,36 @@ ${highlightDump}`;
     const trimmed = text.replace(/\n/g, ' ').trim();
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
   };
+  const FUNC_WORDS = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+  const endsWithFuncWord = (line) => { const w = line.trim().split(/\s+/); return w.length > 0 && FUNC_WORDS.has(w[w.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
   const repackLines = (text) => {
-    // NEVER repack text that contains sound cues — it destroys sound cue line separation
     if (containsSoundCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
-    let line1 = '', line2 = '';
-    for (const w of words) {
-      if (!line1 || (line1 + ' ' + w).length <= 32) { line1 = line1 ? line1 + ' ' + w : w; }
-      else if (!line2 || (line2 + ' ' + w).length <= 32) { line2 = line2 ? line2 + ' ' + w : w; }
-      else { return null; }
+    if (words.length === 0) return null;
+    // If fits on one line, use it
+    const oneLine = words.join(' ');
+    if (oneLine.length <= 32) return oneLine;
+    // Try all valid break points, pick the best one that avoids function-word line endings
+    let bestBreak = -1, bestScore = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1 = words.slice(0, bp).join(' ');
+      const l2 = words.slice(bp).join(' ');
+      if (l1.length > 32 || l2.length > 32) continue;
+      let score = 0;
+      // Penalize function word at end of line 1
+      if (endsWithFuncWord(l1)) score -= 100;
+      // Reward break after punctuation
+      const lastCharL1 = l1[l1.length - 1];
+      if ('.?!'.includes(lastCharL1)) score += 50;
+      else if (',;:'.includes(lastCharL1)) score += 30;
+      // Prefer balanced lines
+      score -= Math.abs(l1.length - l2.length);
+      if (score > bestScore) { bestScore = score; bestBreak = bp; }
     }
-    const result = line2 ? line1 + '\n' + line2 : line1;
-    if (result.split('\n').every(l => l.length <= 32)) return result;
-    return null;
+    if (bestBreak === -1) return null;
+    const l1 = words.slice(0, bestBreak).join(' ');
+    const l2 = words.slice(bestBreak).join(' ');
+    return l1 + '\n' + l2;
   };
   // Build a dual-speaker cue with dashes on each line
   const buildDualSpeakerCue = (textA, textB) => {
