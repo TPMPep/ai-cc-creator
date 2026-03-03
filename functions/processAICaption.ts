@@ -168,41 +168,68 @@ YOUR TASKS:
 6. Timecodes on screen must match when words are actually spoken
 
 ═══════════════════════════════════════
+ABSOLUTE RULE — FUNCTION WORD LINE-END BAN:
+═══════════════════════════════════════
+A line must NEVER end with any of these words:
+  a, an, the, of, to, and, or, but, with, from, in, on, at, for, that, is, are, was, were, by, as, it, its, my, our, your, his, her, their, this, not, be
+
+This is a HARD constraint. If the only way to fit text in 2 lines would end a line with one of these words, you MUST split into a new caption event instead.
+
+EXAMPLES:
+❌ BAD: "about whether I've had a\\nfacelift."
+✓ GOOD: "about whether I've had\\na facelift."
+
+❌ BAD: "There's literally not even a\\nbrand label inside of it."
+✓ GOOD: "There's literally not even\\na brand label inside of it."
+
+❌ BAD: "they gave a lot of\\nclues away"
+✓ GOOD: "they gave\\na lot of clues away"
+
+═══════════════════════════════════════
 PRIORITY 1 — PRESERVE SEMANTIC UNITS
 (NON-NEGOTIABLE — NEVER SPLIT THESE):
 ═══════════════════════════════════════
-A. PROPER NOUNS: Never split person names, city/country names, organization names, or brand names across lines.
+A. PROPER NOUNS: Never split person names, city/country names, organization names, or brand names across lines OR across cue events.
    ❌ "Los\\nAngeles"  ❌ "New\\nYork City"  ❌ "Andy\\nCohen"
-   ✓ Keep the full name on one line.
 
-B. TITLES & NAMED WORKS: Never split TV show names, film titles, book titles, episode names, song titles, franchise names, or event names.
+B. TITLES & NAMED WORKS: Never split TV show names, film titles, book titles, episode names, song titles, franchise names, or event names across lines OR across cue events. These are ATOMIC UNITS.
    ❌ "Watch What\\nHappens Live"  ❌ "Below\\nDeck Med"  ❌ "Game of\\nThrones"
-   ✓ Treat multi-word titles as single atomic units that must stay on one line.
+   ❌ "It's time for Watch What Happens\\nLive." — title split across lines!
+   ✓ "It's time for\\nWatch What Happens Live." — title on one line
 
-C. CONTEXTUAL TITLES & BRANDED PHRASES: Use contextual inference to detect when a phrase functions as a show title, program name, product name, or branded segment — even if capitalization is inconsistent in the transcript input.
-   Example: "Watch What Happens Live" must never be split even if transcript says "watch what happens live."
+C. CONTEXTUAL TITLES & BRANDED PHRASES: Use contextual inference to detect when a phrase functions as a show title, program name, product name, or branded segment — even if capitalization is inconsistent.
+   "watch what happens live" → still "Watch What Happens Live" — keep atomic.
 
 D. SPEAKER LABELS: Never separate a speaker identifier (dash prefix) from its dialogue.
 
-E. HYPHENATED/COMPOUND WORDS: Never split hyphenated words across lines (e.g., "award-winning" stays together).
+E. HYPHENATED/COMPOUND WORDS: Never split across lines (e.g., "award-winning" stays together).
+
+F. NUMBER + UNIT PAIRS: Never split "20 years", "5 PM", "100 percent" across lines.
+
+G. MULTI-WORD CONSTRUCTS: Keep these together: "a lot of", "kind of", "in front of", "because of", "instead of", "out of".
+
+CONCRETE EXAMPLES:
+❌ "Hey, everybody. Welcome to Watch\\nwhat Happens Live. I'm your"
+✓ "Hey, everybody. Welcome to\\nWatch What Happens Live."  (next cue: "I'm your host, Andy Cohen.")
+
+❌ "It's time for Watch What Happens\\nLive. —this was my 9th year"
+✓ "It's time for\\nWatch What Happens Live."  (next cue: "This was my 9th year...")
 
 ═══════════════════════════════════════
 PRIORITY 2 — SOUND CUE SEPARATION:
 ═══════════════════════════════════════
-When a cue contains BOTH a sound cue and dialogue, separate them:
-   ✓ Preferred: "[LAUGHTER]\\nThat was so funny!"
-   ❌ Avoid: "[LAUGHTER] That was\\nso funny!"
-Sound cues ([...] or ♪) are independent semantic units. Give them their own line when possible. Only merge mid-line if character constraints make separation impossible.
+Sound cues ([...] or ♪) are independent semantic units. Give them their own line when possible.
+   ✓ "[LAUGHTER]\\nThat was so funny!"
+   ❌ "[LAUGHTER] That was\\nso funny!"
 
 ═══════════════════════════════════════
-PRIORITY 3 — SMART LINE BREAKING
-(Linguistic Boundary Preference):
+PRIORITY 3 — SMART LINE BREAKING:
 ═══════════════════════════════════════
-When splitting text into two lines within a cue, choose breakpoints in this order:
+Choose breakpoints in this priority order:
   1. After a full sentence (. ? !)
   2. After a comma
   3. After a complete clause
-  4. At a natural phrase boundary
+  4. At a natural phrase boundary (between phrases, NOT inside them)
 
 NEVER break between:
   • Article + noun ("the\\nshow" ❌)
@@ -210,16 +237,12 @@ NEVER break between:
   • Auxiliary verb + main verb ("was\\ngoing" ❌)
   • Inside verb phrases ("should have\\nbeen" ❌)
   • Inside prepositional phrases ("in the\\nmorning" ❌)
-  • Inside idiomatic expressions
+  • Inside idiomatic expressions ("a lot of\\nclues" ❌)
   • Number + unit ("20\\nyears" ❌)
 
-FALLBACK ORDER when no ideal break exists:
-  1. Preserve named entities (hard constraint)
-  2. Preserve phrase integrity
-  3. Choose least disruptive grammatical boundary
-  4. Only then consider character symmetry
+CRITICAL POLICY: If preserving semantic integrity requires splitting into another caption event, DO SO rather than violating any line-break rule above.
 
-Favor SEMANTIC CORRECTNESS over visual line balance.
+Favor SEMANTIC CORRECTNESS over visual line balance. An uneven split like "It's time for\\nWatch What Happens Live." is FAR better than a balanced but broken split.
 
 ═══════════════════════════════════════
 PRIORITY 4 — EVENT SPLITTING:
@@ -228,22 +251,19 @@ If text must be split across multiple cues:
   • Prefer splitting at sentence boundaries
   • Avoid splitting mid-thought across cues
   • Each cue must remain semantically coherent
-  • Only split mid-sentence when absolutely required by duration constraints
+  • If 2-line layout would violate rules, create another cue instead
 
 ═══════════════════════════════════════
 SPEAKER DASHES — CRITICAL:
 ═══════════════════════════════════════
 - When TWO DIFFERENT SPEAKERS share the SAME cue, EACH speaker's text MUST start on its own line with "- " prefix.
-- Example of correct dual-speaker cue: "- Speaker A's text\\n- Speaker B's text"
-- The second speaker MUST ALWAYS start on a NEW LINE. Never put two speakers on the same line.
-- NEVER put a dash on a single-speaker cue (only one speaker in the cue = no dashes).
+- NEVER put a dash on a single-speaker cue.
 
 ═══════════════════════════════════════
 ORPHAN WORDS — CRITICAL:
 ═══════════════════════════════════════
 - NEVER create a cue with just 1-3 words if those words are part of a larger sentence.
 - Combine adjacent segments into one cue when the combined text fits in 2 lines × 32 chars.
-- After you build your output, scan it: any cue with ≤3 words that doesn't end a sentence should be merged.
 
 ═══════════════════════════════════════
 HARD RULES — NEVER VIOLATE:
@@ -256,6 +276,17 @@ HARD RULES — NEVER VIOLATE:
 - Cue duration must be ≥ 500ms
 - Every sentence must end with . ? or !
 - Preserve contractions as spoken. Do NOT censor.
+- NEVER end a line with: a, an, the, of, to, and, or, but, with, from, in, on, at, for, that
+
+═══════════════════════════════════════
+SELF-CHECK — BEFORE OUTPUTTING:
+═══════════════════════════════════════
+Scan every cue in your output and verify:
+1. No line ends with a function word (a/an/the/of/to/and/or/but/with/from/in/on/at/for/that)
+2. No named entity or title is split across lines
+3. Every line is ≤32 characters
+4. Every cue has ≤2 lines
+If any check fails, fix it by adjusting the line break or splitting into a new cue.
 
 ═══════════════════════════════════════
 SOUND/MUSIC CUE RULES:
