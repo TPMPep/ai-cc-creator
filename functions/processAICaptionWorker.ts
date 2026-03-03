@@ -486,6 +486,7 @@ function finalEnforce(cues) {
 
 function runQC(cues) {
   const issues = [];
+  const FW_QC = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that']);
   for (let i = 0; i < cues.length; i++) {
     const c = cues[i];
     const lines = c.text.split('\n');
@@ -495,6 +496,13 @@ function runQC(cues) {
 
     for (let li = 0; li < lines.length; li++) {
       if (lines[li].length > 32) issues.push({ cue: i, type: 'line_too_long', value: `Line ${li+1}: ${lines[li].length} chars` });
+      if (!isSoundCue && li < lines.length - 1) {
+        const lineWords = lines[li].replace(/^- /, '').trim().split(/\s+/);
+        const lastWord = lineWords[lineWords.length - 1].replace(/[.,!?;:'"]+$/, '').toLowerCase();
+        if (FW_QC.has(lastWord)) {
+          issues.push({ cue: i, type: 'func_word_line_end', value: `Line ${li+1} ends with "${lastWord}"` });
+        }
+      }
     }
     if (lines.length > 2) issues.push({ cue: i, type: 'too_many_lines', value: `${lines.length} lines` });
     if (dur < 500) issues.push({ cue: i, type: 'cue_too_short', value: `${dur}ms (min 500ms)` });
