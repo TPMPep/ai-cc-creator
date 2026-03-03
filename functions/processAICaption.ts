@@ -659,18 +659,29 @@ function finalEnforce(cues) {
     const lines = c.text.split('\n');
     return lines.length >= 2 && lines.filter(l => l.startsWith('- ')).length >= 2;
   };
+  const FUNC_WORDS_FE = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+  const endsWithFW = (line) => { const w = line.trim().split(/\s+/); return w.length > 0 && FUNC_WORDS_FE.has(w[w.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
   const repack = (text) => {
-    // Never repack text containing sound cues
     if (hasSndCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
-    let l1 = '', l2 = '';
-    for (const w of words) {
-      if (!l1 || (l1 + ' ' + w).length <= MAX_CHARS) { l1 = l1 ? l1 + ' ' + w : w; }
-      else if (!l2 || (l2 + ' ' + w).length <= MAX_CHARS) { l2 = l2 ? l2 + ' ' + w : w; }
-      else return null;
+    if (!words.length) return null;
+    const oneLine = words.join(' ');
+    if (oneLine.length <= MAX_CHARS) return oneLine;
+    let bestBreak = -1, bestScore = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1 = words.slice(0, bp).join(' ');
+      const l2 = words.slice(bp).join(' ');
+      if (l1.length > MAX_CHARS || l2.length > MAX_CHARS) continue;
+      let score = 0;
+      if (endsWithFW(l1)) score -= 100;
+      const lastChar = l1[l1.length - 1];
+      if ('.?!'.includes(lastChar)) score += 50;
+      else if (',;:'.includes(lastChar)) score += 30;
+      score -= Math.abs(l1.length - l2.length);
+      if (score > bestScore) { bestScore = score; bestBreak = bp; }
     }
-    const r = l2 ? l1 + '\n' + l2 : l1;
-    return r.split('\n').every(l => l.length <= MAX_CHARS) ? r : null;
+    if (bestBreak === -1) return null;
+    return words.slice(0, bestBreak).join(' ') + '\n' + words.slice(bestBreak).join(' ');
   };
 
   // Build dual-speaker cue helper for finalEnforce
