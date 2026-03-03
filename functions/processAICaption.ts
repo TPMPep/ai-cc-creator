@@ -616,10 +616,36 @@ function finalEnforce(cues) {
       continue;
     }
 
-    // Single-speaker cue that's too long — repack without dashes
+    // Single-speaker cue that's too long — repack with smart breakpoints
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
+    const FW_SET = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+    const endsFW = (ln) => { const wds = ln.trim().split(/\s+/); return wds.length > 0 && FW_SET.has(wds[wds.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
+    // Try to fit in 2 lines with smart break
+    const fullText = words.join(' ');
+    if (fullText.length <= MAX_CHARS) {
+      result.push({ ...cue, text: fullText }); continue;
+    }
+    // Find best 2-line break
+    let bestBp = -1, bestSc = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1t = words.slice(0, bp).join(' ');
+      const l2t = words.slice(bp).join(' ');
+      if (l1t.length > MAX_CHARS || l2t.length > MAX_CHARS) continue;
+      let sc = 0;
+      if (endsFW(l1t)) sc -= 100;
+      const lc = l1t[l1t.length - 1];
+      if ('.?!'.includes(lc)) sc += 50;
+      else if (',;:'.includes(lc)) sc += 30;
+      sc -= Math.abs(l1t.length - l2t.length);
+      if (sc > bestSc) { bestSc = sc; bestBp = bp; }
+    }
+    if (bestBp !== -1) {
+      result.push({ ...cue, text: words.slice(0, bestBp).join(' ') + '\n' + words.slice(bestBp).join(' ') });
+      continue;
+    }
+    // Can't fit in 2 lines — split into multiple cues
     const packed = [];
     let cur = '';
     for (const word of words) {
