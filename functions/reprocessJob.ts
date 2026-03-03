@@ -341,14 +341,14 @@ function finalEnforce(cues) {
   };
   for (let i = result.length - 1; i >= 0; i--) {
     const c = result[i];
-    if (!c.text || isSndCue(c.text)) continue;
+    if (!c.text || isSndCue(c.text) || hasSndCue(c.text)) continue;
     const plain = c.text.replace(/\n/g, ' ').trim();
     if (plain.split(/\s+/).length > 2) continue;
-    if (i > 0 && !isSndCue(result[i-1].text)) {
+    if (i > 0 && !isSndCue(result[i-1].text) && !hasSndCue(result[i-1].text)) {
       const rp = repack2(result[i-1].text.replace(/\n/g, ' ').trim() + ' ' + plain);
       if (rp) { result[i-1] = { ...result[i-1], end: c.end, text: rp }; result.splice(i, 1); continue; }
     }
-    if (i < result.length - 1 && !isSndCue(result[i+1].text)) {
+    if (i < result.length - 1 && !isSndCue(result[i+1].text) && !hasSndCue(result[i+1].text)) {
       const rp = repack2(plain + ' ' + result[i+1].text.replace(/\n/g, ' ').trim());
       if (rp) { result[i+1] = { ...result[i+1], start: c.start, text: rp }; result.splice(i, 1); continue; }
     }
