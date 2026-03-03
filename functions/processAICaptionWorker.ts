@@ -253,18 +253,29 @@ ${highlightDump}`;
     const trimmed = text.replace(/\n/g, ' ').trim();
     return /[.?!]$/.test(trimmed) && trimmed.split(/\s+/).length >= 2;
   };
+  const FW_SET = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+  const endsFW = (ln) => { const w = ln.trim().split(/\s+/); return w.length > 0 && FW_SET.has(w[w.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
   const repackLines = (text) => {
     if (containsSoundCue(text)) return null;
     const words = text.split(/\s+/).filter(Boolean);
-    let line1 = '', line2 = '';
-    for (const w of words) {
-      if (!line1 || (line1 + ' ' + w).length <= 32) { line1 = line1 ? line1 + ' ' + w : w; }
-      else if (!line2 || (line2 + ' ' + w).length <= 32) { line2 = line2 ? line2 + ' ' + w : w; }
-      else { return null; }
+    if (!words.length) return null;
+    const oneLine = words.join(' ');
+    if (oneLine.length <= 32) return oneLine;
+    let bestBp = -1, bestSc = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1 = words.slice(0, bp).join(' ');
+      const l2 = words.slice(bp).join(' ');
+      if (l1.length > 32 || l2.length > 32) continue;
+      let sc = 0;
+      if (endsFW(l1)) sc -= 100;
+      const lc = l1[l1.length - 1];
+      if ('.?!'.includes(lc)) sc += 50;
+      else if (',;:'.includes(lc)) sc += 30;
+      sc -= Math.abs(l1.length - l2.length);
+      if (sc > bestSc) { bestSc = sc; bestBp = bp; }
     }
-    const result = line2 ? line1 + '\n' + line2 : line1;
-    if (result.split('\n').every(l => l.length <= 32)) return result;
-    return null;
+    if (bestBp === -1) return null;
+    return words.slice(0, bestBp).join(' ') + '\n' + words.slice(bestBp).join(' ');
   };
 
   const merged = [];
