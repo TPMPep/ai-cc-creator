@@ -351,22 +351,54 @@ function finalEnforce(cues) {
       continue;
     }
 
-    const hasDashes = lines.length >= 2 && lines.every(l => l.startsWith('- '));
+    const hasDashes = lines.length >= 2 && lines.filter(l => l.startsWith('- ')).length >= 2;
+    if (hasDashes) {
+      const repackedLines = lines.map(l => l.length <= MAX_CHARS ? l : l.substring(0, MAX_CHARS));
+      if (repackedLines.length <= 2) { result.push({ ...cue, text: repackedLines.join('\n') }); }
+      else {
+        const totalDur = cue.end - cue.start;
+        const cc = Math.ceil(repackedLines.length / 2);
+        for (let ci = 0; ci < cc; ci++) {
+          const chunk = repackedLines.slice(ci * 2, ci * 2 + 2);
+          const cs = cue.start + Math.round((ci / cc) * totalDur);
+          const ce = ci === cc - 1 ? cue.end : cue.start + Math.round(((ci + 1) / cc) * totalDur);
+          result.push({ start: cs, end: Math.max(cs + MIN_DUR, ce), text: chunk.join('\n'), speaker: cue.speaker });
+        }
+      }
+      continue;
+    }
+
+    // Single-speaker — smart repack with function-word avoidance
     const stripped = lines.map(l => l.replace(/^- /, '')).join(' ');
     const words = stripped.split(/\s+/).filter(Boolean);
     if (words.length === 0) continue;
-    const prefix = hasDashes ? '- ' : '';
-    const limit = MAX_CHARS - prefix.length;
+    const FW_RE = new Set(['a','an','the','of','to','and','or','but','with','from','in','on','at','for','that','is','are','was','were','by','as','it','its','my','our','your','his','her','their','this','not','be']);
+    const endsFWr = (ln) => { const w = ln.trim().split(/\s+/); return w.length > 0 && FW_RE.has(w[w.length - 1].replace(/[.,!?;:'"]+$/,'').toLowerCase()); };
+    const fullText = words.join(' ');
+    if (fullText.length <= MAX_CHARS) { result.push({ ...cue, text: fullText }); continue; }
+    let bestBp = -1, bestSc = -Infinity;
+    for (let bp = 1; bp < words.length; bp++) {
+      const l1 = words.slice(0, bp).join(' ');
+      const l2 = words.slice(bp).join(' ');
+      if (l1.length > MAX_CHARS || l2.length > MAX_CHARS) continue;
+      let sc = 0;
+      if (endsFWr(l1)) sc -= 100;
+      const lc = l1[l1.length - 1];
+      if ('.?!'.includes(lc)) sc += 50; else if (',;:'.includes(lc)) sc += 30;
+      sc -= Math.abs(l1.length - l2.length);
+      if (sc > bestSc) { bestSc = sc; bestBp = bp; }
+    }
+    if (bestBp !== -1) { result.push({ ...cue, text: words.slice(0, bestBp).join(' ') + '\n' + words.slice(bestBp).join(' ') }); continue; }
+    // Fallback — split into multiple cues
     const packed = [];
     let cur = '';
     for (const word of words) {
       const candidate = cur ? `${cur} ${word}` : word;
-      if (candidate.length <= limit) { cur = candidate; }
+      if (candidate.length <= MAX_CHARS) { cur = candidate; }
       else { if (cur) packed.push(cur); cur = word; }
     }
     if (cur) packed.push(cur);
     if (packed.length === 0) continue;
-
     const totalDur = cue.end - cue.start;
     const chunkCount = Math.ceil(packed.length / 2);
     for (let i = 0; i < packed.length; i += 2) {
@@ -374,7 +406,7 @@ function finalEnforce(cues) {
       const ci = Math.floor(i / 2);
       const chunkStart = cue.start + Math.round((ci / chunkCount) * totalDur);
       const chunkEnd = ci === chunkCount - 1 ? cue.end : cue.start + Math.round(((ci + 1) / chunkCount) * totalDur);
-      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.map(l => prefix + l).join('\n'), speaker: cue.speaker });
+      result.push({ start: chunkStart, end: Math.max(chunkStart + MIN_DUR, chunkEnd), text: chunk.join('\n'), speaker: cue.speaker });
     }
   }
 
