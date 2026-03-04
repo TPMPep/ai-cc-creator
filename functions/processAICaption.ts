@@ -780,27 +780,16 @@ Deno.serve(async (req) => {
         if (transcriptData.status !== 'completed') return Response.json({ error: `Transcript not ready: ${transcriptData.status}` }, { status: 400 });
         
       } else {
-        // Reprocess — try to get saved data, or re-fetch from AAI
+        // Reprocess — always re-fetch from AAI (we don't store the full word/srt data)
         const job = await base44.asServiceRole.entities.Job.get(job_db_id);
-        const plan = job.processingPlan || {};
-        
-        if (plan.words && plan.srtText) {
-          // Use saved data
-          words = plan.words;
-          srtText = plan.srtText;
-          language = plan.language || 'en';
-          soundEvents = plan.soundEvents || [];
-          transcriptData = null; // skip fetch
-        } else {
-          const tid = transcript_id || job.railwayJobId;
-          if (!tid) return Response.json({ error: 'No transcript data available' }, { status: 400 });
-          const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${tid}`, {
-            headers: { 'authorization': ASSEMBLYAI_API_KEY },
-          });
-          if (!aaiRes.ok) return Response.json({ error: `AAI re-fetch failed: ${aaiRes.status}` }, { status: 500 });
-          transcriptData = await aaiRes.json();
-          if (transcriptData.status !== 'completed') return Response.json({ error: `Transcript not ready: ${transcriptData.status}` }, { status: 400 });
-        }
+        const tid = transcript_id || job.railwayJobId;
+        if (!tid) return Response.json({ error: 'No transcript data available' }, { status: 400 });
+        const aaiRes = await fetch(`https://api.assemblyai.com/v2/transcript/${tid}`, {
+          headers: { 'authorization': ASSEMBLYAI_API_KEY },
+        });
+        if (!aaiRes.ok) return Response.json({ error: `AAI re-fetch failed: ${aaiRes.status}` }, { status: 500 });
+        transcriptData = await aaiRes.json();
+        if (transcriptData.status !== 'completed') return Response.json({ error: `Transcript not ready: ${transcriptData.status}` }, { status: 400 });
       }
 
       if (transcriptData) {
