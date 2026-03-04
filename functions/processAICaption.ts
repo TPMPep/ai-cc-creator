@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // processAICaption v11 — Production-Grade CC Builder
 // Implements the exact 10-module pipeline from the spec:
