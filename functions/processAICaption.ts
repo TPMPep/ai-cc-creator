@@ -825,17 +825,17 @@ Deno.serve(async (req) => {
         utterances = transcriptData.utterances || [];
       }
 
-      // Save processing plan
+      // Save processing plan (without large text fields — those are kept in memory)
       await base44.asServiceRole.entities.Job.update(job_db_id, {
         status: 'processing',
         result: null,
         error: null,
         pipelineLog: [{ step: 'init', status: 'ok', detail: action === 'reprocess' ? 'Reprocess started' : 'Transcript fetched', ts: new Date().toISOString() }],
         processingPlan: {
-          words: words.slice(0, 50000), // Cap for storage
-          srtText: srtText.substring(0, 200000),
           language,
           soundEvents,
+          wordCount: words.length,
+          srtLength: srtText.length,
         },
       });
 
