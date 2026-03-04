@@ -898,10 +898,16 @@ Deno.serve(async (req) => {
       await addLog(base44, job_db_id, '6_ai', 'ok', 'AI line breaking complete');
 
       // ── STEP 7: Validate and split if needed ────────────────────────────
+      // Per spec Section 5 & 7: hard failures → split + re-invoke AI on children
+      // Soft failures (function word endings) → retry AI once
       await addLog(base44, job_db_id, '7_validate', 'running', 'Validation gate...');
       
       let finalCues = [];
       let splitCount = 0;
+      let softRetryCount = 0;
+      
+      // Collect child cues that need AI re-processing after split
+      const childCuesForAI = []; // { childCue, parentIdx }
       
       for (let i = 0; i < preSplit.length; i++) {
         const cue = preSplit[i];
@@ -919,25 +925,16 @@ Deno.serve(async (req) => {
         }
 
         if (aiResult.needs_split) {
-          // AI said it can't fit — deterministic split
+          // AI said it can't fit — deterministic split, then re-invoke AI on children (per spec)
           const fullText = (cue.runs || []).map(r => r.text).join(' ');
           const [part1, part2] = splitCueText(fullText);
-          const childCues = recalculateTimingsForSplit(cue, [part1, part2]);
+          const children = recalculateTimingsForSplit(cue, [part1, part2]);
           
-          // Re-run deterministic line breaking on each child
-          for (const child of childCues) {
-            const childResult = deterministicLineBreak(child.text);
-            if (childResult.needs_split) {
-              // Still too long — force truncate to fit
-              const words = child.text.split(/\s+/);
-              const half = Math.ceil(words.length / 2);
-              const l1 = words.slice(0, half).join(' ').substring(0, MAX_CHARS);
-              const l2 = words.slice(half).join(' ').substring(0, MAX_CHARS);
-              child.text = l2 ? `${l1}\n${l2}` : l1;
-            } else {
-              child.text = childResult.lines.join('\n');
-            }
+          for (const child of children) {
+            const placeholderIdx = finalCues.length;
+            child._needsAIRetry = true;
             finalCues.push(child);
+            childCuesForAI.push({ idx: placeholderIdx, text: child.text });
           }
           splitCount++;
           continue;
@@ -948,28 +945,34 @@ Deno.serve(async (req) => {
         const errors = validateLines(lines);
         
         if (errors.length > 0) {
-          // Hard failure — deterministic fallback
+          // Hard failure — split + re-invoke AI on children (per spec)
           const fullText = (cue.runs || []).map(r => r.text).join(' ');
-          const fallback = deterministicLineBreak(fullText);
+          const [part1, part2] = splitCueText(fullText);
+          const children = recalculateTimingsForSplit(cue, [part1, part2]);
           
-          if (fallback.needs_split) {
-            const [part1, part2] = splitCueText(fullText);
-            const childCues = recalculateTimingsForSplit(cue, [part1, part2]);
-            for (const child of childCues) {
-              const childResult = deterministicLineBreak(child.text);
-              child.text = childResult.lines.join('\n') || child.text.substring(0, MAX_CHARS);
-              finalCues.push(child);
-            }
-            splitCount++;
-          } else {
-            finalCues.push({
-              start_ms: cue.start_ms,
-              end_ms: cue.end_ms,
-              text: fallback.lines.join('\n'),
-              cue_type: 'dialogue',
-              speaker: cue.runs?.[0]?.speaker || null,
-            });
+          for (const child of children) {
+            child._needsAIRetry = true;
+            finalCues.push(child);
+            childCuesForAI.push({ idx: finalCues.length - 1, text: child.text });
           }
+          splitCount++;
+          continue;
+        }
+
+        // Check soft failures — function word line endings → retry AI once
+        if (lines.length > 1 && hasSoftFailures(lines)) {
+          const fullText = (cue.runs || []).map(r => r.text).join(' ');
+          const placeholderIdx = finalCues.length;
+          finalCues.push({
+            start_ms: cue.start_ms,
+            end_ms: cue.end_ms,
+            text: lines.join('\n'), // store current as fallback
+            cue_type: cue.cue_type || 'dialogue',
+            speaker: cue.runs?.[0]?.speaker || null,
+            _softRetry: true,
+          });
+          childCuesForAI.push({ idx: placeholderIdx, text: fullText, isSoftRetry: true });
+          softRetryCount++;
           continue;
         }
 
@@ -983,8 +986,54 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`[STEP 7] Validation: ${splitCount} cues needed splitting, ${finalCues.length} final cues`);
-      await addLog(base44, job_db_id, '7_validate', 'ok', `${splitCount} splits, ${finalCues.length} final cues`);
+      // Re-invoke AI on all child/retry cues in batches
+      if (childCuesForAI.length > 0) {
+        console.log(`[STEP 7] Re-invoking AI on ${childCuesForAI.length} child/retry cues`);
+        const textsForAI = childCuesForAI.map(c => c.text);
+        const aiRetryResults = await aiLinebreakSmall(textsForAI, OPENAI_API_KEY);
+        
+        for (let j = 0; j < childCuesForAI.length; j++) {
+          const { idx, isSoftRetry } = childCuesForAI[j];
+          const retryResult = aiRetryResults[j];
+          
+          if (retryResult && !retryResult.needs_split && retryResult.lines?.length > 0) {
+            const retryErrors = validateLines(retryResult.lines);
+            if (retryErrors.length === 0) {
+              finalCues[idx].text = retryResult.lines.join('\n');
+              delete finalCues[idx]._needsAIRetry;
+              delete finalCues[idx]._softRetry;
+              continue;
+            }
+          }
+          
+          // AI retry failed — use deterministic fallback
+          if (!isSoftRetry) {
+            const fallback = deterministicLineBreak(childCuesForAI[j].text);
+            if (fallback.needs_split) {
+              // Last resort: force fit
+              const words = childCuesForAI[j].text.split(/\s+/);
+              const half = Math.ceil(words.length / 2);
+              const l1 = words.slice(0, half).join(' ').substring(0, MAX_CHARS);
+              const l2 = words.slice(half).join(' ').substring(0, MAX_CHARS);
+              finalCues[idx].text = l2 ? `${l1}\n${l2}` : l1;
+            } else {
+              finalCues[idx].text = fallback.lines.join('\n');
+            }
+          }
+          // For soft retries, keep the original AI output (already stored as fallback)
+          delete finalCues[idx]._needsAIRetry;
+          delete finalCues[idx]._softRetry;
+        }
+      }
+
+      // Clean up any leftover flags
+      for (const cue of finalCues) {
+        delete cue._needsAIRetry;
+        delete cue._softRetry;
+      }
+
+      console.log(`[STEP 7] Validation: ${splitCount} splits, ${softRetryCount} soft retries, ${finalCues.length} final cues`);
+      await addLog(base44, job_db_id, '7_validate', 'ok', `${splitCount} splits, ${softRetryCount} soft retries, ${finalCues.length} final cues`);
 
       // ── STEP 8: Ensure monotonic timecodes ──────────────────────────────
       finalCues.sort((a, b) => a.start_ms - b.start_ms);
