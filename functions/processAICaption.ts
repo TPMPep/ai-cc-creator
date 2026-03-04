@@ -287,8 +287,85 @@ function preSplitMultispeakerCues(cues) {
 // ─── MODULE 6: ai_linebreak_format_cue (OpenAI) ────────────────────────────
 // OpenAI is ONLY used for linguistic line breaking. No timing changes.
 
+const AI_SYSTEM_PROMPT = `You are a professional broadcast caption formatter.
+Follow these rules strictly:
+- Maximum 2 lines per output
+- Maximum 32 characters per line
+- One speaker per line
+- Dash prefix "- " for each speaker line when multiple speakers in same cue
+- Do not split these named entities across lines: ${PROTECTED_PHRASES.join(', ')}
+- Do not end lines with function words: a, an, the, of, to, and, or, but, with, from, in, on, at, for, that
+- Prefer line breaks at punctuation (. ? ! ,) then phrase boundaries
+- Preserve ALL spoken words — never drop, add, or paraphrase
+- Add proper punctuation if missing
+- Return JSON only — an array of objects.
+
+For each input cue, return:
+{"idx": <same idx>, "lines": ["line1", "line2"], "needs_split": false}
+
+If text cannot fit in 2 lines of 32 chars without violating rules, return:
+{"idx": <same idx>, "lines": [], "needs_split": true, "split_hint": "sentence_boundary"|"comma"|"phrase_boundary"}
+
+Return a JSON array of results for all cues. No markdown fences.`;
+
+// Call OpenAI for a batch of cue inputs, returns parsed results array
+async function callOpenAIBatch(cueInputs, apiKey) {
+  const prompt = JSON.stringify(cueInputs);
+  let res;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 8000,
+      }),
+    });
+    if (res.status === 429) {
+      await new Promise(r => setTimeout(r, 20000 * (attempt + 1)));
+      continue;
+    }
+    break;
+  }
+  if (!res.ok) {
+    console.error(`[AI] OpenAI error: ${await res.text()}`);
+    return null;
+  }
+  const data = await res.json();
+  const content = data.choices[0].message.content.trim();
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    console.error('[AI] No JSON array in response');
+    return null;
+  }
+  return JSON.parse(jsonMatch[0]);
+}
+
+// Build AI input for a single text (for retry/child cues)
+function buildAICueInput(idx, text, speakerCount) {
+  return {
+    idx,
+    cue_type: 'dialogue',
+    runs: [{ speaker: 'A', text }],
+    constraints: {
+      max_lines: MAX_LINES,
+      max_chars_per_line: MAX_CHARS,
+      one_speaker_per_line: true,
+      dash_for_each_speaker_line: speakerCount > 1,
+      sound_cue_standalone: true,
+      no_split_named_entities: true,
+      avoid_function_word_line_endings: true,
+    },
+    protected_phrases: PROTECTED_PHRASES,
+  };
+}
+
 async function aiLinebreakBatch(cues, apiKey) {
-  // Batch cues for efficiency — process in chunks of ~40
   const BATCH_SIZE = 40;
   const results = new Array(cues.length);
   
@@ -299,7 +376,6 @@ async function aiLinebreakBatch(cues, apiKey) {
     const cueInputs = batch.map((cue, localIdx) => {
       const globalIdx = batchStart + localIdx;
       if (cue.cue_type === 'sound') {
-        // Sound cues don't need AI — they're already formatted
         results[globalIdx] = { lines: [cue.text], needs_split: false };
         return null;
       }
@@ -317,10 +393,8 @@ async function aiLinebreakBatch(cues, apiKey) {
         }
       }
 
-      // Single speaker — needs AI line breaking
       const fullText = runs.map(r => r.text).join(' ');
       
-      // If it fits on one line, no AI needed
       if (fullText.length <= MAX_CHARS) {
         results[globalIdx] = { lines: [fullText], needs_split: false };
         return null;
@@ -345,95 +419,30 @@ async function aiLinebreakBatch(cues, apiKey) {
 
     if (cueInputs.length === 0) continue;
 
-    // Call OpenAI for this batch
-    const prompt = JSON.stringify(cueInputs);
+    const parsed = await callOpenAIBatch(cueInputs, apiKey);
     
-    let res;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a professional broadcast caption formatter.
-Follow these rules strictly:
-- Maximum 2 lines per output
-- Maximum 32 characters per line
-- One speaker per line
-- Dash prefix "- " for each speaker line when multiple speakers in same cue
-- Do not split these named entities across lines: ${PROTECTED_PHRASES.join(', ')}
-- Do not end lines with function words: a, an, the, of, to, and, or, but, with, from, in, on, at, for, that
-- Prefer line breaks at punctuation (. ? ! ,) then phrase boundaries
-- Preserve ALL spoken words — never drop, add, or paraphrase
-- Add proper punctuation if missing
-- Return JSON only — an array of objects.
-
-For each input cue, return:
-{"idx": <same idx>, "lines": ["line1", "line2"], "needs_split": false}
-
-If text cannot fit in 2 lines of 32 chars without violating rules, return:
-{"idx": <same idx>, "lines": [], "needs_split": true, "split_hint": "sentence_boundary"|"comma"|"phrase_boundary"}
-
-Return a JSON array of results for all cues. No markdown fences.`,
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.2,
-          max_tokens: 8000,
-        }),
-      });
-      if (res.status === 429) {
-        await new Promise(r => setTimeout(r, 20000 * (attempt + 1)));
-        continue;
-      }
-      break;
-    }
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error(`[AI] OpenAI error: ${err}`);
-      // Fallback: deterministic line breaking for this batch
+    if (!parsed) {
       for (const ci of cueInputs) {
         results[ci.idx] = deterministicLineBreak(ci.runs.map(r => r.text).join(' '));
       }
-      continue;
-    }
-
-    const data = await res.json();
-    const content = data.choices[0].message.content.trim();
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      console.error('[AI] No JSON array in response');
+    } else {
+      for (const r of parsed) {
+        if (r.idx !== undefined && r.idx < results.length) {
+          results[r.idx] = r;
+        }
+      }
       for (const ci of cueInputs) {
-        results[ci.idx] = deterministicLineBreak(ci.runs.map(r => r.text).join(' '));
-      }
-      continue;
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    for (const r of parsed) {
-      if (r.idx !== undefined && r.idx < results.length) {
-        results[r.idx] = r;
+        if (!results[ci.idx]) {
+          results[ci.idx] = deterministicLineBreak(ci.runs.map(r => r.text).join(' '));
+        }
       }
     }
 
-    // Fill any missing results with deterministic fallback
-    for (const ci of cueInputs) {
-      if (!results[ci.idx]) {
-        results[ci.idx] = deterministicLineBreak(ci.runs.map(r => r.text).join(' '));
-      }
-    }
-
-    // Rate limit pause between batches
     if (batchEnd < cues.length) {
       await new Promise(r => setTimeout(r, 1500));
     }
   }
 
-  // Fill any remaining nulls
   for (let i = 0; i < results.length; i++) {
     if (!results[i]) {
       const cue = cues[i];
@@ -442,7 +451,28 @@ Return a JSON array of results for all cues. No markdown fences.`,
     }
   }
 
-  return { results, tokens: { input: 0, output: 0 } };
+  return { results };
+}
+
+// Re-invoke AI on a small set of child cue texts (for split retry per spec Section 7)
+async function aiLinebreakSmall(texts, apiKey) {
+  const inputs = texts.map((t, i) => buildAICueInput(i, t, 1));
+  const parsed = await callOpenAIBatch(inputs, apiKey);
+  const results = texts.map((t, i) => {
+    const match = parsed?.find(r => r.idx === i);
+    return match || deterministicLineBreak(t);
+  });
+  return results;
+}
+
+// Check for soft failures (function word endings) and return true if found
+function hasSoftFailures(lines) {
+  for (let li = 0; li < lines.length - 1; li++) {
+    const lineWords = lines[li].replace(/^- /, '').trim().split(/\s+/);
+    const lastWord = lineWords[lineWords.length - 1].replace(/[.,!?;:'"]+$/, '').toLowerCase();
+    if (FUNC_WORDS.has(lastWord)) return true;
+  }
+  return false;
 }
 
 // ─── MODULE 7: validate_cue_or_split ────────────────────────────────────────
