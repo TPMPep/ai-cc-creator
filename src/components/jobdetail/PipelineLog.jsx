@@ -3,7 +3,17 @@ import { CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp } from "lucide-r
 import { useState } from "react";
 
 const STEP_LABELS = {
+  "init": "Initialize",
   "1_transcribe": "Step 1 — AssemblyAI Transcription",
+  "1_parse": "Step 1 — Parse SRT Backbone",
+  "2_align": "Step 2 — Align Words to Cues",
+  "3_runs": "Step 3 — Build Speaker Runs",
+  "4_sound": "Step 4 — Insert Sound Cues",
+  "5_split": "Step 5 — Pre-split Multi-speaker",
+  "6_ai": "Step 6 — AI Line Breaking",
+  "7_validate": "Step 7 — Validation Gate",
+  "8_export": "Step 8 — Export & QC",
+  "9_done": "Step 9 — Complete",
   "3_finalize": "Step 3 — Final Enforce & QC",
 };
 
