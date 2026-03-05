@@ -516,11 +516,11 @@ function recalculateTimingsForSplit(originalCue, textParts) {
   let offset = originalCue.start_ms;
 
   for (let i = 0; i < textParts.length; i++) {
-    const dur = Math.max(MIN_CUE_DURATION_MS, Math.round(totalDur * (textParts[i].length / totalChars)));
+    const dur = Math.max(MIN_CUE_DURATION_MS + 1, Math.round(totalDur * (textParts[i].length / totalChars)));
     const end = i === textParts.length - 1 ? originalCue.end_ms : Math.min(offset + dur, originalCue.end_ms);
     newCues.push({
       start_ms: offset,
-      end_ms: Math.max(end, offset + MIN_CUE_DURATION_MS),
+      end_ms: Math.max(end, offset + MIN_CUE_DURATION_MS + 1),
       text: textParts[i],
       cue_type: 'dialogue',
       runs: [{ speaker: originalCue.runs?.[0]?.speaker || null, text: textParts[i] }],
