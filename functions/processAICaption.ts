@@ -1044,10 +1044,28 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Re-invoke AI on all child/retry cues in batches
+      // Re-invoke AI on child/retry cues in batches (cap at 120 to avoid timeout)
+      const MAX_AI_RETRIES = 120;
       if (childCuesForAI.length > 0) {
-        console.log(`[STEP 7] Re-invoking AI on ${childCuesForAI.length} child/retry cues`);
-        const textsForAI = childCuesForAI.map(c => c.text);
+        const aiRetrySlice = childCuesForAI.slice(0, MAX_AI_RETRIES);
+        const deterministicSlice = childCuesForAI.slice(MAX_AI_RETRIES);
+        
+        // Handle overflow with deterministic fallback
+        for (const overflow of deterministicSlice) {
+          const fb = deterministicLineBreak(overflow.text);
+          if (!fb.needs_split) {
+            finalCues[overflow.idx].text = fb.lines.join('\n');
+          } else {
+            const words = overflow.text.split(/\s+/);
+            const half = Math.ceil(words.length / 2);
+            finalCues[overflow.idx].text = `${words.slice(0, half).join(' ').substring(0, MAX_CHARS)}\n${words.slice(half).join(' ').substring(0, MAX_CHARS)}`;
+          }
+          delete finalCues[overflow.idx]._needsAIRetry;
+          delete finalCues[overflow.idx]._softRetry;
+        }
+        
+        console.log(`[STEP 7] Re-invoking AI on ${aiRetrySlice.length} child/retry cues (${deterministicSlice.length} overflow handled deterministically)`);
+        const textsForAI = aiRetrySlice.map(c => c.text);
         const aiRetryResults = await aiLinebreakSmall(textsForAI, OPENAI_API_KEY);
         
         for (let j = 0; j < childCuesForAI.length; j++) {
