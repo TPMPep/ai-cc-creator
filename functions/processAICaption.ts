@@ -645,8 +645,19 @@ function enforceMonotonicTimeline(cues) {
   for (let i = 1; i < cues.length; i++) {
     if (cues[i].start_ms <= cues[i - 1].end_ms) {
       cues[i].start_ms = cues[i - 1].end_ms + 1;
+    }
+    // Ensure minimum duration after gap adjustment
+    const dur = cues[i].end_ms - cues[i].start_ms;
+    if (dur < MIN_CUE_DURATION_MS) {
+      cues[i].end_ms = cues[i].start_ms + MIN_CUE_DURATION_MS + 1;
+    }
+  }
+  // Second pass: fix any new overlaps created by extending durations
+  for (let i = 1; i < cues.length; i++) {
+    if (cues[i].start_ms <= cues[i - 1].end_ms) {
+      cues[i].start_ms = cues[i - 1].end_ms + 1;
       if (cues[i].end_ms <= cues[i].start_ms) {
-        cues[i].end_ms = cues[i].start_ms + MIN_CUE_DURATION_MS;
+        cues[i].end_ms = cues[i].start_ms + MIN_CUE_DURATION_MS + 1;
       }
     }
   }
