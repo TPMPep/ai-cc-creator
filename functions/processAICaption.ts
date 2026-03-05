@@ -608,8 +608,8 @@ function broadcastReadabilityGate(cues) {
         // Can't merge — extend duration if too short
         if (isTooShort && !isFuncWordOnly) {
           const nextCue = cues[i + 1];
-          const maxEnd = nextCue ? nextCue.start_ms - 1 : cue.start_ms + MIN_CUE_DURATION_MS;
-          cue.end_ms = Math.min(cue.start_ms + MIN_CUE_DURATION_MS, maxEnd);
+          const maxEnd = nextCue ? nextCue.start_ms - 1 : cue.start_ms + MIN_CUE_DURATION_MS + 100;
+          cue.end_ms = Math.min(cue.start_ms + MIN_CUE_DURATION_MS + 100, maxEnd);
           changed = true;
         }
       }
