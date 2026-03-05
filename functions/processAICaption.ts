@@ -1129,7 +1129,31 @@ Deno.serve(async (req) => {
     console.log(`[9] After readability gate: ${finalCues.length} cues`);
     await addLog(base44, job_db_id, '8_readability', 'ok', `${finalCues.length} cues after readability gate`);
 
-    // ── STEP 10: Enforce monotonic timeline ─────────────────────────────
+    // ── STEP 10: Final hard-constraint enforcement ─────────────────────
+    // Last-resort fix: if any line is still >32 chars, re-break deterministically
+    for (const cue of finalCues) {
+      if (cue.cue_type === 'sound') continue;
+      const lines = cue.text.split('\n');
+      const anyTooLong = lines.some(l => l.length > MAX_CHARS);
+      const tooManyLines = lines.length > MAX_LINES;
+      if (anyTooLong || tooManyLines) {
+        const plainText = lines.map(l => l.replace(/^- /, '').trim()).join(' ').trim();
+        const fb = deterministicLineBreak(plainText);
+        if (!fb.needs_split && fb.lines.length > 0 && fb.lines.every(l => l.length <= MAX_CHARS)) {
+          cue.text = fb.lines.join('\n');
+        } else {
+          // Absolute last resort: truncate each line
+          const fixed = plainText.split(/\s+/);
+          let l1 = '', l2 = '';
+          for (const w of fixed) {
+            if ((l1 + ' ' + w).trim().length <= MAX_CHARS) l1 = (l1 + ' ' + w).trim();
+            else if ((l2 + ' ' + w).trim().length <= MAX_CHARS) l2 = (l2 + ' ' + w).trim();
+          }
+          cue.text = l2 ? `${l1}\n${l2}` : l1;
+        }
+      }
+    }
+
     finalCues = enforceMonotonicTimeline(finalCues);
 
     // ── STEP 11: Run acceptance tests ───────────────────────────────────
