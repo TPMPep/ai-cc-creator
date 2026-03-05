@@ -454,15 +454,29 @@ async function aiLinebreakBatch(cues, apiKey) {
   return { results };
 }
 
-// Re-invoke AI on a small set of child cue texts (for split retry per spec Section 7)
+// Re-invoke AI on child cue texts in batches (for split retry per spec Section 7)
 async function aiLinebreakSmall(texts, apiKey) {
-  const inputs = texts.map((t, i) => buildAICueInput(i, t, 1));
-  const parsed = await callOpenAIBatch(inputs, apiKey);
-  const results = texts.map((t, i) => {
-    const match = parsed?.find(r => r.idx === i);
-    return match || deterministicLineBreak(t);
-  });
-  return results;
+  const RETRY_BATCH = 40;
+  const allResults = new Array(texts.length);
+  
+  for (let start = 0; start < texts.length; start += RETRY_BATCH) {
+    const end = Math.min(start + RETRY_BATCH, texts.length);
+    const batchTexts = texts.slice(start, end);
+    const inputs = batchTexts.map((t, i) => buildAICueInput(start + i, t, 1));
+    const parsed = await callOpenAIBatch(inputs, apiKey);
+    
+    for (let j = 0; j < batchTexts.length; j++) {
+      const globalIdx = start + j;
+      const match = parsed?.find(r => r.idx === globalIdx);
+      allResults[globalIdx] = match || deterministicLineBreak(batchTexts[j]);
+    }
+    
+    if (end < texts.length) {
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  
+  return allResults;
 }
 
 // Check for soft failures (function word endings) and return true if found
