@@ -1084,7 +1084,7 @@ Deno.serve(async (req) => {
           
           // AI retry failed — use deterministic fallback
           if (!isSoftRetry) {
-            const fallback = deterministicLineBreak(childCuesForAI[j].text);
+            const fallback = deterministicLineBreak(aiRetrySlice[j].text);
             if (fallback.needs_split) {
               // Last resort: force fit
               const words = childCuesForAI[j].text.split(/\s+/);
