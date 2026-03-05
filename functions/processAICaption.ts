@@ -617,8 +617,8 @@ function broadcastReadabilityGate(cues) {
       // Sound cue duration clamp
       if (isSoundCue && dur < SOUND_CUE_MIN_MS) {
         const nextCue = cues[i + 1];
-        const maxEnd = nextCue ? nextCue.start_ms - 1 : cue.start_ms + SOUND_CUE_MIN_MS;
-        cue.end_ms = Math.min(cue.start_ms + SOUND_CUE_MIN_MS, maxEnd);
+        const maxEnd = nextCue ? nextCue.start_ms - 1 : cue.start_ms + SOUND_CUE_MIN_MS + 100;
+        cue.end_ms = Math.min(cue.start_ms + SOUND_CUE_MIN_MS + 100, maxEnd);
         changed = true;
       }
 
