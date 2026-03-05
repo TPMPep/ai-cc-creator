@@ -1111,8 +1111,8 @@ Deno.serve(async (req) => {
 
       // ── STEP 10: Run acceptance tests ───────────────────────────────────
       const qc = runAcceptanceTests(finalCues);
-      console.log(`[STEP 10] Acceptance: ${qc.issuesCount} issues across ${finalCues.length} cues`);
-      await addLog(base44, job_db_id, '8_export', 'ok', `Exported ${finalCues.length} cues, ${qc.issuesCount} QC issues`);
+      console.log(`[STEP 10] Acceptance: ${qc.hardCount} hard, ${qc.softCount} soft issues across ${finalCues.length} cues`);
+      await addLog(base44, job_db_id, '8_export', 'ok', `Exported ${finalCues.length} cues, ${qc.hardCount} hard / ${qc.softCount} soft QC issues`);
 
       // ── Save results ────────────────────────────────────────────────────
       const cueJson = JSON.stringify(outputCues);
