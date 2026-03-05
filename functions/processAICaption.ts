@@ -759,11 +759,12 @@ function runAcceptanceTests(finalCues) {
       }
     }
 
-    // HARD: No function-word-only cues
+    // HARD: No function-word-only cues (unless it's an allowed short word like "No")
     if (!isSoundCue) {
       const plainText = lines.map(l => l.replace(/^- /, '').trim()).join(' ').trim();
       const cueWords = plainText.split(/\s+/);
-      if (cueWords.length === 1 && FUNC_WORDS.has(cueWords[0].replace(/[.,!?;:'"]+$/, '').toLowerCase())) {
+      const cleanWord = cueWords.length === 1 ? cueWords[0].replace(/[.,!?;:'"]+$/, '').toLowerCase() : '';
+      if (cueWords.length === 1 && FUNC_WORDS.has(cleanWord) && !ALLOWED_SHORT_WORDS.has(cleanWord)) {
         issues.push({ cue: i, type: 'function_word_only', severity: 'hard', value: plainText });
       }
     }
