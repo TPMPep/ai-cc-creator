@@ -1033,8 +1033,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Re-invoke AI on split child cues in batches (cap at 80 to avoid timeout)
-      const MAX_AI_RETRIES = 80;
+      // Re-invoke AI on split child cues (cap at 40 = 1 batch to stay within time limits)
+      const MAX_AI_RETRIES = 40;
       if (childCuesForAI.length > 0) {
         const aiRetrySlice = childCuesForAI.slice(0, MAX_AI_RETRIES);
         const deterministicSlice = childCuesForAI.slice(MAX_AI_RETRIES);
