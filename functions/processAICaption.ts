@@ -1033,68 +1033,56 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Re-invoke AI on split child cues (cap at 40 = 1 batch to stay within time limits)
-      const MAX_AI_RETRIES = 40;
+      // Per spec Section 7: after splitting, re-run AI on child cues.
+      // Due to serverless time limits, we handle this deterministically first,
+      // then batch-retry only those that the deterministic breaker couldn't cleanly handle.
       if (childCuesForAI.length > 0) {
-        const aiRetrySlice = childCuesForAI.slice(0, MAX_AI_RETRIES);
-        const deterministicSlice = childCuesForAI.slice(MAX_AI_RETRIES);
-        
-        // Handle overflow with deterministic fallback
-        for (const overflow of deterministicSlice) {
-          const fb = deterministicLineBreak(overflow.text);
-          if (!fb.needs_split) {
-            finalCues[overflow.idx].text = fb.lines.join('\n');
+        // First pass: deterministic line breaking on all children
+        const needsAIRetry = [];
+        for (const { idx, text } of childCuesForAI) {
+          const fb = deterministicLineBreak(text);
+          if (!fb.needs_split && fb.lines.length > 0) {
+            // Check quality — if function word ending or other soft issue, queue for AI
+            const hasIssue = fb.lines.length > 1 && hasSoftFailures(fb.lines);
+            finalCues[idx].text = fb.lines.join('\n');
+            if (hasIssue && needsAIRetry.length < 40) {
+              needsAIRetry.push({ idx, text });
+            }
           } else {
-            const words = overflow.text.split(/\s+/);
-            const half = Math.ceil(words.length / 2);
-            finalCues[overflow.idx].text = `${words.slice(0, half).join(' ').substring(0, MAX_CHARS)}\n${words.slice(half).join(' ').substring(0, MAX_CHARS)}`;
-          }
-          delete finalCues[overflow.idx]._needsAIRetry;
-          delete finalCues[overflow.idx]._softRetry;
-        }
-        
-        console.log(`[STEP 7] Re-invoking AI on ${aiRetrySlice.length} child/retry cues (${deterministicSlice.length} overflow handled deterministically)`);
-        const textsForAI = aiRetrySlice.map(c => c.text);
-        const aiRetryResults = await aiLinebreakSmall(textsForAI, OPENAI_API_KEY);
-        
-        for (let j = 0; j < aiRetrySlice.length; j++) {
-          const { idx, isSoftRetry } = aiRetrySlice[j];
-          const retryResult = aiRetryResults[j];
-          
-          if (retryResult && !retryResult.needs_split && retryResult.lines?.length > 0) {
-            const retryErrors = validateLines(retryResult.lines);
-            if (retryErrors.length === 0) {
-              finalCues[idx].text = retryResult.lines.join('\n');
-              delete finalCues[idx]._needsAIRetry;
-              delete finalCues[idx]._softRetry;
-              continue;
-            }
-          }
-          
-          // AI retry failed — use deterministic fallback
-          if (!isSoftRetry) {
-            const fallback = deterministicLineBreak(aiRetrySlice[j].text);
-            if (fallback.needs_split) {
-              // Last resort: force fit
-              const words = aiRetrySlice[j].text.split(/\s+/);
-              const half = Math.ceil(words.length / 2);
-              const l1 = words.slice(0, half).join(' ').substring(0, MAX_CHARS);
-              const l2 = words.slice(half).join(' ').substring(0, MAX_CHARS);
-              finalCues[idx].text = l2 ? `${l1}\n${l2}` : l1;
+            // Deterministic can't fit — definitely needs AI
+            if (needsAIRetry.length < 40) {
+              needsAIRetry.push({ idx, text });
             } else {
-              finalCues[idx].text = fallback.lines.join('\n');
+              // Force fit as last resort
+              const words = text.split(/\s+/);
+              const half = Math.ceil(words.length / 2);
+              finalCues[idx].text = `${words.slice(0, half).join(' ').substring(0, MAX_CHARS)}\n${words.slice(half).join(' ').substring(0, MAX_CHARS)}`;
             }
           }
-          // For soft retries, keep the original AI output (already stored as fallback)
           delete finalCues[idx]._needsAIRetry;
-          delete finalCues[idx]._softRetry;
         }
-      }
 
-      // Clean up any leftover flags
-      for (const cue of finalCues) {
-        delete cue._needsAIRetry;
-        delete cue._softRetry;
+        // Second pass: AI retry on the ones that need it (max 1 batch of 40)
+        if (needsAIRetry.length > 0) {
+          console.log(`[STEP 7] Re-invoking AI on ${needsAIRetry.length} split child cues`);
+          const textsForAI = needsAIRetry.map(c => c.text);
+          const aiRetryResults = await aiLinebreakSmall(textsForAI, OPENAI_API_KEY);
+          
+          for (let j = 0; j < needsAIRetry.length; j++) {
+            const { idx } = needsAIRetry[j];
+            const retryResult = aiRetryResults[j];
+            
+            if (retryResult && !retryResult.needs_split && retryResult.lines?.length > 0) {
+              const retryErrors = validateLines(retryResult.lines);
+              if (retryErrors.length === 0) {
+                finalCues[idx].text = retryResult.lines.join('\n');
+              }
+            }
+            // If AI retry fails, keep the deterministic result already set
+          }
+        } else {
+          console.log(`[STEP 7] All ${childCuesForAI.length} split children handled deterministically`);
+        }
       }
 
       console.log(`[STEP 7] Validation: ${splitCount} splits, ${softRetryCount} soft retries, ${finalCues.length} final cues`);
