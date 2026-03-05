@@ -1079,7 +1079,9 @@ Deno.serve(async (req) => {
       console.log(`[STEP 7] Validation: ${splitCount} splits, ${softRetryCount} soft retries, ${finalCues.length} final cues`);
       await addLog(base44, job_db_id, '7_validate', 'ok', `${splitCount} splits, ${softRetryCount} soft retries, ${finalCues.length} final cues`);
 
-      // ── STEP 8: Ensure monotonic timecodes ──────────────────────────────
+      // ── STEP 8: Ensure monotonic timecodes & no overlaps ─────────────────
+      // Per spec: "sound cue cues must not overlap dialogue cues in time"
+      // and "Output timing is monotonic (no overlaps, no reverse order)"
       finalCues.sort((a, b) => a.start_ms - b.start_ms);
       for (let i = 1; i < finalCues.length; i++) {
         if (finalCues[i].start_ms <= finalCues[i - 1].end_ms) {
@@ -1089,6 +1091,8 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // Remove any sound cues that ended up with zero/negative duration after fixup
+      finalCues = finalCues.filter(c => c.end_ms > c.start_ms);
 
       // ── STEP 9: Export formats ──────────────────────────────────────────
       await addLog(base44, job_db_id, '8_export', 'running', 'Exporting SRT/VTT/SCC...');
