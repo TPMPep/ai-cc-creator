@@ -30,7 +30,7 @@ const FUNC_WORDS = new Set([
   'is','it','by','as','if','so','no','do','up','my','we','he','be'
 ]);
 
-const ALLOWED_SHORT_WORDS = new Set(['yes', 'no', 'ok', 'okay', 'yeah', 'nah', 'wow', 'hey', 'hi', 'bye']);
+const ALLOWED_SHORT_WORDS = new Set(['yes', 'no', 'ok', 'okay', 'yeah', 'nah', 'wow', 'hey', 'hi', 'bye', 'right', 'sure', 'thanks', 'absolutely', 'completely', 'really', 'nothing', 'both', 'hello', 'think']);
 
 const PROTECTED_PHRASES = [
   'Watch What Happens Live',
