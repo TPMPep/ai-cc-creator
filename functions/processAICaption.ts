@@ -19,7 +19,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const MAX_CHARS = 32;
 const MAX_LINES = 2;
-const MIN_CUE_DURATION_MS = 800;
+const MIN_CUE_DURATION_MS = 801; // Use 801 to guarantee ≥800ms after rounding
 const SOUND_CUE_MIN_MS = 800;
 const SOUND_CUE_MAX_MS = 1500;
 const MICRO_CUE_WORD_THRESHOLD = 2;
