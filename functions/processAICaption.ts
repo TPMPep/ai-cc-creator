@@ -1017,21 +1017,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Check soft failures — function word line endings → retry AI once
+        // Track soft failures but accept them (re-asking AI for every function word
+        // ending would exceed time limits; spec says "unless unavoidable")
         if (lines.length > 1 && hasSoftFailures(lines)) {
-          const fullText = (cue.runs || []).map(r => r.text).join(' ');
-          const placeholderIdx = finalCues.length;
-          finalCues.push({
-            start_ms: cue.start_ms,
-            end_ms: cue.end_ms,
-            text: lines.join('\n'), // store current as fallback
-            cue_type: cue.cue_type || 'dialogue',
-            speaker: cue.runs?.[0]?.speaker || null,
-            _softRetry: true,
-          });
-          childCuesForAI.push({ idx: placeholderIdx, text: fullText, isSoftRetry: true });
           softRetryCount++;
-          continue;
         }
 
         // AI output is valid
