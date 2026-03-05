@@ -1068,8 +1068,8 @@ Deno.serve(async (req) => {
         const textsForAI = aiRetrySlice.map(c => c.text);
         const aiRetryResults = await aiLinebreakSmall(textsForAI, OPENAI_API_KEY);
         
-        for (let j = 0; j < childCuesForAI.length; j++) {
-          const { idx, isSoftRetry } = childCuesForAI[j];
+        for (let j = 0; j < aiRetrySlice.length; j++) {
+          const { idx, isSoftRetry } = aiRetrySlice[j];
           const retryResult = aiRetryResults[j];
           
           if (retryResult && !retryResult.needs_split && retryResult.lines?.length > 0) {
