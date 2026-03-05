@@ -1087,7 +1087,7 @@ Deno.serve(async (req) => {
             const fallback = deterministicLineBreak(aiRetrySlice[j].text);
             if (fallback.needs_split) {
               // Last resort: force fit
-              const words = childCuesForAI[j].text.split(/\s+/);
+              const words = aiRetrySlice[j].text.split(/\s+/);
               const half = Math.ceil(words.length / 2);
               const l1 = words.slice(0, half).join(' ').substring(0, MAX_CHARS);
               const l2 = words.slice(half).join(' ').substring(0, MAX_CHARS);
