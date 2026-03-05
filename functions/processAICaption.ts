@@ -695,58 +695,102 @@ function runAcceptanceTests(finalCues) {
     const lines = cue.text.split('\n');
     const isSoundCue = cue.cue_type === 'sound' || (lines.length === 1 && lines[0].startsWith('[') && lines[0].endsWith(']'));
 
-    // Test 1: Every line ≤ 32 chars
+    // Test 1: Every line ≤ 32 chars (HARD — spec says 100%)
     for (let li = 0; li < lines.length; li++) {
       if (lines[li].length > MAX_CHARS) {
-        issues.push({ cue: i, type: 'line_too_long', value: `Line ${li+1}: ${lines[li].length} chars ("${lines[li].substring(0, 40)}...")` });
+        issues.push({ cue: i, type: 'line_too_long', severity: 'hard', value: `Line ${li+1}: ${lines[li].length} chars ("${lines[li].substring(0, 40)}...")` });
       }
     }
 
-    // Test 2: Every cue ≤ 2 lines
+    // Test 2: Every cue ≤ 2 lines (HARD — spec says 100%)
     if (lines.length > MAX_LINES) {
-      issues.push({ cue: i, type: 'too_many_lines', value: `${lines.length} lines` });
+      issues.push({ cue: i, type: 'too_many_lines', severity: 'hard', value: `${lines.length} lines` });
     }
 
-    // Test 3: Sound cues standalone
+    // Test 3: Sound cues standalone — no [ mixed with dialogue (HARD)
     if (isSoundCue) {
       const hasNonSound = lines.some(l => !(l.startsWith('[') && l.endsWith(']')));
       if (hasNonSound) {
-        issues.push({ cue: i, type: 'sound_mixed_with_dialogue', value: cue.text.substring(0, 50) });
+        issues.push({ cue: i, type: 'sound_mixed_with_dialogue', severity: 'hard', value: cue.text.substring(0, 50) });
+      }
+    }
+    // Also check: dialogue cues must not contain bracketed sound text
+    if (!isSoundCue) {
+      const hasBracket = lines.some(l => /\[.*\]/.test(l));
+      if (hasBracket) {
+        issues.push({ cue: i, type: 'sound_mixed_with_dialogue', severity: 'hard', value: cue.text.substring(0, 50) });
       }
     }
 
-    // Test 4: Multi-speaker → dash format
+    // Test 4: Multi-speaker → dash format (HARD)
+    // Two lines with dashes = multi-speaker. One dash, one not = error.
     if (!isSoundCue && lines.length === 2) {
       const dashLines = lines.filter(l => l.startsWith('- '));
       if (dashLines.length === 1) {
-        issues.push({ cue: i, type: 'inconsistent_dash', value: 'One dash line, one without' });
+        issues.push({ cue: i, type: 'inconsistent_dash', severity: 'hard', value: 'One dash line, one without' });
       }
-    }
-
-    // Test 5: Monotonic timecodes
-    if (cue.start_ms < prevEnd) {
-      issues.push({ cue: i, type: 'overlap', value: `Starts at ${cue.start_ms} but prev ends at ${prevEnd}` });
-    }
-    prevEnd = cue.end_ms;
-
-    // Soft: function word line endings
-    if (!isSoundCue) {
-      for (let li = 0; li < lines.length - 1; li++) {
-        const lineWords = lines[li].replace(/^- /, '').trim().split(/\s+/);
-        const lastWord = lineWords[lineWords.length - 1].replace(/[.,!?;:'"]+$/, '').toLowerCase();
-        if (FUNC_WORDS.has(lastWord)) {
-          issues.push({ cue: i, type: 'func_word_line_end', value: `Line ${li+1} ends with "${lastWord}"` });
+      // Check: two speakers on same line (two dashes on one line)
+      for (const line of lines) {
+        const dashCount = (line.match(/^- /g) || []).length + (line.match(/ - /g) || []).length;
+        if (dashCount > 1) {
+          issues.push({ cue: i, type: 'two_speakers_same_line', severity: 'hard', value: line.substring(0, 40) });
         }
       }
     }
 
-    // Duration checks
+    // Test 5: Protected phrases never split across lines
+    if (!isSoundCue && lines.length === 2) {
+      for (const phrase of PROTECTED_PHRASES) {
+        const pWords = phrase.split(' ');
+        for (let pw = 0; pw < pWords.length - 1; pw++) {
+          const l0Words = lines[0].replace(/^- /, '').trim().split(/\s+/);
+          const l1Words = lines[1].replace(/^- /, '').trim().split(/\s+/);
+          const l0Last = l0Words[l0Words.length - 1]?.replace(/[.,!?;:'"]+$/, '');
+          const l1First = l1Words[0]?.replace(/[.,!?;:'"]+$/, '');
+          if (l0Last === pWords[pw] && l1First === pWords[pw + 1]) {
+            issues.push({ cue: i, type: 'protected_phrase_split', severity: 'hard', value: `"${phrase}" split across lines` });
+          }
+        }
+      }
+    }
+
+    // Test 6: Monotonic timecodes — no overlaps (HARD)
+    if (cue.start_ms < prevEnd) {
+      issues.push({ cue: i, type: 'overlap', severity: 'hard', value: `Starts at ${cue.start_ms} but prev ends at ${prevEnd}` });
+    }
+    prevEnd = cue.end_ms;
+
+    // Soft: function word line endings
+    if (!isSoundCue && lines.length > 1) {
+      for (let li = 0; li < lines.length - 1; li++) {
+        const lineWords = lines[li].replace(/^- /, '').trim().split(/\s+/);
+        const lastWord = lineWords[lineWords.length - 1].replace(/[.,!?;:'"]+$/, '').toLowerCase();
+        if (FUNC_WORDS.has(lastWord)) {
+          issues.push({ cue: i, type: 'func_word_line_end', severity: 'soft', value: `Line ${li+1} ends with "${lastWord}"` });
+        }
+      }
+    }
+
+    // Soft: very short orphan lines (1-2 words unless punctuation makes it necessary)
+    if (!isSoundCue && lines.length === 2) {
+      for (let li = 0; li < lines.length; li++) {
+        const lineText = lines[li].replace(/^- /, '').trim();
+        const wordCount = lineText.split(/\s+/).length;
+        if (wordCount <= 2 && lineText.length < 8 && !/[.!?]$/.test(lineText)) {
+          issues.push({ cue: i, type: 'orphan_line', severity: 'soft', value: `Line ${li+1}: "${lineText}" (${wordCount} words)` });
+        }
+      }
+    }
+
+    // Duration checks (informational)
     const dur = cue.end_ms - cue.start_ms;
-    if (dur < 500) issues.push({ cue: i, type: 'cue_too_short', value: `${dur}ms` });
-    if (dur > 8000 && !isSoundCue) issues.push({ cue: i, type: 'cue_too_long', value: `${(dur/1000).toFixed(1)}s` });
+    if (dur < 500) issues.push({ cue: i, type: 'cue_too_short', severity: 'soft', value: `${dur}ms` });
+    if (dur > 8000 && !isSoundCue) issues.push({ cue: i, type: 'cue_too_long', severity: 'soft', value: `${(dur/1000).toFixed(1)}s` });
   }
 
-  return { issuesCount: issues.length, issues };
+  const hardCount = issues.filter(i => i.severity === 'hard').length;
+  const softCount = issues.filter(i => i.severity === 'soft').length;
+  return { issuesCount: issues.length, hardCount, softCount, issues };
 }
 
 // ─── PIPELINE LOG HELPER ────────────────────────────────────────────────────
