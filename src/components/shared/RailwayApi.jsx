@@ -43,7 +43,6 @@ export async function createJob(payload) {
 export async function pollJob(jobId) {
   const response = await fetch(`${API_BASE}/v1/jobs/${jobId}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
   });
   if (!response.ok) {
     throw new Error(`Poll failed (${response.status})`);
