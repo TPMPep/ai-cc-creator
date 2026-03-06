@@ -124,12 +124,25 @@ function extractSoundEvents(words) {
       }
     }
   }
-  // Deduplicate/merge consecutive identical events
+  // Deduplicate/merge consecutive events (identical merge, or different-label compound merge)
   const deduped = [];
   for (const e of events) {
     const last = deduped[deduped.length - 1];
-    if (last && last.label === e.label && e.start_ms - last.end_ms < 500) {
-      last.end_ms = e.end_ms;
+    if (last && e.start_ms - last.end_ms < 500) {
+      if (last.label === e.label) {
+        // Same label — just extend
+        last.end_ms = e.end_ms;
+      } else {
+        // Different labels close together — merge into compound e.g. "LAUGHTER AND APPLAUSE"
+        const compoundLabel = `${last.label} AND ${e.label}`;
+        if (compoundLabel.length <= 28) {
+          last.label = compoundLabel;
+          last.end_ms = e.end_ms;
+        } else {
+          // Too long for compound — keep separate
+          deduped.push({ ...e });
+        }
+      }
     } else {
       deduped.push({ ...e });
     }
