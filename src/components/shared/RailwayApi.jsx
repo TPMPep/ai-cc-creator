@@ -1,29 +1,20 @@
 const API_BASE = "https://web-production-eba27.up.railway.app";
 
 /**
- * Create a job on Railway using multipart/form-data.
- * Required fields: backbone_srt, timestamps_json
- * Optional fields: protected_phrases, output_formats
+ * Create a job on Railway.
+ * Payload: mediaUrl, speakerLabels, languageDetection, allowHttp, captionRules
  */
 export async function createJob(payload) {
-  const formData = new FormData();
-
-  // Required fields
-  formData.append("backbone_srt", payload.backbone_srt);
-  formData.append("timestamps_json", payload.timestamps_json);
-
-  // Optional fields
-  if (payload.protected_phrases) {
-    formData.append("protected_phrases", payload.protected_phrases);
-  }
-  if (payload.output_formats) {
-    formData.append("output_formats", payload.output_formats);
-  }
-
   const response = await fetch(`${API_BASE}/v1/jobs`, {
     method: "POST",
-    body: formData,
-    // Do NOT set Content-Type — browser sets it with boundary automatically
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mediaUrl: payload.mediaUrl,
+      speakerLabels: payload.speaker_labels,
+      languageDetection: payload.language_detection,
+      allowHttp: payload.allowHttp,
+      captionRules: payload.rules,
+    }),
   });
 
   const responseText = await response.text();
@@ -37,13 +28,11 @@ export async function createJob(payload) {
 }
 
 /**
- * Poll a Railway job. Returns the full response object.
- * When completed, result contains: result.srt, result.vtt, result.scc
+ * Poll a Railway job by ID.
+ * When completed, result contains: result.srt, result.vtt, result.scc, result.qc
  */
 export async function pollJob(jobId) {
-  const response = await fetch(`${API_BASE}/v1/jobs/${jobId}`, {
-    method: "GET",
-  });
+  const response = await fetch(`${API_BASE}/v1/jobs/${jobId}`);
   if (!response.ok) {
     throw new Error(`Poll failed (${response.status})`);
   }
