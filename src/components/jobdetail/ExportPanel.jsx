@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Copy, Check, Loader2 } from "lucide-react";
 import { getCuesFromResult } from "../shared/CueUtils";
+import { base44 } from "@/api/base44Client";
 
 function downloadBlob(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
@@ -42,7 +43,7 @@ function joinChunks(chunks) {
   return chunks.join("");
 }
 
-export default function ExportPanel({ result, title, jobId }) {
+export default function ExportPanel({ result, title, jobId, assemblyaiTranscriptId }) {
   const [copiedSrt, setCopiedSrt] = useState(false);
   const [copiedVtt, setCopiedVtt] = useState(false);
   const [downloading, setDownloading] = useState(null);
