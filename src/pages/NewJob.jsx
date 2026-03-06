@@ -119,6 +119,7 @@ export default function NewJob() {
         mediaUrl,
         speaker_labels: speakerLabels,
         language_detection: languageDetection,
+        allowHttp,
         rules,
       };
       const data = await createJob(payload);
