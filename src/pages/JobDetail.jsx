@@ -163,6 +163,7 @@ export default function JobDetail() {
           ...urlMap,
           qc,
           cues: parsedCues,
+          assemblyai_transcript_id: data.assemblyai_transcript_id || null,
         };
         
         // Compute derived fields
