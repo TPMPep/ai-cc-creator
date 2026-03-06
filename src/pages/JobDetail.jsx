@@ -363,7 +363,7 @@ export default function JobDetail() {
               <div className="col-span-3 flex flex-col gap-4" style={{ height: "fit-content", maxHeight: "600px" }}>
                 {/* Exports */}
                 <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-                  <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} />
+                  <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} assemblyaiTranscriptId={job.result?.assemblyai_transcript_id} />
                 </div>
 
                 {/* QC Panel - scrollable */}
