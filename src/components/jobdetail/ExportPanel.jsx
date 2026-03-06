@@ -143,7 +143,7 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
           <div className="grid grid-cols-2 gap-2">
             <DownloadBtn onClick={async () => {
               setDownloading("aai-srt");
-              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId });
+              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId, format: "srt" });
               downloadBlob(res.data.srt, `${safeName}_raw_${jobId}.srt`, "text/plain");
               setDownloading(null);
             }}>
@@ -151,7 +151,7 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
             </DownloadBtn>
             <DownloadBtn onClick={async () => {
               setDownloading("aai-json");
-              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId });
+              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId, format: "json" });
               downloadBlob(JSON.stringify(res.data.json, null, 2), `${safeName}_raw_${jobId}.json`, "application/json");
               setDownloading(null);
             }}>
