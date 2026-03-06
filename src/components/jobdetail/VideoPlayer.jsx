@@ -87,11 +87,10 @@ export default function VideoPlayer({ mediaUrl, cues, videoRef, onTimeUpdate, ca
     <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black group">
       <video
         ref={videoRef}
-        src={`${API_BASE}/v1/proxy?url=${encodeURIComponent(mediaUrl)}`}
+        src={mediaUrl}
         controls
         className="w-full aspect-video bg-black"
         onTimeUpdate={handleTimeUpdate}
-        crossOrigin="anonymous"
       />
       {/* Caption overlay */}
       {activeCue && (
