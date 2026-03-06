@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { transcriptId } = await req.json();
+    const { transcriptId, format } = await req.json();
     if (!transcriptId) {
       return Response.json({ error: 'Missing transcriptId' }, { status: 400 });
     }
@@ -20,23 +20,26 @@ Deno.serve(async (req) => {
 
     const headers = { authorization: apiKey };
 
-    // Fetch raw JSON transcript and raw SRT in parallel
-    const [jsonRes, srtRes] = await Promise.all([
-      fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers }),
-      fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}/srt`, { headers }),
-    ]);
-
-    if (!jsonRes.ok) {
-      return Response.json({ error: `AssemblyAI JSON fetch failed: ${jsonRes.status}` }, { status: 502 });
-    }
-    if (!srtRes.ok) {
-      return Response.json({ error: `AssemblyAI SRT fetch failed: ${srtRes.status}` }, { status: 502 });
+    // Fetch only the requested format to avoid huge payloads
+    if (format === "srt") {
+      const srtRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}/srt`, { headers });
+      if (!srtRes.ok) {
+        return Response.json({ error: `AssemblyAI SRT fetch failed: ${srtRes.status}` }, { status: 502 });
+      }
+      const srtText = await srtRes.text();
+      return Response.json({ srt: srtText });
     }
 
-    const jsonData = await jsonRes.json();
-    const srtText = await srtRes.text();
+    if (format === "json") {
+      const jsonRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers });
+      if (!jsonRes.ok) {
+        return Response.json({ error: `AssemblyAI JSON fetch failed: ${jsonRes.status}` }, { status: 502 });
+      }
+      const jsonData = await jsonRes.json();
+      return Response.json({ json: jsonData });
+    }
 
-    return Response.json({ json: jsonData, srt: srtText });
+    return Response.json({ error: 'Invalid format. Use "srt" or "json".' }, { status: 400 });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
