@@ -4,7 +4,7 @@ const API_BASE = "https://web-production-eba27.up.railway.app";
 
 export async function createJob(payload) {
   try {
-    const response = await fetch(`${API_BASE}/v1/jobs`, {
+    const response = await fetch(`${API_BASE}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
