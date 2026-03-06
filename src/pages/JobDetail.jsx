@@ -111,18 +111,20 @@ export default function JobDetail() {
       const updates = { status: mappedStatus, lastPolledAt: new Date().toISOString() };
       if (data.error) updates.error = data.error;
       
-      // Save exports when completed
-      if (mappedStatus === "done" && data.exports) {
-        // Parse VTT to get cues
+      // Save results when completed — Railway returns result.srt/.vtt/.scc/.qc
+      if (mappedStatus === "done" && data.result) {
+        // Parse VTT to get cues for the editor/player
         let parsedCues = [];
-        if (data.exports.vtt) {
-          parsedCues = parseVTT(data.exports.vtt);
+        if (data.result.vtt) {
+          parsedCues = parseVTT(data.result.vtt);
         }
         
         updates.result = {
-          ...data.exports.result,
-          exports: { srt: data.exports.srt, vtt: data.exports.vtt },
-          cues: parsedCues
+          srt: data.result.srt,
+          vtt: data.result.vtt,
+          scc: data.result.scc,
+          qc: data.result.qc,
+          cues: parsedCues,
         };
         
         // Compute derived fields
@@ -130,8 +132,8 @@ export default function JobDetail() {
           const lastCue = parsedCues[parsedCues.length - 1];
           updates.durationMs = lastCue.end;
         }
-        if (data.exports.result?.qc) {
-          updates.issuesCount = data.exports.result.qc.issuesCount || 0;
+        if (data.result.qc) {
+          updates.issuesCount = data.result.qc.issuesCount || 0;
         }
       }
 
