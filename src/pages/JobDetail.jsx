@@ -96,58 +96,78 @@ export default function JobDetail() {
     return hours * 3600000 + minutes * 60000 + seconds * 1000 + ms;
   };
 
-  // Polling logic
+  // Use a ref to always have the latest job for polling without re-creating the callback
+  const jobRef = useRef(job);
+  useEffect(() => { jobRef.current = job; }, [job]);
+
+  // Polling logic — uses jobRef to avoid stale closures
   const doPoll = useCallback(async () => {
-    if (!jobId || !job) return;
-    if (job.status === "done" || job.status === "error") return;
+    const currentJob = jobRef.current;
+    if (!jobId || !currentJob) return;
+    if (currentJob.status === "done" || currentJob.status === "error") return;
 
     try {
       const data = await pollJob(jobId);
+      console.log("[JobDetail] Poll raw status:", data.status);
       
       // Map Railway API status to app status
-      const statusMap = { "completed": "done", "failed": "error" };
+      // Railway returns "completed" / "failed" / "processing" / "queued"
+      const statusMap = { "completed": "done", "complete": "done", "finished": "done", "success": "done", "failed": "error", "failure": "error" };
       const mappedStatus = statusMap[data.status] || data.status;
+      console.log("[JobDetail] Mapped status:", mappedStatus);
       
       const updates = { status: mappedStatus, lastPolledAt: new Date().toISOString() };
       if (data.error) updates.error = data.error;
       
       // Save results when completed — Railway returns result.srt/.vtt/.scc/.qc
-      if (mappedStatus === "done" && data.result) {
+      if (mappedStatus === "done") {
+        // Railway may return result at top level or nested — handle both
+        const resultData = data.result || data;
+        const srt = resultData.srt || null;
+        const vtt = resultData.vtt || null;
+        const scc = resultData.scc || null;
+        const qc = resultData.qc || null;
+        
+        console.log("[JobDetail] Result found:", { hasSrt: !!srt, hasVtt: !!vtt, hasScc: !!scc, hasQc: !!qc });
+        
         // Parse VTT to get cues for the editor/player
         let parsedCues = [];
-        if (data.result.vtt) {
-          parsedCues = parseVTT(data.result.vtt);
+        if (vtt) {
+          parsedCues = parseVTT(vtt);
+          console.log("[JobDetail] Parsed", parsedCues.length, "cues from VTT");
+        } else if (srt) {
+          // Fallback: parse SRT if no VTT
+          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/,/g, '.');
+          parsedCues = parseVTT(vttFromSrt);
+          console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT fallback");
         }
         
-        updates.result = {
-          srt: data.result.srt,
-          vtt: data.result.vtt,
-          scc: data.result.scc,
-          qc: data.result.qc,
-          cues: parsedCues,
-        };
+        updates.result = { srt, vtt, scc, qc, cues: parsedCues };
         
         // Compute derived fields
         if (parsedCues.length > 0) {
           const lastCue = parsedCues[parsedCues.length - 1];
           updates.durationMs = lastCue.end;
         }
-        if (data.result.qc) {
-          updates.issuesCount = data.result.qc.issuesCount || 0;
+        if (qc) {
+          updates.issuesCount = qc.issuesCount || 0;
         }
       }
 
-      await base44.entities.Job.update(job.id, updates);
+      await base44.entities.Job.update(currentJob.id, updates);
       setJob((prev) => ({ ...prev, ...updates }));
       if (updates.result?.cues) setCues(updates.result.cues);
 
+      // Stop polling on terminal states
       if (mappedStatus === "done" || mappedStatus === "error") {
-        clearInterval(pollingRef.current);
+        if (pollingRef.current) clearTimeout(pollingRef.current);
+        pollingRef.current = null;
       }
     } catch (err) {
+      console.error("[JobDetail] Poll error:", err);
       toast("Temporary network issue. Retrying…", { duration: 2000 });
     }
-  }, [jobId, job]);
+  }, [jobId]);
 
   useEffect(() => {
     if (!job) return;
@@ -160,13 +180,17 @@ export default function JobDetail() {
       const interval = elapsed < 20000 ? 2000 : 5000;
       pollingRef.current = setTimeout(async () => {
         await doPoll();
-        tick();
+        // Only continue ticking if job is still processing
+        const currentJob = jobRef.current;
+        if (currentJob && currentJob.status !== "done" && currentJob.status !== "error") {
+          tick();
+        }
       }, interval);
     };
     tick();
 
     return () => { if (pollingRef.current) clearTimeout(pollingRef.current); };
-  }, [job?.status, job?.id, doPoll]);
+  }, [job?.id, doPoll]);
 
   const handleSaveTitle = async () => {
     if (!titleDraft.trim()) return;
