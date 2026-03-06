@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { toast as sonnerToast } from "sonner";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
 import { pollJob } from "../components/shared/RailwayApi";
@@ -136,13 +137,33 @@ export default function JobDetail() {
           parsedCues = parseVTT(vtt);
           console.log("[JobDetail] Parsed", parsedCues.length, "cues from VTT");
         } else if (srt) {
-          // Fallback: parse SRT if no VTT
           const vttFromSrt = "WEBVTT\n\n" + srt.replace(/,/g, '.');
           parsedCues = parseVTT(vttFromSrt);
           console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT fallback");
         }
         
-        updates.result = { srt, vtt, scc, qc, cues: parsedCues };
+        // Upload large text content as files to avoid entity field size limits
+        const uploadText = async (text, filename) => {
+          const file = new File([text], filename, { type: "text/plain" });
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          return file_url;
+        };
+        
+        const uploadPromises = [];
+        if (srt) uploadPromises.push(uploadText(srt, `${jobId}.srt`).then(url => ({ key: "srt_url", url })));
+        if (vtt) uploadPromises.push(uploadText(vtt, `${jobId}.vtt`).then(url => ({ key: "vtt_url", url })));
+        if (scc) uploadPromises.push(uploadText(scc, `${jobId}.scc`).then(url => ({ key: "scc_url", url })));
+        
+        const uploaded = await Promise.all(uploadPromises);
+        const urlMap = {};
+        for (const { key, url } of uploaded) urlMap[key] = url;
+        console.log("[JobDetail] Uploaded files:", urlMap);
+        
+        updates.result = {
+          ...urlMap,
+          qc,
+          cues: parsedCues,
+        };
         
         // Compute derived fields
         if (parsedCues.length > 0) {
