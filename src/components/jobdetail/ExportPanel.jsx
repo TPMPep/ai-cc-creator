@@ -136,6 +136,31 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
           JSON (Cues)
         </DownloadBtn>
       </div>
+      {/* AssemblyAI Raw Exports */}
+      {assemblyaiTranscriptId && (
+        <>
+          <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mt-4">Raw (AssemblyAI)</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <DownloadBtn onClick={async () => {
+              setDownloading("aai-srt");
+              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId });
+              downloadBlob(res.data.srt, `${safeName}_raw_${jobId}.srt`, "text/plain");
+              setDownloading(null);
+            }}>
+              Raw SRT
+            </DownloadBtn>
+            <DownloadBtn onClick={async () => {
+              setDownloading("aai-json");
+              const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId });
+              downloadBlob(JSON.stringify(res.data.json, null, 2), `${safeName}_raw_${jobId}.json`, "application/json");
+              setDownloading(null);
+            }}>
+              Raw JSON
+            </DownloadBtn>
+          </div>
+        </>
+      )}
+
       <div className="flex gap-2">
         {hasSrt && (
           <Button variant="ghost" size="sm" onClick={async () => {
