@@ -151,6 +151,7 @@ export default function Jobs() {
                   <TableHead className="text-zinc-500 text-xs font-medium">Created By</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Job ID</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Created</TableHead>
+                  <TableHead className="text-zinc-500 text-xs font-medium">Pipeline</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium">Status</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium hidden md:table-cell">Media URL</TableHead>
                   <TableHead className="text-zinc-500 text-xs font-medium text-right">Actions</TableHead>
@@ -175,6 +176,11 @@ export default function Jobs() {
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
                       {moment(job.created_date).format("MMM D, YYYY h:mm A")}
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${job.pipeline === "ai" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"}`}>
+                        {job.pipeline === "ai" ? "AI Pipeline" : "Railway"}
+                      </span>
                     </TableCell>
                     <TableCell><StatusBadge status={job.status} /></TableCell>
                     <TableCell className="hidden md:table-cell">
