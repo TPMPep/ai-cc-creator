@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Sparkles, Info, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ export default function NewJob() {
   const [urlError, setUrlError] = useState(null);
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [protectedPhrases, setProtectedPhrases] = useState("");
 
   useEffect(() => {
     const init = async () => {
@@ -115,12 +117,18 @@ export default function NewJob() {
     setSubmitting(true);
 
     try {
+      const parsedPhrases = protectedPhrases
+        .split(/[\n,]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
       const payload = {
         mediaUrl,
         speaker_labels: speakerLabels,
         language_detection: languageDetection,
         allowHttp,
         rules,
+        protected_phrases: parsedPhrases,
       };
       const data = await createJob(payload);
 
@@ -192,6 +200,21 @@ export default function NewJob() {
                   <Label className="text-xs text-zinc-400">Allow HTTP</Label>
                 </div>
               </div>
+            </div>
+
+            {/* Protected Phrases */}
+            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6 space-y-3">
+              <div className="space-y-1">
+                <Label className="text-sm text-zinc-300 font-medium">Protected Phrases <span className="text-zinc-600 font-normal">(optional)</span></Label>
+                <p className="text-xs text-zinc-500">Phrases that must not be split across lines — e.g. show titles, character names, brands. One per line or comma-separated.</p>
+              </div>
+              <Textarea
+                value={protectedPhrases}
+                onChange={(e) => setProtectedPhrases(e.target.value)}
+                placeholder={"Watch What Happens Live\nBelow Deck Med\nAndy Cohen"}
+                rows={4}
+                className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus:border-blue-500 text-sm resize-y"
+              />
             </div>
 
             {/* Rules */}

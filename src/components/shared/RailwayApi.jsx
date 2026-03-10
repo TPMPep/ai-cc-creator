@@ -14,6 +14,7 @@ export async function createJob(payload) {
       languageDetection: payload.language_detection,
       allowHttp: payload.allowHttp,
       captionRules: payload.rules,
+      protectedPhrases: payload.protected_phrases || [],
     }),
   });
 
