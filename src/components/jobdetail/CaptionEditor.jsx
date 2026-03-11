@@ -361,28 +361,31 @@ export default function CaptionEditor({
             </tr>
           </thead>
           <tbody>
-            {cues.map((cue, idx) => (
-              <CaptionEditorRow
-                key={idx}
-                cue={cue}
-                idx={idx}
-                isActive={idx === activeCueIndex}
-                nextCue={cues[idx + 1] || null}
-                selected={selectedCues.has(idx)}
-                onToggleSelect={toggleSelect}
-                editingCell={editingCell}
-                editValue={editValue}
-                setEditValue={setEditValue}
-                onStartEdit={startEdit}
-                onCommitEdit={commitEdit}
-                onKeyDown={handleKeyDown}
-                onCellEdit={handleCellEdit}
-                onSeek={seekTo}
-                showRawCol={showRawCol}
-                rawMatch={showRawCol ? findRawMatch(rawCues.current, cue.start) : null}
-                ref={idx === activeCueIndex ? activeRowRef : null}
-              />
-            ))}
+            {cues.map((cue, idx) => {
+              const isActive = idx === activeCueIndex;
+              return (
+                <CaptionEditorRow
+                  key={idx}
+                  ref={isActive ? activeRowRef : undefined}
+                  cue={cue}
+                  idx={idx}
+                  isActive={isActive}
+                  nextCue={cues[idx + 1] || null}
+                  selected={selectedCues.has(idx)}
+                  onToggleSelect={toggleSelect}
+                  editingCell={editingCell}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  onStartEdit={startEdit}
+                  onCommitEdit={commitEdit}
+                  onKeyDown={handleKeyDown}
+                  onCellEdit={handleCellEdit}
+                  onSeek={seekTo}
+                  showRawCol={showRawCol}
+                  rawMatch={showRawCol ? findRawMatch(rawCues.current, cue.start) : null}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
