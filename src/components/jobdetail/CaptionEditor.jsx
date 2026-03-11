@@ -403,6 +403,7 @@ export default function CaptionEditor({
                   onSeek={seekTo}
                   showRawCol={showRawCol}
                   rawMatch={showRawCol ? findRawMatch(rawCues.current, cue.start) : null}
+                  rawUtterance={showRawCol ? findRawUtterance(rawUtterancesRef.current, cue.start) : null}
                 />
               );
             })}
