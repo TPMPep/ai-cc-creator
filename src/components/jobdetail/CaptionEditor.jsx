@@ -55,6 +55,18 @@ function findRawMatch(rawCues, start) {
   return bestDiff < 3000 ? best : null;
 }
 
+// Find the raw utterance that overlaps with the cue's time range
+function findRawUtterance(utterances, startMs) {
+  if (!utterances || !utterances.length) return null;
+  let best = null;
+  let bestDiff = Infinity;
+  for (const utt of utterances) {
+    const diff = Math.abs(utt.start - startMs);
+    if (diff < bestDiff) { best = utt; bestDiff = diff; }
+  }
+  return bestDiff < 5000 ? best : null;
+}
+
 export default function CaptionEditor({ 
   cues: initialCues, 
   currentTimeMs, 
