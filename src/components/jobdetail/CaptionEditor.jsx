@@ -90,6 +90,12 @@ export default function CaptionEditor({
     }
   }, [rawSrtText]);
 
+  useEffect(() => {
+    if (externalRawUtterances && externalRawUtterances.length > 0) {
+      rawUtterancesRef.current = externalRawUtterances;
+    }
+  }, [externalRawUtterances]);
+
   // Auto-follow
   useEffect(() => {
     if (!autoFollow || !activeRowRef.current || !tableRef.current) return;
