@@ -92,7 +92,7 @@ export default function CaptionEditor({
   const [bulkSpeakerOpen, setBulkSpeakerOpen] = useState(false);
   const [selectedCues, setSelectedCues] = useState(new Set());
   const [violationIdx, setViolationIdx] = useState(-1);
-  const [diffOpen, setDiffOpen] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const tableRef = useRef(null);
   const activeRowRef = useRef(null);
   const rawCues = useRef([]);
@@ -339,21 +339,18 @@ export default function CaptionEditor({
     setSelectedCues(next);
   };
 
-  // --- Style tags ---
+  // --- Style tag wrapping ---
   const handleStyleWrap = (style) => {
-    if (activeCueIndex < 0) { toast.error("No active cue"); return; }
+    if (activeCueIndex < 0) { toast.error("No active cue — play video to select one"); return; }
     const cue = cues[activeCueIndex];
-    let newText;
-    if (style === "italic") {
-      newText = `<i>${cue.text}</i>`;
-    } else if (style === "music") {
-      newText = `♪ ${cue.text.replace(/^♪\s*/, "").replace(/\s*♪$/, "")} ♪`;
-    } else {
-      return;
-    }
     const newCues = cues.map(c => ({ ...c }));
-    newCues[activeCueIndex] = { ...cue, text: newText };
+    if (style === "italic") {
+      newCues[activeCueIndex].text = `<i>${cue.text}</i>`;
+    } else if (style === "music") {
+      newCues[activeCueIndex].text = `♪ ${cue.text} ♪`;
+    }
     updateCues(newCues);
+    toast.success(`Applied ${style} style to cue ${activeCueIndex + 1}`);
   };
 
   return (
@@ -370,7 +367,7 @@ export default function CaptionEditor({
         onBulkSpeaker={handleBulkSpeaker} bulkSpeakerOpen={bulkSpeakerOpen} setBulkSpeakerOpen={setBulkSpeakerOpen}
         selectedCount={selectedCues.size}
         onStyleWrap={handleStyleWrap}
-        diffOpen={diffOpen} setDiffOpen={setDiffOpen} hasRawCues={rawCues.current.length > 0}
+        showDiff={showDiff} setShowDiff={setShowDiff} hasRawForDiff={rawCues.current.length > 0}
       />
 
       {/* Keyboard hints */}
@@ -385,8 +382,10 @@ export default function CaptionEditor({
       </div>
 
       {/* Diff panel */}
-      {diffOpen && (
-        <ExportDiffPanel cues={cues} rawCues={rawCues.current} onClose={() => setDiffOpen(false)} />
+      {showDiff && (
+        <div className="px-3 py-2">
+          <ExportDiffPanel cues={cues} rawCues={rawCues.current} onClose={() => setShowDiff(false)} />
+        </div>
       )}
 
       {/* Table */}

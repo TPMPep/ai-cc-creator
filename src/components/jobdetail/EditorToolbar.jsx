@@ -7,7 +7,6 @@ import {
   Search, Replace, Undo2, Redo2, Volume2, ChevronDown, ChevronUp,
   AlertTriangle, Users, X, Italic, Music, FileText
 } from "lucide-react";
-import StyleTagButtons from "./StyleTagButtons";
 
 export default function EditorToolbar({
   cueCount,
@@ -21,7 +20,7 @@ export default function EditorToolbar({
   onBulkSpeaker, bulkSpeakerOpen, setBulkSpeakerOpen,
   selectedCount,
   onStyleWrap,
-  diffOpen, setDiffOpen, hasRawCues: hasRawCuesForDiff,
+  showDiff, setShowDiff, hasRawForDiff,
 }) {
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -66,10 +65,15 @@ export default function EditorToolbar({
           </Button>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
           {/* Style tags */}
-          <StyleTagButtons onWrapSelection={onStyleWrap} />
+          <Button variant="ghost" size="sm" onClick={() => onStyleWrap("italic")} className="h-6 w-6 p-0 text-zinc-400 hover:text-white" title="Wrap active cue in italics <i>...</i>">
+            <Italic className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onStyleWrap("music")} className="h-6 w-6 p-0 text-zinc-400 hover:text-white" title="Wrap active cue in music notes ♪...♪">
+            <Music className="w-3.5 h-3.5" />
+          </Button>
           {/* Export diff */}
-          {hasRawCuesForDiff && (
-            <Button variant="ghost" size="sm" onClick={() => setDiffOpen(!diffOpen)} className={`h-6 px-2 text-[10px] gap-1 ${diffOpen ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`} title="Show diff between raw and edited">
+          {hasRawForDiff && (
+            <Button variant="ghost" size="sm" onClick={() => setShowDiff(!showDiff)} className={`h-6 px-2 text-[10px] gap-1 ${showDiff ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`} title="Show diff between raw and edited">
               <FileText className="w-3 h-3" /> Diff
             </Button>
           )}

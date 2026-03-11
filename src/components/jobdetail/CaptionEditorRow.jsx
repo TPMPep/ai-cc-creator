@@ -45,6 +45,34 @@ function RawCharCounts({ text }) {
   );
 }
 
+// Render styled text with italic tags and music notes
+function renderStyledText(text) {
+  // Handle <i>...</i> tags
+  const parts = text.split(/(<i>|<\/i>)/g);
+  let inItalic = false;
+  const elements = [];
+  let key = 0;
+  for (const part of parts) {
+    if (part === "<i>") { inItalic = true; continue; }
+    if (part === "</i>") { inItalic = false; continue; }
+    if (!part) continue;
+    if (inItalic) {
+      elements.push(<span key={key++} className="italic text-blue-300">{part}</span>);
+    } else {
+      // Highlight music notes
+      const musicParts = part.split(/(♪[^♪]*♪)/g);
+      for (const mp of musicParts) {
+        if (mp.startsWith("♪") && mp.endsWith("♪")) {
+          elements.push(<span key={key++} className="text-purple-300">{mp}</span>);
+        } else {
+          elements.push(<span key={key++}>{mp}</span>);
+        }
+      }
+    }
+  }
+  return elements;
+}
+
 function getCPS(text, durationMs) {
   if (durationMs <= 0) return 0;
   const totalChars = text.replace(/\n/g, "").length;
@@ -190,14 +218,13 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
               className="w-full bg-zinc-800 border border-blue-500 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none min-h-[50px]"
               autoFocus
               spellCheck={true}
-              lang="en"
             />
           ) : (
             <div
               onDoubleClick={function() { onStartEdit(idx, "text"); }}
               className="cursor-pointer hover:bg-zinc-800/50 rounded px-1.5 py-0.5 text-zinc-200 whitespace-pre-wrap text-[11px] leading-relaxed"
             >
-              {cue.text}
+              {renderStyledText(cue.text)}
               {anyLineOver32 && <AlertTriangle className="inline w-3 h-3 ml-1.5 text-red-400" />}
             </div>
           )}
