@@ -5,8 +5,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { 
   Search, Replace, Undo2, Redo2, Volume2, ChevronDown, ChevronUp,
-  AlertTriangle, Users, X
+  AlertTriangle, Users, X, Italic, Music, FileText
 } from "lucide-react";
+import StyleTagButtons from "./StyleTagButtons";
 
 export default function EditorToolbar({
   cueCount,
@@ -19,6 +20,8 @@ export default function EditorToolbar({
   onJumpToNextViolation,
   onBulkSpeaker, bulkSpeakerOpen, setBulkSpeakerOpen,
   selectedCount,
+  onStyleWrap,
+  diffOpen, setDiffOpen, hasRawCues: hasRawCuesForDiff,
 }) {
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -61,6 +64,15 @@ export default function EditorToolbar({
           <Button variant="ghost" size="sm" onClick={() => setBulkSpeakerOpen(!bulkSpeakerOpen)} className={`h-6 px-2 text-[10px] gap-1 ${bulkSpeakerOpen ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`}>
             <Users className="w-3 h-3" /> Bulk SPK
           </Button>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          {/* Style tags */}
+          <StyleTagButtons onWrapSelection={onStyleWrap} />
+          {/* Export diff */}
+          {hasRawCuesForDiff && (
+            <Button variant="ghost" size="sm" onClick={() => setDiffOpen(!diffOpen)} className={`h-6 px-2 text-[10px] gap-1 ${diffOpen ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`} title="Show diff between raw and edited">
+              <FileText className="w-3 h-3" /> Diff
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onInsertSDH} className="bg-transparent border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white text-[10px] h-6 px-2">
