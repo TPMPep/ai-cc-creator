@@ -53,6 +53,9 @@ export default function JobDetail() {
           base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "srt" })
             .then(res => setRawSrtText(res.data?.srt || null))
             .catch(() => {});
+          base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "utterances" })
+            .then(res => setRawUtterances(res.data?.utterances || []))
+            .catch(() => {});
         }
       }
       setLoading(false);
