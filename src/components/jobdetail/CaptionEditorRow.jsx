@@ -154,14 +154,10 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
 
         <td className="px-1 py-1 font-mono text-zinc-500 text-[10px]">{durationSec}s</td>
 
-        <td className="px-1 py-1" onClick={function(e) { e.stopPropagation(); }}>
-          <select
-            value={cue.speaker || "none"}
-            onChange={function(e) { e.stopPropagation(); onCellEdit(idx, "speaker", e.target.value === "none" ? null : e.target.value); }}
-            className="w-full h-6 text-[11px] bg-zinc-800 border border-zinc-700 rounded text-zinc-200 focus:outline-none focus:border-blue-500 px-1 cursor-pointer appearance-auto"
-          >
-            {getSpeakerOptions(cue.speaker).map(function(o) { return <option key={o.value} value={o.value}>{o.label}</option>; })}
-          </select>
+        <td className="px-1 py-1 text-center">
+          <span className="font-mono text-[11px] text-zinc-300">
+            {cue.speaker || "\u2014"}
+          </span>
         </td>
 
         <td className="px-1 py-1" onClick={function(e) { e.stopPropagation(); }}>
