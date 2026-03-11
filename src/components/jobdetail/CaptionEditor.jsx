@@ -55,9 +55,14 @@ function findRawMatch(rawCues, start) {
   return bestDiff < 3000 ? best : null;
 }
 
-// Find the raw utterance that overlaps with the cue's time range
+// Find the raw utterance that contains or is closest to the cue's start time
 function findRawUtterance(utterances, startMs) {
   if (!utterances || !utterances.length) return null;
+  // First try to find an utterance that contains this time
+  for (const utt of utterances) {
+    if (utt.start <= startMs && utt.end >= startMs) return utt;
+  }
+  // Fallback: find closest by start time
   let best = null;
   let bestDiff = Infinity;
   for (const utt of utterances) {
