@@ -29,7 +29,6 @@ const msToShortTC = (ms) => {
   return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(mil).padStart(2,"0")}`;
 };
 
-// Parse raw SRT string into array of {start, end, text}
 function parseRawSRT(srtText) {
   if (!srtText) return [];
   const blocks = srtText.trim().split(/\n\n+/);
@@ -53,7 +52,6 @@ function parseRawSRT(srtText) {
   return cues;
 }
 
-// Find matching raw cue by closest start time
 function findRawMatch(rawCues, start) {
   if (!rawCues.length) return null;
   let best = rawCues[0];
@@ -65,23 +63,57 @@ function findRawMatch(rawCues, start) {
   return bestDiff < 3000 ? best : null;
 }
 
-// Line char counts display
 function CharCounts({ text }) {
   const lines = text.split("\n");
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col items-center gap-0">
       {lines.map((line, i) => {
         const len = line.length;
         const over = len > 32;
         return (
           <span key={i} className={`font-mono text-[10px] leading-tight ${over ? "text-red-400 font-bold" : "text-zinc-500"}`}>
-            L{i+1}: {len}
+            {len}
           </span>
         );
       })}
     </div>
   );
 }
+
+function RawCharCounts({ text }) {
+  if (!text) return <span className="text-zinc-700">—</span>;
+  const lines = text.split("\n");
+  return (
+    <div className="flex flex-col items-center gap-0">
+      {lines.map((line, i) => {
+        const len = line.length;
+        const over = len > 32;
+        return (
+          <span key={i} className={`font-mono text-[10px] leading-tight ${over ? "text-red-400 font-bold" : "text-zinc-500"}`}>
+            {len}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+const SPEAKER_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "A", label: "A" },
+  { value: "B", label: "B" },
+  { value: "C", label: "C" },
+  { value: "D", label: "D" },
+  { value: "E", label: "E" },
+];
+
+const TYPE_OPTIONS = [
+  { value: "dialogue", label: "Dialogue" },
+  { value: "sdh", label: "SDH" },
+  { value: "music", label: "Music" },
+  { value: "foreign_language", label: "Foreign" },
+  { value: "sound_effect", label: "Sound FX" },
+];
 
 export default function CaptionEditor({ 
   cues: initialCues, 
@@ -103,9 +135,7 @@ export default function CaptionEditor({
   const rules = job?.rules || {};
   const rawCues = useRef([]);
   
-  useEffect(() => {
-    setCues(initialCues || []);
-  }, [initialCues]);
+  useEffect(() => { setCues(initialCues || []); }, [initialCues]);
 
   useEffect(() => {
     if (rawSrtText) {
@@ -204,15 +234,6 @@ export default function CaptionEditor({
   const seekTo = (ms) => {
     if (videoRef.current) videoRef.current.currentTime = ms / 1000;
   };
-  
-  const SPEAKER_OPTIONS = ["none", "A", "B", "C", "D", "E"];
-  const TYPE_OPTIONS = [
-    { value: "dialogue", label: "DLG" },
-    { value: "sdh", label: "SDH" },
-    { value: "music", label: "MUS" },
-    { value: "foreign_language", label: "FRN" },
-    { value: "sound_effect", label: "SFX" },
-  ];
 
   return (
     <div className="space-y-0">
@@ -243,18 +264,23 @@ export default function CaptionEditor({
       
       {/* Table */}
       <div ref={tableRef} className="overflow-auto" style={{ maxHeight: "60vh" }}>
-        <table className="w-full text-[11px] border-collapse table-fixed">
+        <table className="w-full text-[11px] border-collapse">
           <thead className="sticky top-0 z-10 bg-zinc-900 shadow-md">
             <tr className="border-b border-zinc-800">
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"32px"}}>#</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"80px"}}>IN</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"80px"}}>OUT</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"42px"}}>DUR</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"48px"}}>SPK</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"48px"}}>TYPE</th>
-              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"40px"}}>CHR</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[30px]">#</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[72px]">IN</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[72px]">OUT</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[40px]">DUR</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[72px]">SPK</th>
+              <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium w-[82px]">TYPE</th>
+              <th className="px-1.5 py-1.5 text-center text-zinc-500 font-medium w-[30px]">CHR</th>
               <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium">TEXT</th>
-              {showRawCol && <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium" style={{width:"25%"}}>RAW (AAI)</th>}
+              {showRawCol && (
+                <>
+                  <th className="px-1.5 py-1.5 text-center text-zinc-500 font-medium w-[30px]">CHR</th>
+                  <th className="px-1.5 py-1.5 text-left text-zinc-500 font-medium">RAW (AAI)</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -273,7 +299,6 @@ export default function CaptionEditor({
                   ref={isActive ? activeRowRef : null}
                   className={`border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors ${isActive ? "bg-blue-600/10" : ""} ${anyLineOver32 ? "border-l-2 border-l-red-500/60" : ""} ${isSDH ? "bg-blue-950/20" : ""}`}
                 >
-                  {/* # */}
                   <td className="px-1.5 py-1 text-zinc-500 font-mono cursor-pointer" onClick={() => seekTo(cue.start)}>{idx + 1}</td>
                   
                   {/* IN */}
@@ -303,30 +328,36 @@ export default function CaptionEditor({
                   {/* DUR */}
                   <td className="px-1.5 py-1 font-mono text-zinc-500 text-[10px]">{durationSec}s</td>
                   
-                  {/* SPEAKER - using native select to avoid event issues */}
+                  {/* SPEAKER */}
                   <td className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
                     <select 
                       value={cue.speaker || "none"} 
-                      onChange={(e) => handleCellEdit(idx, "speaker", e.target.value === "none" ? null : e.target.value)}
-                      className="w-full h-6 text-[10px] bg-zinc-900 border border-zinc-800 rounded text-zinc-300 focus:outline-none focus:border-blue-500 px-0.5"
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleCellEdit(idx, "speaker", e.target.value === "none" ? null : e.target.value);
+                      }}
+                      className="w-full h-6 text-[11px] bg-zinc-800 border border-zinc-700 rounded text-zinc-200 focus:outline-none focus:border-blue-500 px-1 cursor-pointer appearance-auto"
                     >
-                      {SPEAKER_OPTIONS.map(v => <option key={v} value={v}>{v === "none" ? "—" : v}</option>)}
+                      {SPEAKER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </td>
                   
-                  {/* TYPE - using native select to avoid event issues */}
+                  {/* TYPE */}
                   <td className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
                     <select 
                       value={cue.kind || "dialogue"} 
-                      onChange={(e) => handleCellEdit(idx, "type", e.target.value)}
-                      className="w-full h-6 text-[10px] bg-zinc-900 border border-zinc-800 rounded text-zinc-300 focus:outline-none focus:border-blue-500 px-0.5"
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleCellEdit(idx, "type", e.target.value);
+                      }}
+                      className="w-full h-6 text-[11px] bg-zinc-800 border border-zinc-700 rounded text-zinc-200 focus:outline-none focus:border-blue-500 px-1 cursor-pointer appearance-auto"
                     >
                       {TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </td>
                   
-                  {/* CHAR COUNTS */}
-                  <td className="px-1.5 py-1">
+                  {/* CHR */}
+                  <td className="px-1 py-1 text-center">
                     <CharCounts text={cue.text} />
                   </td>
                   
@@ -338,18 +369,23 @@ export default function CaptionEditor({
                         className="w-full bg-zinc-800 border border-blue-500 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none min-h-[50px]" autoFocus />
                     ) : (
                       <div onDoubleClick={() => startEdit(idx, "text")} 
-                        className="cursor-pointer hover:bg-zinc-800/50 rounded px-1.5 py-0.5 text-zinc-200 whitespace-pre-wrap min-h-[28px] text-[11px] leading-relaxed">
+                        className="cursor-pointer hover:bg-zinc-800/50 rounded px-1.5 py-0.5 text-zinc-200 whitespace-pre-wrap text-[11px] leading-relaxed">
                         {cue.text}
                         {anyLineOver32 && <AlertTriangle className="inline w-3 h-3 ml-1.5 text-red-400" />}
                       </div>
                     )}
                   </td>
                   
-                  {/* RAW AAI */}
+                  {/* RAW CHR + RAW TEXT */}
                   {showRawCol && (
-                    <td className="px-1.5 py-1 text-zinc-500 text-[10px] whitespace-pre-wrap leading-relaxed">
-                      {rawMatch ? rawMatch.text : <span className="text-zinc-700 italic">—</span>}
-                    </td>
+                    <>
+                      <td className="px-1 py-1 text-center">
+                        <RawCharCounts text={rawMatch?.text} />
+                      </td>
+                      <td className="px-1.5 py-1 text-zinc-200 text-[11px] whitespace-pre-wrap leading-relaxed">
+                        {rawMatch ? rawMatch.text : <span className="text-zinc-700 italic">—</span>}
+                      </td>
+                    </>
                   )}
                 </tr>
               );
