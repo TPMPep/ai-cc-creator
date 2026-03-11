@@ -18,6 +18,29 @@ const TYPE_OPTIONS = [
   { value: "sound_effect", label: "SFX" },
 ];
 
+function CueTextDisplay({ text }) {
+  // Render <i>...</i> as italic and ♪...♪ with music styling
+  const parts = [];
+  let remaining = text;
+  let key = 0;
+  
+  while (remaining.length > 0) {
+    const italicMatch = remaining.match(/<i>([\s\S]*?)<\/i>/);
+    if (italicMatch && italicMatch.index !== undefined) {
+      if (italicMatch.index > 0) {
+        parts.push(<span key={key++}>{remaining.slice(0, italicMatch.index)}</span>);
+      }
+      parts.push(<span key={key++} className="italic text-blue-300">{italicMatch[1]}</span>);
+      remaining = remaining.slice(italicMatch.index + italicMatch[0].length);
+    } else {
+      parts.push(<span key={key++}>{remaining}</span>);
+      break;
+    }
+  }
+  
+  return <>{parts}</>;
+}
+
 function CharCounts({ text }) {
   const lines = text.split("\n");
   return (
