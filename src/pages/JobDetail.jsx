@@ -11,6 +11,7 @@ import ExportPanel from "../components/jobdetail/ExportPanel";
 import QCPanel from "../components/jobdetail/QCPanel";
 import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import CaptionEditor from "../components/jobdetail/CaptionEditor";
+import { getCuesFromResultAsync } from "../components/shared/CueUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
@@ -42,7 +43,9 @@ export default function JobDetail() {
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
-        setCues(jobs[0].result?.cues || []);
+        // Load cues from all formats (cue_url, cue_chunks, cues)
+        const loadedCues = await getCuesFromResultAsync(jobs[0].result);
+        setCues(loadedCues);
         // Fetch raw AAI SRT if transcript id exists
         const tid = jobs[0].result?.assemblyai_transcript_id;
         if (tid) {
