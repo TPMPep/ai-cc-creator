@@ -28,6 +28,7 @@ export default function JobDetail() {
   const [titleDraft, setTitleDraft] = useState("");
   const [captionSettings, setCaptionSettings] = useState({ fontSize: 16, opacity: 0.8, position: "bottom" });
   const [cues, setCues] = useState([]);
+  const [rawSrtText, setRawSrtText] = useState(null);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
@@ -42,6 +43,13 @@ export default function JobDetail() {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
         setCues(jobs[0].result?.cues || []);
+        // Fetch raw AAI SRT if transcript id exists
+        const tid = jobs[0].result?.assemblyai_transcript_id;
+        if (tid) {
+          base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "srt" })
+            .then(res => setRawSrtText(res.data?.srt || null))
+            .catch(() => {});
+        }
       }
       setLoading(false);
     };
@@ -382,6 +390,7 @@ export default function JobDetail() {
                 currentTimeMs={currentTimeMs}
                 videoRef={videoRef}
                 job={job}
+                rawSrtText={rawSrtText}
                 onCuesChanged={(updatedCues) => {
                   setCues(updatedCues);
                   setJob(prev => ({ ...prev, result: { ...prev.result, cues: updatedCues } }));
