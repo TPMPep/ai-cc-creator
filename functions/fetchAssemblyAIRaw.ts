@@ -36,14 +36,23 @@ Deno.serve(async (req) => {
         return Response.json({ error: `AssemblyAI JSON fetch failed: ${jsonRes.status}` }, { status: 502 });
       }
       const jsonData = await jsonRes.json();
-      // Strip the massive words array and utterances to stay under payload limits
-      const { words, utterances, ...trimmed } = jsonData;
+      // Strip the massive words array to stay under payload limits, but keep utterances (has speaker labels)
+      const { words, ...trimmed } = jsonData;
       trimmed._meta = {
         words_count: words?.length || 0,
-        utterances_count: utterances?.length || 0,
-        note: "words and utterances arrays omitted to reduce payload size"
+        utterances_count: trimmed.utterances?.length || 0,
       };
       return Response.json({ json: trimmed });
+    }
+
+    if (format === "utterances") {
+      const jsonRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers });
+      if (!jsonRes.ok) {
+        return Response.json({ error: `AssemblyAI utterances fetch failed: ${jsonRes.status}` }, { status: 502 });
+      }
+      const jsonData = await jsonRes.json();
+      // Return just the utterances array (speaker-labeled segments)
+      return Response.json({ utterances: jsonData.utterances || [] });
     }
 
     return Response.json({ error: 'Invalid format. Use "srt" or "json".' }, { status: 400 });
