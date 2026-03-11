@@ -61,7 +61,8 @@ export default function CaptionEditor({
   videoRef, 
   job,
   onCuesChanged,
-  rawSrtText
+  rawSrtText,
+  rawUtterances: externalRawUtterances,
 }) {
   const { current: cues, push: pushCues, undo, redo, canUndo, canRedo, reset: resetHistory } = useUndoRedo(initialCues || []);
   const [autoFollow, setAutoFollow] = useState(true);
@@ -76,6 +77,7 @@ export default function CaptionEditor({
   const tableRef = useRef(null);
   const activeRowRef = useRef(null);
   const rawCues = useRef([]);
+  const rawUtterancesRef = useRef([]);
   const rules = job?.rules || {};
   
   // Sync with external cues changes
