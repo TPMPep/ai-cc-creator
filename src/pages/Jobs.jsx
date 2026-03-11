@@ -175,7 +175,7 @@ export default function Jobs() {
                       <span className="text-xs text-zinc-500 font-mono">{job.railwayJobId || job.jobId}</span>
                     </TableCell>
                     <TableCell className="text-xs text-zinc-500">
-                      {moment(job.created_date).format("MMM D, YYYY h:mm A")}
+                      {moment.utc(job.created_date).local().format("MMM D, YYYY h:mm A")}
                     </TableCell>
                     <TableCell>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${job.pipeline === "ai" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"}`}>
