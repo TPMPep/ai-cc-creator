@@ -401,6 +401,7 @@ export default function JobDetail() {
                 videoRef={videoRef}
                 job={job}
                 rawSrtText={rawSrtText}
+                rawUtterances={rawUtterances}
                 onCuesChanged={(updatedCues) => {
                   setCues(updatedCues);
                   setJob(prev => ({ ...prev, result: { ...prev.result, cues: updatedCues } }));
