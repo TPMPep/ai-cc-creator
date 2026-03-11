@@ -8,7 +8,7 @@ const msToShortTC = (ms) => {
   return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(mil).padStart(2,"0")}`;
 };
 
-const SPEAKER_OPTIONS = [
+const BASE_SPEAKER_OPTIONS = [
   { value: "none", label: "\u2014" },
   { value: "A", label: "A" },
   { value: "B", label: "B" },
@@ -16,6 +16,17 @@ const SPEAKER_OPTIONS = [
   { value: "D", label: "D" },
   { value: "E", label: "E" },
 ];
+
+// Build speaker options dynamically to include the current value if not in base list
+function getSpeakerOptions(currentSpeaker) {
+  if (!currentSpeaker || currentSpeaker === "none") return BASE_SPEAKER_OPTIONS;
+  const exists = BASE_SPEAKER_OPTIONS.some(function(o) { return o.value === currentSpeaker; });
+  if (exists) return BASE_SPEAKER_OPTIONS;
+  // Add the current value as an extra option so it shows properly
+  return [{ value: "none", label: "\u2014" }, { value: currentSpeaker, label: currentSpeaker }].concat(
+    BASE_SPEAKER_OPTIONS.filter(function(o) { return o.value !== "none"; })
+  );
+}
 
 const TYPE_OPTIONS = [
   { value: "dialogue", label: "DL" },
