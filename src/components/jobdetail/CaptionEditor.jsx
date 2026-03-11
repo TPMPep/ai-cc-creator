@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import useUndoRedo from "./useUndoRedo";
 import EditorToolbar from "./EditorToolbar";
 import CaptionEditorRow from "./CaptionEditorRow";
+import ExportDiffPanel from "./ExportDiffPanel";
 
 const msToTimecode = (ms) => {
   const h = Math.floor(ms / 3600000);
@@ -91,6 +92,7 @@ export default function CaptionEditor({
   const [bulkSpeakerOpen, setBulkSpeakerOpen] = useState(false);
   const [selectedCues, setSelectedCues] = useState(new Set());
   const [violationIdx, setViolationIdx] = useState(-1);
+  const [diffOpen, setDiffOpen] = useState(false);
   const tableRef = useRef(null);
   const activeRowRef = useRef(null);
   const rawCues = useRef([]);
@@ -337,6 +339,23 @@ export default function CaptionEditor({
     setSelectedCues(next);
   };
 
+  // --- Style tags ---
+  const handleStyleWrap = (style) => {
+    if (activeCueIndex < 0) { toast.error("No active cue"); return; }
+    const cue = cues[activeCueIndex];
+    let newText;
+    if (style === "italic") {
+      newText = `<i>${cue.text}</i>`;
+    } else if (style === "music") {
+      newText = `♪ ${cue.text.replace(/^♪\s*/, "").replace(/\s*♪$/, "")} ♪`;
+    } else {
+      return;
+    }
+    const newCues = cues.map(c => ({ ...c }));
+    newCues[activeCueIndex] = { ...cue, text: newText };
+    updateCues(newCues);
+  };
+
   return (
     <div className="space-y-0">
       <EditorToolbar
@@ -350,6 +369,8 @@ export default function CaptionEditor({
         onJumpToNextViolation={handleJumpToNextViolation}
         onBulkSpeaker={handleBulkSpeaker} bulkSpeakerOpen={bulkSpeakerOpen} setBulkSpeakerOpen={setBulkSpeakerOpen}
         selectedCount={selectedCues.size}
+        onStyleWrap={handleStyleWrap}
+        diffOpen={diffOpen} setDiffOpen={setDiffOpen} hasRawCues={rawCues.current.length > 0}
       />
 
       {/* Keyboard hints */}
@@ -362,6 +383,11 @@ export default function CaptionEditor({
         <span>Enter Next cue</span>
         <span>Double-click to edit cell</span>
       </div>
+
+      {/* Diff panel */}
+      {diffOpen && (
+        <ExportDiffPanel cues={cues} rawCues={rawCues.current} onClose={() => setDiffOpen(false)} />
+      )}
 
       {/* Table */}
       <div ref={tableRef} className="overflow-auto" style={{ maxHeight: "60vh" }}>
