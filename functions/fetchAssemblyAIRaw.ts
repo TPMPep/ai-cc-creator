@@ -36,7 +36,14 @@ Deno.serve(async (req) => {
         return Response.json({ error: `AssemblyAI JSON fetch failed: ${jsonRes.status}` }, { status: 502 });
       }
       const jsonData = await jsonRes.json();
-      return Response.json({ json: jsonData });
+      // Strip the massive words array and utterances to stay under payload limits
+      const { words, utterances, ...trimmed } = jsonData;
+      trimmed._meta = {
+        words_count: words?.length || 0,
+        utterances_count: utterances?.length || 0,
+        note: "words and utterances arrays omitted to reduce payload size"
+      };
+      return Response.json({ json: trimmed });
     }
 
     return Response.json({ error: 'Invalid format. Use "srt" or "json".' }, { status: 400 });
