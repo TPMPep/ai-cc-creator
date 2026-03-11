@@ -76,7 +76,7 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
     editingCell, editValue, setEditValue,
     onStartEdit, onCommitEdit, onKeyDown,
     onCellEdit, onSeek,
-    showRawCol, rawMatch,
+    showRawCol, rawMatch, rawUtterance,
   } = props;
 
   const duration = cue.end - cue.start;
