@@ -137,7 +137,8 @@ export default function JobDetail() {
           parsedCues = parseVTT(vtt);
           console.log("[JobDetail] Parsed", parsedCues.length, "cues from VTT");
         } else if (srt) {
-          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/,/g, '.');
+          // Convert SRT timecodes to VTT format (commas to periods in timestamps only)
+          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
           parsedCues = parseVTT(vttFromSrt);
           console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT fallback");
         }
