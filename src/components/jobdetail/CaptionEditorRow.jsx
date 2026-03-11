@@ -189,6 +189,8 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
               onKeyDown={function(e) { if (e.key === "Escape") onCommitEdit(); }}
               className="w-full bg-zinc-800 border border-blue-500 rounded px-1.5 py-1 text-[11px] text-white focus:outline-none min-h-[50px]"
               autoFocus
+              spellCheck={true}
+              lang="en"
             />
           ) : (
             <div
