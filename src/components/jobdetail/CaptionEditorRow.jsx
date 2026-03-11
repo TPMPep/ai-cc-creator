@@ -229,6 +229,13 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
         {showRawCol && (
           <React.Fragment>
             <td className="px-1 py-1 text-center">
+              {rawUtterance && rawUtterance.speaker ? (
+                <span className="font-mono text-[10px] text-cyan-400 font-semibold">{rawUtterance.speaker}</span>
+              ) : (
+                <span className="text-zinc-700 text-[10px]">{"\u2014"}</span>
+              )}
+            </td>
+            <td className="px-1 py-1 text-center">
               <RawCharCounts text={rawMatch ? rawMatch.text : null} />
             </td>
             <td className="px-1.5 py-1 text-zinc-200 text-[11px] whitespace-pre-wrap leading-relaxed">
