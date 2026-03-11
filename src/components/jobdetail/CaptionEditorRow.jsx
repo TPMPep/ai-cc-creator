@@ -246,7 +246,7 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
       </tr>
       {gapMs !== null && (gapTooShort || gapWarning) && (
         <tr className="border-0">
-          <td colSpan={showRawCol ? 11 : 9} className="px-0 py-0">
+          <td colSpan={showRawCol ? 12 : 9} className="px-0 py-0">
             <div
               className={"h-[2px] mx-8 " + (gapTooShort ? "bg-red-500" : "bg-amber-500/50")}
               title={gapTooShort ? "Overlap: " + Math.abs(gapMs) + "ms" : "Gap: " + gapMs + "ms (< 80ms)"}
