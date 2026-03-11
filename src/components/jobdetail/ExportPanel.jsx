@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Copy, Check, Loader2 } from "lucide-react";
+import { Download, Copy, Check, Loader2, DownloadCloud } from "lucide-react";
 import { getCuesFromResult } from "../shared/CueUtils";
 import { base44 } from "@/api/base44Client";
 
@@ -160,6 +160,50 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
           </div>
         </>
       )}
+
+      {/* Download All */}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!!downloading}
+        onClick={async () => {
+          setDownloading("all");
+          const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+          // SRT
+          if (hasSrt) {
+            const content = result.srt_url || result.srt_text || result.srt || (result.srt_chunks ? joinChunks(result.srt_chunks) : null);
+            if (result.srt_url) await downloadFromUrl(content, `${safeName}_${jobId}.srt`);
+            else downloadBlob(content, `${safeName}_${jobId}.srt`, "text/plain");
+            await delay(400);
+          }
+
+          // JSON Cues
+          if (result.cue_url) {
+            await downloadFromUrl(result.cue_url, `${safeName}_${jobId}.json`);
+          } else {
+            const cues = getCuesFromResult(result);
+            downloadBlob(JSON.stringify(cues, null, 2), `${safeName}_${jobId}.json`, "application/json");
+          }
+          await delay(400);
+
+          // Raw SRT + Raw JSON from AssemblyAI
+          if (assemblyaiTranscriptId) {
+            const srtRes = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId, format: "srt" });
+            downloadBlob(srtRes.data.srt, `${safeName}_raw_${jobId}.srt`, "text/plain");
+            await delay(400);
+
+            const jsonRes = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: assemblyaiTranscriptId, format: "json" });
+            downloadBlob(JSON.stringify(jsonRes.data.json, null, 2), `${safeName}_raw_${jobId}.json`, "application/json");
+          }
+
+          setDownloading(null);
+        }}
+        className="w-full bg-emerald-600/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/20 hover:text-emerald-200 text-xs h-9 justify-center font-semibold mt-1"
+      >
+        {downloading === "all" ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <DownloadCloud className="w-3 h-3 mr-1.5" />}
+        Download All
+      </Button>
 
       <div className="flex gap-2">
         {hasSrt && (
