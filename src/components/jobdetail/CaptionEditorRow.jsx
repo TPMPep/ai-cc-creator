@@ -80,13 +80,13 @@ function ReadingSpeedBar({ cps }) {
   );
 }
 
-export default function CaptionEditorRow({
+const CaptionEditorRow = React.forwardRef(function CaptionEditorRow({
   cue, idx, isActive, nextCue, selected, onToggleSelect,
   editingCell, editValue, setEditValue,
   onStartEdit, onCommitEdit, onKeyDown,
   onCellEdit, onSeek,
   showRawCol, rawMatch,
-}) {
+}, ref) {
   const duration = cue.end - cue.start;
   const durationSec = (duration / 1000).toFixed(1);
   const lines = cue.text.split("\n");
@@ -104,6 +104,7 @@ export default function CaptionEditorRow({
   return (
     <>
       <tr
+        ref={ref}
         className={`border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors 
           ${isActive ? "bg-blue-600/10" : ""} 
           ${anyLineOver32 ? "border-l-2 border-l-red-500/60" : ""} 
