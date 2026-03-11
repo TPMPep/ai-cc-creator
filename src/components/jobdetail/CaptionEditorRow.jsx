@@ -218,4 +218,6 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRow({
       )}
     </>
   );
-}
+});
+
+export default CaptionEditorRow;
