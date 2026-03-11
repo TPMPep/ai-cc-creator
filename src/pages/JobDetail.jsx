@@ -190,7 +190,10 @@ export default function JobDetail() {
 
       await base44.entities.Job.update(currentJob.id, updates);
       setJob((prev) => ({ ...prev, ...updates }));
-      if (updates.result?.cues) setCues(updates.result.cues);
+      if (updates.result) {
+        const freshCues = await getCuesFromResultAsync(updates.result);
+        setCues(freshCues);
+      }
 
       // Stop polling on terminal states
       if (mappedStatus === "done" || mappedStatus === "error") {
