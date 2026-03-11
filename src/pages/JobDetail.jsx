@@ -30,6 +30,7 @@ export default function JobDetail() {
   const [captionSettings, setCaptionSettings] = useState({ fontSize: 16, opacity: 0.8, position: "bottom" });
   const [cues, setCues] = useState([]);
   const [rawSrtText, setRawSrtText] = useState(null);
+  const [rawUtterances, setRawUtterances] = useState([]);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
 
