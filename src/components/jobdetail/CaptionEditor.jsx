@@ -374,6 +374,7 @@ export default function CaptionEditor({
               <th className="px-1 py-1.5 text-left text-zinc-500 font-medium">TEXT</th>
               {showRawCol && (
                 <>
+                  <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[40px]">RAW SPK</th>
                   <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[28px]">CHR</th>
                   <th className="px-1 py-1.5 text-left text-zinc-500 font-medium">RAW (AAI)</th>
                 </>
