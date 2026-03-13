@@ -101,7 +101,8 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
 
   const duration = cue.end - cue.start;
   const durationSec = (duration / 1000).toFixed(1);
-  const lines = cue.text.split("\n");
+  const cleanText = stripSSATags(cue.text);
+  const lines = cleanText.split("\n");
   const anyLineOver32 = lines.some(function(l) { return l.length > 32; });
   const isSDH = cue.kind === "sdh";
   const cps = getCPS(cue.text, duration);
