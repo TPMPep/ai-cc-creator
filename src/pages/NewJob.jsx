@@ -160,7 +160,6 @@ export default function NewJob() {
                 speakerLabels={speakerLabels}
                 languageDetection={languageDetection}
                 allowHttp={allowHttp}
-                rules={rules}
                 protectedPhrases={protectedPhrases}
                 captionOptions={captionOptions}
               />
