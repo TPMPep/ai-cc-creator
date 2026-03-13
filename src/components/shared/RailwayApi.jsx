@@ -4,12 +4,18 @@ const API_BASE = "https://web-production-eba27.up.railway.app";
  * Create a job on Railway.
  * Payload: mediaUrl, speakerLabels, languageDetection, allowHttp, captionRules
  */
-function buildCaptionEnvVars(opts) {
+export function buildCaptionEnvVars(opts) {
   if (!opts) return {};
   const vars = {};
+
+  // Profile
+  const profile = opts.captionProfile || "nbcu";
+  vars.CAPTION_PROFILE = profile;
+
   // Output format
   if (opts.outputFormat) vars.OUTPUT_FORMATS = opts.outputFormat;
-  // TTML settings (emit when any TTML output is included)
+
+  // TTML settings
   const hasTtml = (opts.outputFormat || "").includes("ttml");
   if (hasTtml) {
     vars.TTML_TIMEBASE = opts.ttmlTimebase || "media";
@@ -17,6 +23,7 @@ function buildCaptionEnvVars(opts) {
     vars.TTML_FRAME_RATE_MULTIPLIER = opts.ttmlFrameRateMultiplier || "1000 1001";
     vars.TTML_TEXT_ALIGN = opts.ttmlTextAlign || "center";
   }
+
   // Speaker labels
   if (opts.speakerLabelMode) vars.SPEAKER_LABEL_MODE = opts.speakerLabelMode;
   if (opts.speakerLabelFormat) vars.SPEAKER_LABEL_FORMAT = opts.speakerLabelFormat;
@@ -25,20 +32,38 @@ function buildCaptionEnvVars(opts) {
   if (opts.speakerNameMap && typeof opts.speakerNameMap === "object" && Object.keys(opts.speakerNameMap).length > 0) {
     vars.SPEAKER_NAME_MAP = JSON.stringify(opts.speakerNameMap);
   }
+
   // Sound labels
   if (opts.soundLabelStyle) vars.SOUND_LABEL_STYLE = opts.soundLabelStyle;
+
   // Italics
   if (opts.italicizeTitles !== undefined) vars.ITALICIZE_TITLES = String(opts.italicizeTitles);
   if (opts.italicizeTitlesMinWords !== undefined) vars.ITALICIZE_TITLES_MIN_WORDS = String(opts.italicizeTitlesMinWords);
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
+
   // Alignment
   if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
   if (opts.alignmentWindows && opts.alignmentWindows.length > 0) {
     const valid = opts.alignmentWindows.filter(w => w.start && w.end && w.align);
     if (valid.length > 0) vars.ALIGNMENT_WINDOWS = JSON.stringify(valid);
   }
+
   // Timecode
   if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
+
+  // Custom overrides (only when profile=custom)
+  if (profile === "custom") {
+    if (opts.customMaxLines !== undefined)          vars.CUSTOM_MAX_LINES = String(opts.customMaxLines);
+    if (opts.customMaxChars !== undefined)           vars.CUSTOM_MAX_CHARS = String(opts.customMaxChars);
+    if (opts.customTargetCps !== undefined)          vars.CUSTOM_TARGET_CPS = String(opts.customTargetCps);
+    if (opts.customMaxCps !== undefined)             vars.CUSTOM_MAX_CPS = String(opts.customMaxCps);
+    if (opts.customMinDisplayMs !== undefined)       vars.CUSTOM_MIN_DISPLAY_MS = String(opts.customMinDisplayMs);
+    if (opts.customMinSoundDisplayMs !== undefined)  vars.CUSTOM_MIN_SOUND_DISPLAY_MS = String(opts.customMinSoundDisplayMs);
+    if (opts.customMinSoundMs !== undefined)         vars.CUSTOM_MIN_SOUND_MS = String(opts.customMinSoundMs);
+    if (opts.customSoundClusterGapMs !== undefined)  vars.CUSTOM_SOUND_CLUSTER_GAP_MS = String(opts.customSoundClusterGapMs);
+    if (opts.customMergeGapMs !== undefined)         vars.CUSTOM_MERGE_GAP_MS = String(opts.customMergeGapMs);
+  }
+
   return vars;
 }
 
