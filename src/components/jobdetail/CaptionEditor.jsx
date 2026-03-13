@@ -358,6 +358,10 @@ export default function CaptionEditor({
     toast.success(`Applied ${style} style to cue ${activeCueIndex + 1}`);
   };
 
+  const resizeCol = useCallback((col) => (newWidth) => {
+    setColWidths(prev => ({ ...prev, [col]: newWidth }));
+  }, []);
+
   return (
     <div className="space-y-0">
       <EditorToolbar
