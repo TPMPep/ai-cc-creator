@@ -12,6 +12,7 @@ import QCPanel from "../components/jobdetail/QCPanel";
 import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { getCuesFromResultAsync } from "../components/shared/CueUtils";
+import { parseTTML, cuesToSrt, cuesToVtt, parseVTT } from "../components/shared/SubtitleParsers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, RotateCcw } from "lucide-react";
