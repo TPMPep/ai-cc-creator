@@ -35,11 +35,13 @@ export const CAPTION_OPTIONS_DEFAULTS = {
   italicizeTitlesMinWords: 3,
   italicizePhrases: "",
   alignmentDefault: "none",
+  alignmentWindows: [],
   timecodeOffsetMs: 0,
   outputFormat: "srt",
   ttmlTimebase: "media",
   ttmlFrameRate: 30,
   ttmlFrameRateMultiplier: "1000 1001",
+  ttmlTextAlign: "center",
 };
 
 export const NBCU_CAPTION_OPTIONS = {
@@ -53,9 +55,31 @@ export const NBCU_CAPTION_OPTIONS = {
   italicizeTitlesMinWords: 3,
   italicizePhrases: "",
   alignmentDefault: "none",
+  alignmentWindows: [],
   timecodeOffsetMs: 0,
   outputFormat: "ttml",
   ttmlTimebase: "media",
   ttmlFrameRate: 30,
   ttmlFrameRateMultiplier: "1000 1001",
+  ttmlTextAlign: "center",
+};
+
+export const INTERNAL_CAPTION_OPTIONS = {
+  speakerLabelMode: "named",
+  speakerLabelFormat: "bracket",
+  speakerLabelSingle: 0,
+  speakerGenericPrefix: "SPEAKER",
+  speakerNameMap: { A: "Andy", B: "Aesha", C: "Cathy" },
+  soundLabelStyle: "descriptive",
+  italicizeTitles: 1,
+  italicizeTitlesMinWords: 3,
+  italicizePhrases: "",
+  alignmentDefault: "none",
+  alignmentWindows: [],
+  timecodeOffsetMs: 0,
+  outputFormat: "srt,ttml",
+  ttmlTimebase: "media",
+  ttmlFrameRate: 30,
+  ttmlFrameRateMultiplier: "1000 1001",
+  ttmlTextAlign: "center",
 };
