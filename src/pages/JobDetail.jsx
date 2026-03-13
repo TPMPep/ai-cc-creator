@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast as sonnerToast } from "sonner";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
-import { pollJob } from "../components/shared/RailwayApi";
+import { pollJob, createReformatJob } from "../components/shared/RailwayApi";
 import StatusBadge from "../components/shared/StatusBadge";
 import VideoPlayer from "../components/jobdetail/VideoPlayer";
 import CueList from "../components/jobdetail/CueList";
@@ -14,7 +14,7 @@ import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { getCuesFromResultAsync } from "../components/shared/CueUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
+import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, RotateCcw } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
 
