@@ -105,18 +105,20 @@ export async function createJob(payload) {
  */
 export async function createReformatJob(transcriptId, captionOptions) {
   const captionEnv = buildCaptionEnvVars(captionOptions);
+  const payload = {
+    transcript_id: transcriptId,
+    reformat_only: true,
+    captionOptions: captionEnv,
+  };
+  console.log("POST /v1/jobs (reformat) payload:", JSON.stringify(payload, null, 2));
   const response = await fetch(`${API_BASE}/v1/jobs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      transcript_id: transcriptId,
-      reformat_only: true,
-      env: captionEnv,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const responseText = await response.text();
-  console.log("POST /v1/jobs (reformat) response:", { status: response.status, body: responseText });
+  console.log("POST /v1/jobs (reformat) response:", { status: response.status, body: responseText.substring(0, 3000) });
 
   if (!response.ok) {
     throw new Error(`Reformat job creation failed (${response.status}): ${responseText}`);
