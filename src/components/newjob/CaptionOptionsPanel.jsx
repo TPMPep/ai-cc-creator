@@ -10,7 +10,7 @@ import { NBCU_CAPTION_OPTIONS, CAPTION_OPTIONS_DEFAULTS } from "../shared/RulesD
 const SECTION_CLASS = "space-y-3 border-b border-zinc-800/40 pb-4 last:border-0 last:pb-0";
 const LABEL_CLASS = "text-xs text-zinc-400";
 
-function SpeakerSection({ opts, onChange }) {
+function SpeakerSection({ opts, onChange, locked }) {
   const update = (key, val) => onChange({ ...opts, [key]: val });
   
   const nameMapStr = React.useMemo(() => {
@@ -23,67 +23,74 @@ function SpeakerSection({ opts, onChange }) {
       <div className="flex items-center gap-2 mb-1">
         <Users className="w-3.5 h-3.5 text-blue-400" />
         <span className="text-xs font-semibold text-zinc-300">Speaker Labels</span>
+        {locked && <span className="text-[10px] text-amber-400 ml-auto">NBCU: dash only</span>}
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className={LABEL_CLASS}>Mode</Label>
-          <Select value={opts.speakerLabelMode} onValueChange={(v) => update("speakerLabelMode", v)}>
-            <SelectTrigger className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="dash" className="text-zinc-300">Dash (no labels)</SelectItem>
-              <SelectItem value="alpha" className="text-zinc-300">Alpha (A, B, C)</SelectItem>
-              <SelectItem value="generic" className="text-zinc-300">Generic (SPEAKER 1)</SelectItem>
-              <SelectItem value="named" className="text-zinc-300">Named (custom)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className={LABEL_CLASS}>Format</Label>
-          <Select value={opts.speakerLabelFormat} onValueChange={(v) => update("speakerLabelFormat", v)}>
-            <SelectTrigger className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="prefix" className="text-zinc-300">Prefix (- Andy:)</SelectItem>
-              <SelectItem value="bracket" className="text-zinc-300">Bracket (-[Andy])</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="flex items-center justify-between py-1">
-        <Label className={LABEL_CLASS}>Label single-speaker cues</Label>
-        <Switch
-          checked={!!opts.speakerLabelSingle}
-          onCheckedChange={(v) => update("speakerLabelSingle", v ? 1 : 0)}
-          className="data-[state=checked]:bg-blue-600"
-        />
-      </div>
-      {opts.speakerLabelMode === "generic" && (
-        <div className="space-y-1">
-          <Label className={LABEL_CLASS}>Generic prefix</Label>
-          <Input
-            value={opts.speakerGenericPrefix}
-            onChange={(e) => update("speakerGenericPrefix", e.target.value)}
-            className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs"
-            placeholder="SPEAKER"
-          />
-        </div>
-      )}
-      {opts.speakerLabelMode === "named" && (
-        <div className="space-y-1">
-          <Label className={LABEL_CLASS}>Name map (JSON)</Label>
-          <Input
-            value={nameMapStr}
-            onChange={(e) => {
-              try { update("speakerNameMap", JSON.parse(e.target.value)); } catch {}
-            }}
-            className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs font-mono"
-            placeholder='{"A":"Andy","B":"Aesha"}'
-          />
-          <span className="text-[10px] text-zinc-600">Map AssemblyAI speaker letters to display names</span>
-        </div>
+      {locked ? (
+        <p className="text-xs text-zinc-500">Locked to dash mode (no speaker names) per NBCU CM-051.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className={LABEL_CLASS}>Mode</Label>
+              <Select value={opts.speakerLabelMode} onValueChange={(v) => update("speakerLabelMode", v)}>
+                <SelectTrigger className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  <SelectItem value="dash" className="text-zinc-300">Dash (no labels)</SelectItem>
+                  <SelectItem value="alpha" className="text-zinc-300">Alpha (A, B, C)</SelectItem>
+                  <SelectItem value="generic" className="text-zinc-300">Generic (SPEAKER 1)</SelectItem>
+                  <SelectItem value="named" className="text-zinc-300">Named (custom)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className={LABEL_CLASS}>Format</Label>
+              <Select value={opts.speakerLabelFormat} onValueChange={(v) => update("speakerLabelFormat", v)}>
+                <SelectTrigger className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  <SelectItem value="prefix" className="text-zinc-300">Prefix (- Andy:)</SelectItem>
+                  <SelectItem value="bracket" className="text-zinc-300">Bracket (-[Andy])</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center justify-between py-1">
+            <Label className={LABEL_CLASS}>Label single-speaker cues</Label>
+            <Switch
+              checked={!!opts.speakerLabelSingle}
+              onCheckedChange={(v) => update("speakerLabelSingle", v ? 1 : 0)}
+              className="data-[state=checked]:bg-blue-600"
+            />
+          </div>
+          {opts.speakerLabelMode === "generic" && (
+            <div className="space-y-1">
+              <Label className={LABEL_CLASS}>Generic prefix</Label>
+              <Input
+                value={opts.speakerGenericPrefix}
+                onChange={(e) => update("speakerGenericPrefix", e.target.value)}
+                className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs"
+                placeholder="SPEAKER"
+              />
+            </div>
+          )}
+          {opts.speakerLabelMode === "named" && (
+            <div className="space-y-1">
+              <Label className={LABEL_CLASS}>Name map (JSON)</Label>
+              <Input
+                value={nameMapStr}
+                onChange={(e) => {
+                  try { update("speakerNameMap", JSON.parse(e.target.value)); } catch {}
+                }}
+                className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs font-mono"
+                placeholder='{"A":"Andy","B":"Aesha"}'
+              />
+              <span className="text-[10px] text-zinc-600">Map AssemblyAI speaker letters to display names</span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
