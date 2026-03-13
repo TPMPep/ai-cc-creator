@@ -95,6 +95,18 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
   return (
     <div className="space-y-3">
       <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Exports</h3>
+      {hasTtml && (
+        <DownloadBtn
+          highlight
+          onClick={() => {
+            const content = result.ttml_url || result.ttml_text || result.ttml || (result.ttml_chunks ? joinChunks(result.ttml_chunks) : null);
+            const isUrl = !!result.ttml_url;
+            handleDownload(content, isUrl, `${safeName}_${jobId}.ttml`);
+          }}
+        >
+          TTML (Broadcast / IMSC-1.1)
+        </DownloadBtn>
+      )}
       {hasScc && (
         <DownloadBtn
           highlight
