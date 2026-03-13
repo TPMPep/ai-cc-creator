@@ -21,8 +21,6 @@ export default function NewJob() {
   const [allowHttp, setAllowHttp] = useState(false);
   const [speakerLabels, setSpeakerLabels] = useState(true);
   const [languageDetection, setLanguageDetection] = useState(true);
-  const [rules, setRules] = useState({ ...NBCU_DEFAULTS });
-  const [preset, setPreset] = useState("nbcu");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [urlError, setUrlError] = useState(null);
