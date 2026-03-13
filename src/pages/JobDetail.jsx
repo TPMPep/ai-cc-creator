@@ -146,31 +146,41 @@ export default function JobDetail() {
       const updates = { status: mappedStatus, lastPolledAt: new Date().toISOString() };
       if (data.error) updates.error = data.error;
       
-      // Save results when completed — Railway returns result.srt/.vtt/.scc/.qc
+      // Save results when completed — Railway returns result.srt/.vtt/.scc/.ttml/.qc
       if (mappedStatus === "done") {
         // Railway may return result at top level or nested — handle both
         const resultData = data.result || data;
         const srt = resultData.srt || null;
         const vtt = resultData.vtt || null;
         const scc = resultData.scc || null;
+        const ttml = resultData.ttml || null;
         const qc = resultData.qc || null;
         
         console.log("[JobDetail] Result data keys:", Object.keys(resultData));
-        console.log("[JobDetail] Result found:", { hasSrt: !!srt, hasVtt: !!vtt, hasScc: !!scc, hasQc: !!qc });
-        console.log("[JobDetail] SRT preview:", srt ? srt.substring(0, 300) : "null");
-        console.log("[JobDetail] VTT preview:", vtt ? vtt.substring(0, 300) : "null");
-        console.log("[JobDetail] assemblyai_transcript_id:", data.assemblyai_transcript_id || resultData.assemblyai_transcript_id || "none");
+        console.log("[JobDetail] Result found:", { hasSrt: !!srt, hasVtt: !!vtt, hasScc: !!scc, hasTtml: !!ttml, hasQc: !!qc });
         
-        // Parse VTT to get cues for the editor/player
+        // Parse cues from best available format: VTT > SRT > TTML
         let parsedCues = [];
         if (vtt) {
           parsedCues = parseVTT(vtt);
           console.log("[JobDetail] Parsed", parsedCues.length, "cues from VTT");
         } else if (srt) {
-          // Convert SRT timecodes to VTT format (commas to periods in timestamps only)
           const vttFromSrt = "WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
           parsedCues = parseVTT(vttFromSrt);
-          console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT fallback");
+          console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT");
+        } else if (ttml) {
+          parsedCues = parseTTML(ttml);
+          console.log("[JobDetail] Parsed", parsedCues.length, "cues from TTML");
+        }
+
+        // Generate SRT from cues if Railway didn't return it (e.g. TTML-only output)
+        let effectiveSrt = srt;
+        let effectiveVtt = vtt;
+        if (!srt && parsedCues.length > 0) {
+          effectiveSrt = cuesToSrt(parsedCues);
+        }
+        if (!vtt && parsedCues.length > 0) {
+          effectiveVtt = cuesToVtt(parsedCues);
         }
         
         // Upload large text content as files to avoid entity field size limits
@@ -181,9 +191,10 @@ export default function JobDetail() {
         };
         
         const uploadPromises = [];
-        if (srt) uploadPromises.push(uploadText(srt, `${jobId}.srt`).then(url => ({ key: "srt_url", url })));
-        if (vtt) uploadPromises.push(uploadText(vtt, `${jobId}.vtt`).then(url => ({ key: "vtt_url", url })));
+        if (effectiveSrt) uploadPromises.push(uploadText(effectiveSrt, `${jobId}.srt`).then(url => ({ key: "srt_url", url })));
+        if (effectiveVtt) uploadPromises.push(uploadText(effectiveVtt, `${jobId}.vtt`).then(url => ({ key: "vtt_url", url })));
         if (scc) uploadPromises.push(uploadText(scc, `${jobId}.scc`).then(url => ({ key: "scc_url", url })));
+        if (ttml) uploadPromises.push(uploadText(ttml, `${jobId}.ttml`).then(url => ({ key: "ttml_url", url })));
         
         const uploaded = await Promise.all(uploadPromises);
         const urlMap = {};
