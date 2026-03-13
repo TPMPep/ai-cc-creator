@@ -361,7 +361,7 @@ export default function JobDetail() {
                 variant="outline"
                 onClick={handleReformat}
                 disabled={reformatting}
-                className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800"
+                className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800 bg-transparent"
               >
                 {reformatting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
                 Reformat Captions
