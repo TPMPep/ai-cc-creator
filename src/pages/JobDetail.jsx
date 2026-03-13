@@ -258,6 +258,42 @@ export default function JobDetail() {
     navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
 
+  const handleReformat = async () => {
+    const transcriptId = job.result?.assemblyai_transcript_id;
+    if (!transcriptId) {
+      toast.error("No AssemblyAI transcript ID found on this job.");
+      return;
+    }
+    setReformatting(true);
+    try {
+      const captionOptions = job.rules || {};
+      const data = await createReformatJob(transcriptId, captionOptions);
+      const newRailwayJobId = data.job_id || data.id;
+      if (!newRailwayJobId) throw new Error("No job_id returned from Railway");
+
+      // Create a new Job record for the reformat
+      const newJob = await base44.entities.Job.create({
+        railwayJobId: newRailwayJobId,
+        userId: job.userId,
+        mediaUrl: job.mediaUrl,
+        title: `${job.title || "Untitled"} (reformat)`,
+        status: "processing",
+        pipeline: "railway",
+        speakerLabels: job.speakerLabels,
+        languageDetection: job.languageDetection,
+        rules: job.rules,
+      });
+
+      toast.success("Reformat job submitted! Redirecting…");
+      navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}`);
+    } catch (err) {
+      console.error("Reformat error:", err);
+      toast.error(`Reformat failed: ${err.message}`);
+    } finally {
+      setReformatting(false);
+    }
+  };
+
   if (!jobId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
