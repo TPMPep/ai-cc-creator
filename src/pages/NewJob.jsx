@@ -123,7 +123,6 @@ export default function NewJob() {
         speaker_labels: speakerLabels,
         language_detection: languageDetection,
         allowHttp,
-        rules,
         protected_phrases: parsedPhrases,
         captionOptions,
       };
