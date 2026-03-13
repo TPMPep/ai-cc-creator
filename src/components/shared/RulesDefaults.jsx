@@ -36,4 +36,26 @@ export const CAPTION_OPTIONS_DEFAULTS = {
   italicizePhrases: "",
   alignmentDefault: "none",
   timecodeOffsetMs: 0,
+  outputFormat: "srt",
+  ttmlTimebase: "media",
+  ttmlFrameRate: 30,
+  ttmlFrameRateMultiplier: "1000 1001",
+};
+
+export const NBCU_CAPTION_OPTIONS = {
+  speakerLabelMode: "dash",
+  speakerLabelFormat: "prefix",
+  speakerLabelSingle: 0,
+  speakerGenericPrefix: "SPEAKER",
+  speakerNameMap: {},
+  soundLabelStyle: "simple",
+  italicizeTitles: 1,
+  italicizeTitlesMinWords: 3,
+  italicizePhrases: "",
+  alignmentDefault: "none",
+  timecodeOffsetMs: 0,
+  outputFormat: "ttml",
+  ttmlTimebase: "media",
+  ttmlFrameRate: 30,
+  ttmlFrameRateMultiplier: "1000 1001",
 };
