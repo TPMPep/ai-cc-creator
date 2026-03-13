@@ -74,7 +74,7 @@ function RawCharCounts({ text }) {
 
 function getCPS(text, durationMs) {
   if (durationMs <= 0) return 0;
-  const totalChars = text.replace(/\n/g, "").length;
+  const totalChars = stripSSATags(text).replace(/\n/g, "").length;
   return totalChars / (durationMs / 1000);
 }
 
