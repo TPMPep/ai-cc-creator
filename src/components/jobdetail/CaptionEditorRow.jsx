@@ -22,9 +22,10 @@ const TYPE_OPTIONS = [
 ];
 
 function CueTextDisplay({ text }) {
-  // Render <i>...</i> as italic and ♪...♪ with music styling
+  // Strip SSA/ASS tags, then render <i>...</i> as italic and ♪...♪ with music styling
+  const cleaned = stripSSATags(text);
   const parts = [];
-  let remaining = text;
+  let remaining = cleaned;
   let key = 0;
   
   while (remaining.length > 0) {
