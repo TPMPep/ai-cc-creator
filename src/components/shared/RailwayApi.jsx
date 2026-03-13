@@ -7,18 +7,31 @@ const API_BASE = "https://web-production-eba27.up.railway.app";
 function buildCaptionEnvVars(opts) {
   if (!opts) return {};
   const vars = {};
+  // Output format
+  if (opts.outputFormat) vars.OUTPUT_FORMATS = opts.outputFormat;
+  // TTML frame rate
+  if (opts.outputFormat === "ttml") {
+    vars.TTML_TIMEBASE = opts.ttmlTimebase || "media";
+    vars.TTML_FRAME_RATE = String(opts.ttmlFrameRate || 30);
+    vars.TTML_FRAME_RATE_MULTIPLIER = opts.ttmlFrameRateMultiplier || "1000 1001";
+  }
+  // Speaker labels
   if (opts.speakerLabelMode) vars.SPEAKER_LABEL_MODE = opts.speakerLabelMode;
   if (opts.speakerLabelFormat) vars.SPEAKER_LABEL_FORMAT = opts.speakerLabelFormat;
   if (opts.speakerLabelSingle !== undefined) vars.SPEAKER_LABEL_SINGLE = String(opts.speakerLabelSingle);
   if (opts.speakerGenericPrefix) vars.SPEAKER_GENERIC_PREFIX = opts.speakerGenericPrefix;
-  if (opts.speakerNameMap && typeof opts.speakerNameMap === "object") {
+  if (opts.speakerNameMap && typeof opts.speakerNameMap === "object" && Object.keys(opts.speakerNameMap).length > 0) {
     vars.SPEAKER_NAME_MAP = JSON.stringify(opts.speakerNameMap);
   }
+  // Sound labels
   if (opts.soundLabelStyle) vars.SOUND_LABEL_STYLE = opts.soundLabelStyle;
+  // Italics
   if (opts.italicizeTitles !== undefined) vars.ITALICIZE_TITLES = String(opts.italicizeTitles);
   if (opts.italicizeTitlesMinWords !== undefined) vars.ITALICIZE_TITLES_MIN_WORDS = String(opts.italicizeTitlesMinWords);
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
+  // Alignment
   if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
+  // Timecode
   if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
   return vars;
 }
