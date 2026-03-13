@@ -46,7 +46,7 @@ function CueTextDisplay({ text }) {
 }
 
 function CharCounts({ text }) {
-  const lines = text.split("\n");
+  const lines = stripSSATags(text).split("\n");
   return (
     <div className="flex flex-col items-center gap-0">
       {lines.map((line, i) => (
