@@ -139,7 +139,6 @@ export default function NewJob() {
         allowHttp,
         speakerLabels,
         languageDetection,
-        rules,
       });
 
       navigate(createPageUrl("JobDetail") + `?jobId=${data.id}`);
