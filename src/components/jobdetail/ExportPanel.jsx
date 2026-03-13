@@ -183,6 +183,14 @@ export default function ExportPanel({ result, title, jobId, assemblyaiTranscript
           setDownloading("all");
           const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
+          // TTML
+          if (hasTtml) {
+            const content = result.ttml_url || result.ttml_text || result.ttml || (result.ttml_chunks ? joinChunks(result.ttml_chunks) : null);
+            if (result.ttml_url) await downloadFromUrl(content, `${safeName}_${jobId}.ttml`);
+            else downloadBlob(content, `${safeName}_${jobId}.ttml`, "text/plain");
+            await delay(400);
+          }
+
           // SRT
           if (hasSrt) {
             const content = result.srt_url || result.srt_text || result.srt || (result.srt_chunks ? joinChunks(result.srt_chunks) : null);
