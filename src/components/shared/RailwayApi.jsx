@@ -42,7 +42,7 @@ export function buildCaptionEnvVars(opts) {
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
 
   // Alignment
-  if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
+  if (opts.alignmentDefault) vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
   if (opts.alignmentWindows && opts.alignmentWindows.length > 0) {
     const valid = opts.alignmentWindows.filter(w => w.start && w.end && w.align);
     if (valid.length > 0) vars.ALIGNMENT_WINDOWS = JSON.stringify(valid);
