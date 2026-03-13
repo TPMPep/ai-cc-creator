@@ -10,6 +10,9 @@ const msToShortTC = (ms) => {
 
 
 
+// Strip SSA/ASS override tags like {\an2}, {\pos(x,y)}, {\fad(...)}, etc.
+const stripSSATags = (text) => text.replace(/\{\\[^}]*\}/g, "");
+
 const TYPE_OPTIONS = [
   { value: "dialogue", label: "DL" },
   { value: "sdh", label: "SDH" },
