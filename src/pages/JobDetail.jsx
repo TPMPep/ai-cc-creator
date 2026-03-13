@@ -282,8 +282,54 @@ export default function JobDetail() {
     try {
       const captionOptions = job.rules || {};
       const data = await createReformatJob(transcriptId, captionOptions);
+      console.log("[Reformat] Full response:", JSON.stringify(data, null, 2).substring(0, 3000));
+      console.log("[Reformat] Response keys:", Object.keys(data));
+      
       const newRailwayJobId = data.job_id || data.id;
       if (!newRailwayJobId) throw new Error("No job_id returned from Railway");
+
+      // Check if the reformat response already contains result data (synchronous reformat)
+      const resultData = data.result || data;
+      const srt = resultData.srt || null;
+      const vtt = resultData.vtt || null;
+      const scc = resultData.scc || null;
+      const qc = resultData.qc || null;
+      const alreadyDone = !!(srt || vtt);
+
+      let jobStatus = alreadyDone ? "done" : "processing";
+      let jobResult = undefined;
+
+      if (alreadyDone) {
+        console.log("[Reformat] Result available inline, processing cues");
+        let parsedCues = [];
+        if (vtt) {
+          parsedCues = parseVTT(vtt);
+        } else if (srt) {
+          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+          parsedCues = parseVTT(vttFromSrt);
+        }
+
+        // Upload large text content as files
+        const uploadText = async (text, filename) => {
+          const file = new File([text], filename, { type: "text/plain" });
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          return file_url;
+        };
+        const uploadPromises = [];
+        if (srt) uploadPromises.push(uploadText(srt, `${newRailwayJobId}-reformat.srt`).then(url => ({ key: "srt_url", url })));
+        if (vtt) uploadPromises.push(uploadText(vtt, `${newRailwayJobId}-reformat.vtt`).then(url => ({ key: "vtt_url", url })));
+        if (scc) uploadPromises.push(uploadText(scc, `${newRailwayJobId}-reformat.scc`).then(url => ({ key: "scc_url", url })));
+        const uploaded = await Promise.all(uploadPromises);
+        const urlMap = {};
+        for (const { key, url } of uploaded) urlMap[key] = url;
+
+        jobResult = {
+          ...urlMap,
+          qc,
+          cues: parsedCues,
+          assemblyai_transcript_id: data.assemblyai_transcript_id || transcriptId,
+        };
+      }
 
       // Create a new Job record for the reformat
       const newJob = await base44.entities.Job.create({
@@ -291,11 +337,12 @@ export default function JobDetail() {
         userId: job.userId,
         mediaUrl: job.mediaUrl,
         title: `${job.title || "Untitled"} (reformat)`,
-        status: "processing",
+        status: jobStatus,
         pipeline: "railway",
         speakerLabels: job.speakerLabels,
         languageDetection: job.languageDetection,
         rules: job.rules,
+        ...(jobResult ? { result: jobResult, durationMs: jobResult.cues?.length > 0 ? jobResult.cues[jobResult.cues.length - 1].end : null, issuesCount: qc?.issuesCount || 0 } : {}),
       });
 
       toast.success("Reformat job submitted! Redirecting…");
