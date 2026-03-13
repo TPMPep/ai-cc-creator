@@ -100,6 +100,32 @@ export async function createJob(payload) {
 }
 
 /**
+ * Create a reformat-only job on Railway.
+ * Skips AAI transcription — re-runs GPT formatting on existing transcript.
+ */
+export async function createReformatJob(transcriptId, captionOptions) {
+  const captionEnv = buildCaptionEnvVars(captionOptions);
+  const response = await fetch(`${API_BASE}/v1/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      transcript_id: transcriptId,
+      reformat_only: true,
+      env: captionEnv,
+    }),
+  });
+
+  const responseText = await response.text();
+  console.log("POST /v1/jobs (reformat) response:", { status: response.status, body: responseText });
+
+  if (!response.ok) {
+    throw new Error(`Reformat job creation failed (${response.status}): ${responseText}`);
+  }
+
+  return JSON.parse(responseText);
+}
+
+/**
  * Poll a Railway job by ID.
  * When completed, result contains: result.srt, result.vtt, result.scc, result.qc
  */
