@@ -90,6 +90,34 @@ function ReadingSpeedBar({ cps }) {
   );
 }
 
+function UtteranceCell({ rawUtterance }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!rawUtterance) {
+    return (
+      <td className="px-1.5 py-1 text-[11px] overflow-hidden">
+        <span className="text-zinc-700 italic">{"\u2014"}</span>
+      </td>
+    );
+  }
+  return (
+    <td className="px-1.5 py-1 text-[11px] leading-relaxed overflow-hidden">
+      <div
+        onClick={() => setExpanded(e => !e)}
+        className={`cursor-pointer ${expanded ? "whitespace-pre-wrap" : ""}`}
+        style={expanded ? {} : {
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        <span className="text-cyan-400 font-mono text-[10px] mr-1">[{rawUtterance.speaker}]</span>
+        <span className="text-zinc-300">{rawUtterance.text}</span>
+      </div>
+    </td>
+  );
+}
+
 const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, ref) {
   const {
     cue, idx, isActive, nextCue, selected, onToggleSelect,
