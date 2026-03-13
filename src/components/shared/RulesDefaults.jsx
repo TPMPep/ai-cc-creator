@@ -23,3 +23,17 @@ export const RULES_VALIDATION = {
 };
 
 export const SCC_FRAME_RATES = [23.976, 24, 25, 29.97, 30];
+
+export const CAPTION_OPTIONS_DEFAULTS = {
+  speakerLabelMode: "named",
+  speakerLabelFormat: "bracket",
+  speakerLabelSingle: 0,
+  speakerGenericPrefix: "SPEAKER",
+  speakerNameMap: { A: "Speaker 1", B: "Speaker 2", C: "Speaker 3" },
+  soundLabelStyle: "descriptive",
+  italicizeTitles: 1,
+  italicizeTitlesMinWords: 3,
+  italicizePhrases: "",
+  alignmentDefault: "none",
+  timecodeOffsetMs: 0,
+};
