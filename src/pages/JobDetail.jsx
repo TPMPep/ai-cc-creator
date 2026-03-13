@@ -36,12 +36,20 @@ export default function JobDetail() {
   const [reformatting, setReformatting] = useState(false);
 
   const jobId = searchParams.get("jobId");
+  const recordId = searchParams.get("recordId");
 
   // Load job from DB
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId && !recordId) return;
     const loadJob = async () => {
-      const jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
+      let jobs;
+      if (recordId) {
+        // Direct lookup by Base44 record ID (used for reformats to avoid duplicate railwayJobId collisions)
+        const record = await base44.entities.Job.filter({ id: recordId }, "-created_date", 1);
+        jobs = record;
+      } else {
+        jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
+      }
       if (jobs.length > 0) {
         setJob(jobs[0]);
         setTitleDraft(jobs[0].title || "");
