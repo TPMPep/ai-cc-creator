@@ -7,6 +7,7 @@ import { NBCU_DEFAULTS, CAPTION_OPTIONS_DEFAULTS } from "../components/shared/Ru
 import { ensureSettingsExist, getSettings, matchesDomainAllowlist, checkRateLimit } from "../components/shared/ValidationUtils";
 import RulesPanel from "../components/newjob/RulesPanel";
 import CaptionOptionsPanel from "../components/newjob/CaptionOptionsPanel";
+import PayloadInspector from "../components/newjob/PayloadInspector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
