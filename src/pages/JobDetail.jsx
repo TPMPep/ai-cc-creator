@@ -324,7 +324,7 @@ export default function JobDetail() {
     }
   };
 
-  if (!jobId) {
+  if (!jobId && !recordId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <AlertCircle className="w-8 h-8 text-red-400 mb-2" />
