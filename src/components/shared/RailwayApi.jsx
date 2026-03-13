@@ -77,7 +77,6 @@ export async function createJob(payload) {
       speakerLabels: payload.speaker_labels,
       languageDetection: payload.language_detection,
       allowHttp: payload.allowHttp,
-      captionRules: payload.rules,
       protectedPhrases: payload.protected_phrases || [],
       captionOptions: captionEnv,
     }),
