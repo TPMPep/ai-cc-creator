@@ -5,15 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  Shield, HelpCircle, FileOutput, Film, Users, Volume2, Italic,
-  AlignCenter, Clock, Plus, Trash2, SlidersHorizontal,
-} from "lucide-react";
-import {
-  CAPTION_OPTIONS_DEFAULTS,
-  NBCU_LOCKED_VALUES,
-  CUSTOM_OVERRIDES_CONFIG,
-} from "../shared/RulesDefaults";
+import { Shield, HelpCircle, FileOutput, Film, Users, Volume2, Italic, AlignCenter, Clock, Plus, Trash2, SlidersHorizontal } from "lucide-react";
+import { CAPTION_OPTIONS_DEFAULTS, NBCU_LOCKED_VALUES, CUSTOM_OVERRIDES_CONFIG } from "../shared/RulesDefaults";
 
 const SEC = "space-y-3 border-b border-zinc-800/40 pb-4 last:border-0 last:pb-0";
 const LBL = "text-xs text-zinc-400";
