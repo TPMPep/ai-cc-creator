@@ -161,7 +161,20 @@ export default function NewJob() {
     <div className="px-4 sm:px-6 lg:px-8 py-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">New Caption Job</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white">New Caption Job</h1>
+            {user?.role === "admin" && (
+              <PayloadInspector
+                mediaUrl={mediaUrl}
+                speakerLabels={speakerLabels}
+                languageDetection={languageDetection}
+                allowHttp={allowHttp}
+                rules={rules}
+                protectedPhrases={protectedPhrases}
+                captionOptions={captionOptions}
+              />
+            )}
+          </div>
           <p className="text-sm text-zinc-500 mt-1">Submit a public media URL to generate broadcast-ready captions.</p>
         </div>
 
