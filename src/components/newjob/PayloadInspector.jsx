@@ -7,10 +7,12 @@ function buildCaptionEnvVars(opts) {
   if (!opts) return {};
   const vars = {};
   if (opts.outputFormat) vars.OUTPUT_FORMATS = opts.outputFormat;
-  if (opts.outputFormat === "ttml") {
+  const hasTtml = (opts.outputFormat || "").includes("ttml");
+  if (hasTtml) {
     vars.TTML_TIMEBASE = opts.ttmlTimebase || "media";
     vars.TTML_FRAME_RATE = String(opts.ttmlFrameRate || 30);
     vars.TTML_FRAME_RATE_MULTIPLIER = opts.ttmlFrameRateMultiplier || "1000 1001";
+    vars.TTML_TEXT_ALIGN = opts.ttmlTextAlign || "center";
   }
   if (opts.speakerLabelMode) vars.SPEAKER_LABEL_MODE = opts.speakerLabelMode;
   if (opts.speakerLabelFormat) vars.SPEAKER_LABEL_FORMAT = opts.speakerLabelFormat;
@@ -24,6 +26,10 @@ function buildCaptionEnvVars(opts) {
   if (opts.italicizeTitlesMinWords !== undefined) vars.ITALICIZE_TITLES_MIN_WORDS = String(opts.italicizeTitlesMinWords);
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
   if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
+  if (opts.alignmentWindows && opts.alignmentWindows.length > 0) {
+    const valid = opts.alignmentWindows.filter(w => w.start && w.end && w.align);
+    if (valid.length > 0) vars.ALIGNMENT_WINDOWS = JSON.stringify(valid);
+  }
   if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
   return vars;
 }
