@@ -33,6 +33,7 @@ export default function JobDetail() {
   const [rawUtterances, setRawUtterances] = useState([]);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
+  const [reformatting, setReformatting] = useState(false);
 
   const jobId = searchParams.get("jobId");
 
