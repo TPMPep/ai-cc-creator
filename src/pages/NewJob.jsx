@@ -131,6 +131,7 @@ export default function NewJob() {
         allowHttp,
         rules,
         protected_phrases: parsedPhrases,
+        captionOptions,
       };
       const data = await createJob(payload);
 
