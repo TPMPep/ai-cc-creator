@@ -208,7 +208,7 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
           <CharCounts text={cue.text} />
         </td>
 
-        <td className="px-1.5 py-1">
+        <td className="px-1.5 py-1 overflow-hidden">
           {isEditingField("text") ? (
             <textarea
               value={editValue}
@@ -223,7 +223,7 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
           ) : (
             <div
               onDoubleClick={function() { onStartEdit(idx, "text"); }}
-              className="cursor-pointer hover:bg-zinc-800/50 rounded px-1.5 py-0.5 text-zinc-200 whitespace-pre-wrap text-[11px] leading-relaxed"
+              className="cursor-pointer hover:bg-zinc-800/50 rounded px-1.5 py-0.5 text-zinc-200 whitespace-pre-wrap text-[11px] leading-relaxed overflow-hidden"
             >
               <CueTextDisplay text={cue.text} />
               {anyLineOver32 && <AlertTriangle className="inline w-3 h-3 ml-1.5 text-red-400" />}
