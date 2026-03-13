@@ -28,10 +28,10 @@ export const SCC_FRAME_RATES = [23.976, 24, 25, 29.97, 30];
 export const CUSTOM_OVERRIDES_CONFIG = {
   customMaxLines:          { default: 2,    min: 1,   max: 4,     label: "Max Lines" },
   customMaxChars:          { default: 32,   min: 20,  max: 42,    label: "Max Chars" },
-  customTargetCps:         { default: 15,   min: 8,   max: 25,    label: "Target CPS" },
-  customMaxCps:            { default: 17,   min: 10,  max: 30,    label: "Max CPS" },
-  customMinDisplayMs:      { default: 1000, min: 200, max: 3000,  label: "Min Display (ms)" },
-  customMinSoundDisplayMs: { default: 1500, min: 500, max: 5000,  label: "Min Sound Display (ms)" },
+  customTargetCps:         { default: 27,   min: 8,   max: 50,    label: "Target CPS" },
+  customMaxCps:            { default: 45,   min: 10,  max: 60,    label: "Max CPS" },
+  customMinDisplayMs:      { default: 800,  min: 200, max: 3000,  label: "Min Display (ms)" },
+  customMinSoundDisplayMs: { default: 800,  min: 500, max: 5000,  label: "Min Sound Display (ms)" },
   customMinSoundMs:        { default: 250,  min: 100, max: 2000,  label: "Min Sound (ms)" },
   customSoundClusterGapMs: { default: 1500, min: 500, max: 5000,  label: "Sound Cluster Gap (ms)" },
   customMergeGapMs:        { default: 80,   min: 0,   max: 500,   label: "Merge Gap (ms)" },
@@ -44,6 +44,11 @@ const customOverrideDefaults = Object.fromEntries(
 
 export const CAPTION_OPTIONS_DEFAULTS = {
   captionProfile: "nbcu",
+  // Validation
+  validateTtml: 1,
+  failOnTtmlValidation: 1,
+  // Sound density
+  soundDensity: "conservative",
   // Delivery
   outputFormat: "ttml",
   ttmlTimebase: "media",
@@ -81,4 +86,7 @@ export const NBCU_LOCKED_VALUES = {
   speakerLabelSingle: 0,
   soundLabelStyle: "simple",
   alignmentDefault: "none",
+  validateTtml: 1,
+  failOnTtmlValidation: 1,
+  soundDensity: "conservative",
 };

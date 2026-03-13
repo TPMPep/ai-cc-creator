@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Shield, HelpCircle, FileOutput, Film, Users, Volume2, Italic, AlignCenter, Clock, Plus, Trash2, SlidersHorizontal } from "lucide-react";
+import { Shield, HelpCircle, FileOutput, Film, Users, Volume2, Italic, AlignCenter, Clock, Plus, Trash2, SlidersHorizontal, CheckCircle, Activity } from "lucide-react";
 import { CAPTION_OPTIONS_DEFAULTS, NBCU_LOCKED_VALUES, CUSTOM_OVERRIDES_CONFIG } from "../shared/RulesDefaults";
 
 const SEC = "space-y-3 border-b border-zinc-800/40 pb-4 last:border-0 last:pb-0";
@@ -176,6 +176,53 @@ function SpeakerSection({ opts, up, locked }) {
   );
 }
 
+// ─── TTML Validation ──────────────────────────
+function ValidationSection({ opts, up, locked }) {
+  return (
+    <div className={SEC}>
+      <div className="flex items-center gap-2 mb-1">
+        <CheckCircle className="w-3.5 h-3.5 text-teal-400" />
+        <span className="text-xs font-semibold text-zinc-300">TTML Validation</span>
+        {locked && <span className="text-[10px] text-amber-400 ml-auto">NBCU: required</span>}
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between py-1">
+          <Label className={LBL}>Validate TTML output <Hint text="Runs IMSC-1.1 conformance checks on the generated TTML." /></Label>
+          <Switch checked={!!opts.validateTtml} onCheckedChange={v => up("validateTtml", v ? 1 : 0)} disabled={locked} className="data-[state=checked]:bg-teal-600" />
+        </div>
+        <div className="flex items-center justify-between py-1">
+          <Label className={LBL}>Fail on validation error <Hint text="If ON, the job fails when TTML validation finds issues. NBCU requires this." /></Label>
+          <Switch checked={!!opts.failOnTtmlValidation} onCheckedChange={v => up("failOnTtmlValidation", v ? 1 : 0)} disabled={locked} className="data-[state=checked]:bg-teal-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sound Density ────────────────────────────
+function SoundDensitySection({ opts, up, locked }) {
+  return (
+    <div className={SEC}>
+      <div className="flex items-center gap-2 mb-1">
+        <Activity className="w-3.5 h-3.5 text-sky-400" />
+        <span className="text-xs font-semibold text-zinc-300">Sound Cue Density</span>
+        {locked && <span className="text-[10px] text-amber-400 ml-auto">NBCU: conservative</span>}
+      </div>
+      <div className="space-y-1">
+        <Label className={LBL}>Density <Hint text="Controls how many sound cues are inserted. Conservative = strict NBCU style. Balanced = more cues. Aggressive = most cues with trimming." /></Label>
+        <Select value={opts.soundDensity || "conservative"} onValueChange={v => up("soundDensity", v)} disabled={locked}>
+          <SelectTrigger className="h-8 bg-zinc-900 border-zinc-800 text-zinc-300 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800">
+            <SelectItem value="conservative" className="text-zinc-300">Conservative (NBCU safe)</SelectItem>
+            <SelectItem value="balanced" className="text-zinc-300">Balanced</SelectItem>
+            <SelectItem value="aggressive" className="text-zinc-300">Aggressive</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
 // ─── Sound ─────────────────────────────────────
 function SoundSection({ opts, up, locked }) {
   return (
@@ -333,7 +380,9 @@ function NbcuLockedSummary() {
     ["Max Lines", "2"],
     ["Max Chars", "32"],
     ["Sound", "Simple"],
+    ["Sound Density", "Conservative"],
     ["Alignment", "None"],
+    ["TTML Validate", "Yes + Fail"],
   ];
   return (
     <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2.5">
@@ -363,14 +412,19 @@ export default function CaptionOptionsPanel({ options, onOptionsChange }) {
 
   const switchProfile = (p) => {
     if (p === "nbcu") {
-      // Apply NBCU locks, preserve user-editable fields
       onOptionsChange({
         ...options,
         captionProfile: "nbcu",
         ...NBCU_LOCKED_VALUES,
       });
     } else {
-      onOptionsChange({ ...options, captionProfile: "custom" });
+      onOptionsChange({
+        ...options,
+        captionProfile: "custom",
+        validateTtml: 0,
+        failOnTtmlValidation: 0,
+        soundDensity: "balanced",
+      });
     }
   };
 
@@ -394,8 +448,10 @@ export default function CaptionOptionsPanel({ options, onOptionsChange }) {
       {isNbcu && <NbcuLockedSummary />}
 
       <OutputSection opts={options} up={up} locked={isNbcu} />
+      <ValidationSection opts={options} up={up} locked={isNbcu} />
       <SpeakerSection opts={options} up={up} locked={isNbcu} />
       <SoundSection opts={options} up={up} locked={isNbcu} />
+      <SoundDensitySection opts={options} up={up} locked={isNbcu} />
       <ItalicsSection opts={options} up={up} />
       <AlignmentSection opts={options} up={up} locked={isNbcu} />
       <TimecodeSection opts={options} up={up} />

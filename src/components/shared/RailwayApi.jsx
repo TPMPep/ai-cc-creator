@@ -41,6 +41,13 @@ export function buildCaptionEnvVars(opts) {
   if (opts.italicizeTitlesMinWords !== undefined) vars.ITALICIZE_TITLES_MIN_WORDS = String(opts.italicizeTitlesMinWords);
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
 
+  // TTML Validation
+  vars.VALIDATE_TTML = String(opts.validateTtml ?? (profile === "nbcu" ? 1 : 0));
+  vars.FAIL_ON_TTML_VALIDATION = String(opts.failOnTtmlValidation ?? (profile === "nbcu" ? 1 : 0));
+
+  // Sound Density
+  vars.SOUND_DENSITY = opts.soundDensity || (profile === "nbcu" ? "conservative" : "balanced");
+
   // Alignment
   if (opts.alignmentDefault) vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
   if (opts.alignmentWindows && opts.alignmentWindows.length > 0) {
