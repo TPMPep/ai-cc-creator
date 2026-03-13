@@ -75,55 +75,6 @@ export default function JobDetail() {
     loadJob();
   }, [jobId, recordId]);
 
-  // Parse VTT to cues
-  const parseVTT = (vttString) => {
-    const lines = vttString.split('\n');
-    const cues = [];
-    let i = 0;
-    
-    while (i < lines.length) {
-      const line = lines[i].trim();
-      
-      // Look for timecode line (contains -->)
-      if (line.includes('-->')) {
-        const [startStr, endStr] = line.split('-->').map(s => s.trim());
-        const start = parseTimecode(startStr);
-        const end = parseTimecode(endStr);
-        
-        // Collect text lines until blank line
-        const textLines = [];
-        i++;
-        while (i < lines.length && lines[i].trim() !== '') {
-          textLines.push(lines[i]);
-          i++;
-        }
-        
-        if (textLines.length > 0) {
-          cues.push({
-            start,
-            end,
-            text: textLines.join('\n'),
-            speaker: null,
-            type: 'caption'
-          });
-        }
-      }
-      i++;
-    }
-    
-    return cues;
-  };
-  
-  const parseTimecode = (tc) => {
-    const parts = tc.split(':');
-    const secParts = parts[parts.length - 1].split('.');
-    const hours = parts.length === 3 ? parseInt(parts[0]) : 0;
-    const minutes = parts.length === 3 ? parseInt(parts[1]) : parseInt(parts[0]);
-    const seconds = parseInt(secParts[0]);
-    const ms = parseInt(secParts[1] || 0);
-    return hours * 3600000 + minutes * 60000 + seconds * 1000 + ms;
-  };
-
   // Use a ref to always have the latest job for polling without re-creating the callback
   const jobRef = useRef(job);
   useEffect(() => { jobRef.current = job; }, [job]);
