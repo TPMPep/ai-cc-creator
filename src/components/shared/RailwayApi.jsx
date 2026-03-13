@@ -4,7 +4,27 @@ const API_BASE = "https://web-production-eba27.up.railway.app";
  * Create a job on Railway.
  * Payload: mediaUrl, speakerLabels, languageDetection, allowHttp, captionRules
  */
+function buildCaptionEnvVars(opts) {
+  if (!opts) return {};
+  const vars = {};
+  if (opts.speakerLabelMode) vars.SPEAKER_LABEL_MODE = opts.speakerLabelMode;
+  if (opts.speakerLabelFormat) vars.SPEAKER_LABEL_FORMAT = opts.speakerLabelFormat;
+  if (opts.speakerLabelSingle !== undefined) vars.SPEAKER_LABEL_SINGLE = String(opts.speakerLabelSingle);
+  if (opts.speakerGenericPrefix) vars.SPEAKER_GENERIC_PREFIX = opts.speakerGenericPrefix;
+  if (opts.speakerNameMap && typeof opts.speakerNameMap === "object") {
+    vars.SPEAKER_NAME_MAP = JSON.stringify(opts.speakerNameMap);
+  }
+  if (opts.soundLabelStyle) vars.SOUND_LABEL_STYLE = opts.soundLabelStyle;
+  if (opts.italicizeTitles !== undefined) vars.ITALICIZE_TITLES = String(opts.italicizeTitles);
+  if (opts.italicizeTitlesMinWords !== undefined) vars.ITALICIZE_TITLES_MIN_WORDS = String(opts.italicizeTitlesMinWords);
+  if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
+  if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
+  if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
+  return vars;
+}
+
 export async function createJob(payload) {
+  const captionEnv = buildCaptionEnvVars(payload.captionOptions);
   const response = await fetch(`${API_BASE}/v1/jobs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -15,6 +35,7 @@ export async function createJob(payload) {
       allowHttp: payload.allowHttp,
       captionRules: payload.rules,
       protectedPhrases: payload.protected_phrases || [],
+      captionOptions: captionEnv,
     }),
   });
 
