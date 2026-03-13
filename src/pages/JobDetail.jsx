@@ -289,7 +289,7 @@ export default function JobDetail() {
       });
 
       toast.success("Reformat job submitted! Redirecting…");
-      navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}`);
+      navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}&recordId=${newJob.id}`);
     } catch (err) {
       console.error("Reformat error:", err);
       toast.error(`Reformat failed: ${err.message}`);
