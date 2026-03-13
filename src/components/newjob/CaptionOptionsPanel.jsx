@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Italic, Volume2, AlignCenter, Clock } from "lucide-react";
+import { Users, Italic, Volume2, AlignCenter, Clock, FileOutput, Shield, Film } from "lucide-react";
+import { NBCU_CAPTION_OPTIONS, CAPTION_OPTIONS_DEFAULTS } from "../shared/RulesDefaults";
 
 const SECTION_CLASS = "space-y-3 border-b border-zinc-800/40 pb-4 last:border-0 last:pb-0";
 const LABEL_CLASS = "text-xs text-zinc-400";
