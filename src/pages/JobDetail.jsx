@@ -296,7 +296,7 @@ export default function JobDetail() {
           ...urlMap,
           qc,
           cues: parsedCues,
-          assemblyai_transcript_id: data.assemblyai_transcript_id || transcriptId,
+          assemblyai_transcript_id: data.assemblyai_transcript_id || data.transcript_id || transcriptId,
         };
       }
 
