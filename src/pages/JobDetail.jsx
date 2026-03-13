@@ -145,7 +145,11 @@ export default function JobDetail() {
         const scc = resultData.scc || null;
         const qc = resultData.qc || null;
         
+        console.log("[JobDetail] Result data keys:", Object.keys(resultData));
         console.log("[JobDetail] Result found:", { hasSrt: !!srt, hasVtt: !!vtt, hasScc: !!scc, hasQc: !!qc });
+        console.log("[JobDetail] SRT preview:", srt ? srt.substring(0, 300) : "null");
+        console.log("[JobDetail] VTT preview:", vtt ? vtt.substring(0, 300) : "null");
+        console.log("[JobDetail] assemblyai_transcript_id:", data.assemblyai_transcript_id || resultData.assemblyai_transcript_id || "none");
         
         // Parse VTT to get cues for the editor/player
         let parsedCues = [];
