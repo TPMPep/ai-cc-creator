@@ -72,7 +72,7 @@ export default function JobDetail() {
       setLoading(false);
     };
     loadJob();
-  }, [jobId]);
+  }, [jobId, recordId]);
 
   // Parse VTT to cues
   const parseVTT = (vttString) => {
