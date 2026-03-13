@@ -94,6 +94,10 @@ export default function CaptionEditor({
   const [selectedCues, setSelectedCues] = useState(new Set());
   const [violationIdx, setViolationIdx] = useState(-1);
   const [showDiff, setShowDiff] = useState(false);
+  const [colWidths, setColWidths] = useState({
+    num: 44, inTC: 68, outTC: 68, dur: 36, spk: 64, type: 64, cps: 28, chr: 28, text: 300,
+    rawSpk: 40, rawChr: 28, rawSrt: 250, rawUtt: 300,
+  });
   const tableRef = useRef(null);
   const activeRowRef = useRef(null);
   const rawCues = useRef([]);
