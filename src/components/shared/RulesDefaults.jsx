@@ -24,62 +24,61 @@ export const RULES_VALIDATION = {
 
 export const SCC_FRAME_RATES = [23.976, 24, 25, 29.97, 30];
 
-export const CAPTION_OPTIONS_DEFAULTS = {
-  speakerLabelMode: "named",
-  speakerLabelFormat: "bracket",
-  speakerLabelSingle: 0,
-  speakerGenericPrefix: "SPEAKER",
-  speakerNameMap: { A: "Speaker 1", B: "Speaker 2", C: "Speaker 3" },
-  soundLabelStyle: "descriptive",
-  italicizeTitles: 1,
-  italicizeTitlesMinWords: 3,
-  italicizePhrases: "",
-  alignmentDefault: "none",
-  alignmentWindows: [],
-  timecodeOffsetMs: 0,
-  outputFormat: "srt",
-  ttmlTimebase: "media",
-  ttmlFrameRate: 30,
-  ttmlFrameRateMultiplier: "1000 1001",
-  ttmlTextAlign: "center",
+// Custom override fields and their defaults/validation
+export const CUSTOM_OVERRIDES_CONFIG = {
+  customMaxLines:          { default: 2,    min: 1,   max: 4,     label: "Max Lines" },
+  customMaxChars:          { default: 32,   min: 20,  max: 42,    label: "Max Chars" },
+  customTargetCps:         { default: 15,   min: 8,   max: 25,    label: "Target CPS" },
+  customMaxCps:            { default: 17,   min: 10,  max: 30,    label: "Max CPS" },
+  customMinDisplayMs:      { default: 1000, min: 200, max: 3000,  label: "Min Display (ms)" },
+  customMinSoundDisplayMs: { default: 1500, min: 500, max: 5000,  label: "Min Sound Display (ms)" },
+  customMinSoundMs:        { default: 250,  min: 100, max: 2000,  label: "Min Sound (ms)" },
+  customSoundClusterGapMs: { default: 1500, min: 500, max: 5000,  label: "Sound Cluster Gap (ms)" },
+  customMergeGapMs:        { default: 80,   min: 0,   max: 500,   label: "Merge Gap (ms)" },
 };
 
-export const NBCU_CAPTION_OPTIONS = {
-  speakerLabelMode: "dash",
-  speakerLabelFormat: "prefix",
-  speakerLabelSingle: 0,
-  speakerGenericPrefix: "SPEAKER",
-  speakerNameMap: {},
-  soundLabelStyle: "simple",
-  italicizeTitles: 1,
-  italicizeTitlesMinWords: 3,
-  italicizePhrases: "",
-  alignmentDefault: "none",
-  alignmentWindows: [],
-  timecodeOffsetMs: 0,
+// Build default custom overrides from config
+const customOverrideDefaults = Object.fromEntries(
+  Object.entries(CUSTOM_OVERRIDES_CONFIG).map(([k, v]) => [k, v.default])
+);
+
+export const CAPTION_OPTIONS_DEFAULTS = {
+  captionProfile: "nbcu",
+  // Delivery
   outputFormat: "ttml",
   ttmlTimebase: "media",
   ttmlFrameRate: 30,
   ttmlFrameRateMultiplier: "1000 1001",
   ttmlTextAlign: "center",
-};
-
-export const INTERNAL_CAPTION_OPTIONS = {
-  speakerLabelMode: "named",
-  speakerLabelFormat: "bracket",
+  // Speaker
+  speakerLabelMode: "dash",
+  speakerLabelFormat: "prefix",
   speakerLabelSingle: 0,
   speakerGenericPrefix: "SPEAKER",
-  speakerNameMap: { A: "Andy", B: "Aesha", C: "Cathy" },
-  soundLabelStyle: "descriptive",
+  speakerNameMap: {},
+  // Sound
+  soundLabelStyle: "simple",
+  // Italics
   italicizeTitles: 1,
   italicizeTitlesMinWords: 3,
   italicizePhrases: "",
+  // Alignment
   alignmentDefault: "none",
   alignmentWindows: [],
+  // Timecode
   timecodeOffsetMs: 0,
-  outputFormat: "srt,ttml",
+  // Custom overrides (used when captionProfile=custom)
+  ...customOverrideDefaults,
+};
+
+export const NBCU_LOCKED_VALUES = {
+  outputFormat: "ttml",
   ttmlTimebase: "media",
   ttmlFrameRate: 30,
   ttmlFrameRateMultiplier: "1000 1001",
   ttmlTextAlign: "center",
+  speakerLabelMode: "dash",
+  speakerLabelSingle: 0,
+  soundLabelStyle: "simple",
+  alignmentDefault: "none",
 };
