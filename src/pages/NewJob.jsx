@@ -42,11 +42,7 @@ export default function NewJob() {
       // Check for prefilled data from query params
       const params = new URLSearchParams(window.location.search);
       const prefillUrl = params.get("mediaUrl");
-      const prefillRules = params.get("rules");
       if (prefillUrl) setMediaUrl(prefillUrl);
-      if (prefillRules) {
-        try { setRules(JSON.parse(prefillRules)); setPreset("custom"); } catch {}
-      }
     };
     init();
   }, []);
