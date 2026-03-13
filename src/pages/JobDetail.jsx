@@ -256,8 +256,9 @@ export default function JobDetail() {
       const srt = resultData.srt || null;
       const vtt = resultData.vtt || null;
       const scc = resultData.scc || null;
+      const ttml = resultData.ttml || null;
       const qc = resultData.qc || null;
-      const alreadyDone = !!(srt || vtt);
+      const alreadyDone = !!(srt || vtt || ttml);
 
       let jobStatus = alreadyDone ? "done" : "processing";
       let jobResult = undefined;
@@ -268,20 +269,25 @@ export default function JobDetail() {
         if (vtt) {
           parsedCues = parseVTT(vtt);
         } else if (srt) {
-          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-          parsedCues = parseVTT(vttFromSrt);
+          parsedCues = parseVTT("WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2'));
+        } else if (ttml) {
+          parsedCues = parseTTML(ttml);
         }
 
-        // Upload large text content as files
+        // Generate SRT/VTT from cues if not returned by Railway
+        const effectiveSrt = srt || (parsedCues.length > 0 ? cuesToSrt(parsedCues) : null);
+        const effectiveVtt = vtt || (parsedCues.length > 0 ? cuesToVtt(parsedCues) : null);
+
         const uploadText = async (text, filename) => {
           const file = new File([text], filename, { type: "text/plain" });
           const { file_url } = await base44.integrations.Core.UploadFile({ file });
           return file_url;
         };
         const uploadPromises = [];
-        if (srt) uploadPromises.push(uploadText(srt, `${newRailwayJobId}-reformat.srt`).then(url => ({ key: "srt_url", url })));
-        if (vtt) uploadPromises.push(uploadText(vtt, `${newRailwayJobId}-reformat.vtt`).then(url => ({ key: "vtt_url", url })));
+        if (effectiveSrt) uploadPromises.push(uploadText(effectiveSrt, `${newRailwayJobId}-reformat.srt`).then(url => ({ key: "srt_url", url })));
+        if (effectiveVtt) uploadPromises.push(uploadText(effectiveVtt, `${newRailwayJobId}-reformat.vtt`).then(url => ({ key: "vtt_url", url })));
         if (scc) uploadPromises.push(uploadText(scc, `${newRailwayJobId}-reformat.scc`).then(url => ({ key: "scc_url", url })));
+        if (ttml) uploadPromises.push(uploadText(ttml, `${newRailwayJobId}-reformat.ttml`).then(url => ({ key: "ttml_url", url })));
         const uploaded = await Promise.all(uploadPromises);
         const urlMap = {};
         for (const { key, url } of uploaded) urlMap[key] = url;
