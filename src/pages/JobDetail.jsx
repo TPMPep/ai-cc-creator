@@ -54,13 +54,33 @@ export default function JobDetail() {
         jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
       }
       if (jobs.length > 0) {
-        setJob(jobs[0]);
-        setTitleDraft(jobs[0].title || "");
+        const loadedJob = jobs[0];
+        setJob(loadedJob);
+        setTitleDraft(loadedJob.title || "");
         // Load cues from all formats (cue_url, cue_chunks, cues)
-        const loadedCues = await getCuesFromResultAsync(jobs[0].result);
+        const loadedCues = await getCuesFromResultAsync(loadedJob.result);
         setCues(loadedCues);
-        // Fetch raw AAI SRT if transcript id exists
-        const tid = jobs[0].result?.assemblyai_transcript_id;
+
+        // Get transcript ID — check result first, then backfill from Railway if missing
+        let tid = loadedJob.result?.assemblyai_transcript_id;
+        if (!tid && loadedJob.status === "done" && loadedJob.railwayJobId) {
+          try {
+            const railwayData = await pollJob(loadedJob.railwayJobId);
+            tid = railwayData.assemblyai_transcript_id || null;
+            if (tid) {
+              // Backfill into DB so we don't need to re-poll next time
+              const patchedResult = { ...(loadedJob.result || {}), assemblyai_transcript_id: tid };
+              await base44.entities.Job.update(loadedJob.id, { result: patchedResult });
+              const patchedJob = { ...loadedJob, result: patchedResult };
+              setJob(patchedJob);
+              console.log("[JobDetail] Backfilled assemblyai_transcript_id:", tid);
+            }
+          } catch (e) {
+            console.warn("[JobDetail] Could not backfill transcript ID from Railway:", e);
+          }
+        }
+
+        // Fetch raw AAI data if transcript id exists
         if (tid) {
           base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "srt" })
             .then(res => setRawSrtText(res.data?.srt || null))
