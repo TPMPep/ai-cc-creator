@@ -399,24 +399,43 @@ export default function CaptionEditor({
 
       {/* Table */}
       <div ref={tableRef} className="overflow-auto" style={{ maxHeight: "60vh" }}>
-        <table className="w-full text-[11px] border-collapse">
+        <table className="text-[11px] border-collapse" style={{ tableLayout: "fixed", minWidth: "100%" }}>
+          <colgroup>
+            <col style={{ width: colWidths.num }} />
+            <col style={{ width: colWidths.inTC }} />
+            <col style={{ width: colWidths.outTC }} />
+            <col style={{ width: colWidths.dur }} />
+            <col style={{ width: colWidths.spk }} />
+            <col style={{ width: colWidths.type }} />
+            <col style={{ width: colWidths.cps }} />
+            <col style={{ width: colWidths.chr }} />
+            <col style={{ width: colWidths.text }} />
+            {showRawCol && (
+              <>
+                <col style={{ width: colWidths.rawSpk }} />
+                <col style={{ width: colWidths.rawChr }} />
+                <col style={{ width: colWidths.rawSrt }} />
+                <col style={{ width: colWidths.rawUtt }} />
+              </>
+            )}
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-zinc-900 shadow-md">
             <tr className="border-b border-zinc-800">
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[44px]">#</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[68px]">IN</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[68px]">OUT</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[36px]">DUR</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[64px]">SPK</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium w-[64px]">TYPE</th>
-              <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[28px]" title="Characters per second">CPS</th>
-              <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[28px]">CHR</th>
-              <th className="px-1 py-1.5 text-left text-zinc-500 font-medium">TEXT</th>
+              <ResizableHeader width={colWidths.num} minWidth={30} onResize={resizeCol("num")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">#</ResizableHeader>
+              <ResizableHeader width={colWidths.inTC} minWidth={50} onResize={resizeCol("inTC")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">IN</ResizableHeader>
+              <ResizableHeader width={colWidths.outTC} minWidth={50} onResize={resizeCol("outTC")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">OUT</ResizableHeader>
+              <ResizableHeader width={colWidths.dur} minWidth={28} onResize={resizeCol("dur")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">DUR</ResizableHeader>
+              <ResizableHeader width={colWidths.spk} minWidth={30} onResize={resizeCol("spk")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">SPK</ResizableHeader>
+              <ResizableHeader width={colWidths.type} minWidth={40} onResize={resizeCol("type")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">TYPE</ResizableHeader>
+              <ResizableHeader width={colWidths.cps} minWidth={24} onResize={resizeCol("cps")} className="px-1 py-1.5 text-center text-zinc-500 font-medium" title="Characters per second">CPS</ResizableHeader>
+              <ResizableHeader width={colWidths.chr} minWidth={24} onResize={resizeCol("chr")} className="px-1 py-1.5 text-center text-zinc-500 font-medium">CHR</ResizableHeader>
+              <ResizableHeader width={colWidths.text} minWidth={100} onResize={resizeCol("text")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">TEXT</ResizableHeader>
               {showRawCol && (
                 <>
-                  <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[40px]">RAW SPK</th>
-                  <th className="px-1 py-1.5 text-center text-zinc-500 font-medium w-[28px]">CHR</th>
-                  <th className="px-1 py-1.5 text-left text-zinc-500 font-medium">RAW SRT (AAI)</th>
-                  <th className="px-1 py-1.5 text-left text-zinc-500 font-medium">UTTERANCE (AAI)</th>
+                  <ResizableHeader width={colWidths.rawSpk} minWidth={30} onResize={resizeCol("rawSpk")} className="px-1 py-1.5 text-center text-zinc-500 font-medium">RAW SPK</ResizableHeader>
+                  <ResizableHeader width={colWidths.rawChr} minWidth={24} onResize={resizeCol("rawChr")} className="px-1 py-1.5 text-center text-zinc-500 font-medium">CHR</ResizableHeader>
+                  <ResizableHeader width={colWidths.rawSrt} minWidth={80} onResize={resizeCol("rawSrt")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">RAW SRT (AAI)</ResizableHeader>
+                  <ResizableHeader width={colWidths.rawUtt} minWidth={80} onResize={resizeCol("rawUtt")} className="px-1 py-1.5 text-left text-zinc-500 font-medium">UTTERANCE (AAI)</ResizableHeader>
                 </>
               )}
             </tr>
