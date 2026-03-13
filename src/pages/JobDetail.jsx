@@ -42,12 +42,14 @@ export default function JobDetail() {
   useEffect(() => {
     if (!jobId && !recordId) return;
     const loadJob = async () => {
-      let jobs;
+      let jobs = [];
       if (recordId) {
         // Direct lookup by Base44 record ID (used for reformats to avoid duplicate railwayJobId collisions)
-        const record = await base44.entities.Job.filter({ id: recordId }, "-created_date", 1);
-        jobs = record;
-      } else {
+        const allJobs = await base44.entities.Job.list("-created_date", 50);
+        const match = allJobs.find(j => j.id === recordId);
+        if (match) jobs = [match];
+      }
+      if (jobs.length === 0 && jobId) {
         jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
       }
       if (jobs.length > 0) {
