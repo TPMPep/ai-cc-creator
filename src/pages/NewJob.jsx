@@ -29,6 +29,7 @@ export default function NewJob() {
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState(null);
   const [protectedPhrases, setProtectedPhrases] = useState("");
+  const [captionOptions, setCaptionOptions] = useState({ ...CAPTION_OPTIONS_DEFAULTS });
 
   useEffect(() => {
     const init = async () => {
