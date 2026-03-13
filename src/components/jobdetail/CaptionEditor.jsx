@@ -5,6 +5,7 @@ import useUndoRedo from "./useUndoRedo";
 import EditorToolbar from "./EditorToolbar";
 import CaptionEditorRow from "./CaptionEditorRow";
 import ExportDiffPanel from "./ExportDiffPanel";
+import ResizableHeader from "./ResizableHeader";
 
 const msToTimecode = (ms) => {
   const h = Math.floor(ms / 3600000);
