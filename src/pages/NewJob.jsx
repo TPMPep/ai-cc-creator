@@ -229,11 +229,6 @@ export default function NewJob() {
               <CaptionOptionsPanel options={captionOptions} onOptionsChange={setCaptionOptions} />
             </div>
 
-            {/* Rules */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6">
-              <RulesPanel rules={rules} onRulesChange={setRules} preset={preset} onPresetChange={setPreset} />
-            </div>
-
             {/* Submit */}
             <div>
               {error && (
