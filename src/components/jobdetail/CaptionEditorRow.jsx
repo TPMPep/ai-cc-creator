@@ -249,6 +249,16 @@ const CaptionEditorRow = React.forwardRef(function CaptionEditorRowInner(props, 
             <td className="px-1.5 py-1 text-zinc-200 text-[11px] whitespace-pre-wrap leading-relaxed">
               {rawMatch ? rawMatch.text : <span className="text-zinc-700 italic">{"\u2014"}</span>}
             </td>
+            <td className="px-1.5 py-1 text-[11px] whitespace-pre-wrap leading-relaxed">
+              {rawUtterance ? (
+                <div>
+                  <span className="text-cyan-400 font-mono text-[10px] mr-1">[{rawUtterance.speaker}]</span>
+                  <span className="text-zinc-300">{rawUtterance.text}</span>
+                </div>
+              ) : (
+                <span className="text-zinc-700 italic">{"\u2014"}</span>
+              )}
+            </td>
           </React.Fragment>
         )}
       </tr>
