@@ -9,11 +9,13 @@ function buildCaptionEnvVars(opts) {
   const vars = {};
   // Output format
   if (opts.outputFormat) vars.OUTPUT_FORMATS = opts.outputFormat;
-  // TTML frame rate
-  if (opts.outputFormat === "ttml") {
+  // TTML settings (emit when any TTML output is included)
+  const hasTtml = (opts.outputFormat || "").includes("ttml");
+  if (hasTtml) {
     vars.TTML_TIMEBASE = opts.ttmlTimebase || "media";
     vars.TTML_FRAME_RATE = String(opts.ttmlFrameRate || 30);
     vars.TTML_FRAME_RATE_MULTIPLIER = opts.ttmlFrameRateMultiplier || "1000 1001";
+    vars.TTML_TEXT_ALIGN = opts.ttmlTextAlign || "center";
   }
   // Speaker labels
   if (opts.speakerLabelMode) vars.SPEAKER_LABEL_MODE = opts.speakerLabelMode;
@@ -31,6 +33,10 @@ function buildCaptionEnvVars(opts) {
   if (opts.italicizePhrases) vars.ITALICIZE_PHRASES = opts.italicizePhrases;
   // Alignment
   if (opts.alignmentDefault && opts.alignmentDefault !== "none") vars.ALIGNMENT_DEFAULT = opts.alignmentDefault;
+  if (opts.alignmentWindows && opts.alignmentWindows.length > 0) {
+    const valid = opts.alignmentWindows.filter(w => w.start && w.end && w.align);
+    if (valid.length > 0) vars.ALIGNMENT_WINDOWS = JSON.stringify(valid);
+  }
   // Timecode
   if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
   return vars;
