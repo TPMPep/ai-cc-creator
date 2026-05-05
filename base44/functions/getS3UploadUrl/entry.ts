@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Build S3 key with timestamp to avoid collisions
     const timestamp = Date.now();
     const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const key = `public/ppantoja/Testing/Pluto/${timestamp}_${sanitized}`;
+    const key = `pep-test/Pluto-Test/${timestamp}_${sanitized}`;
 
     // Generate presigned PUT URL using AWS Signature V4
     const now = new Date();
