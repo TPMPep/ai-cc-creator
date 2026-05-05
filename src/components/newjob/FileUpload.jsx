@@ -30,21 +30,27 @@ export default function FileUpload({ onUploadComplete }) {
       if (!data.uploadUrl) throw new Error("Failed to get upload URL");
 
       // 2. Upload directly to S3
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", data.uploadUrl);
-
-      xhr.upload.onprogress = (evt) => {
-        if (evt.lengthComputable) {
-          setProgress(Math.round((evt.loaded / evt.total) * 100));
-        }
-      };
-
       await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", data.uploadUrl);
+
+        xhr.upload.onprogress = (evt) => {
+          if (evt.lengthComputable) {
+            setProgress(Math.round((evt.loaded / evt.total) * 100));
+          }
+        };
+
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`Upload failed: ${xhr.status}`));
+          else {
+            console.error("S3 upload failed:", xhr.status, xhr.responseText);
+            reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText?.substring(0, 200)}`));
+          }
         };
-        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.onerror = () => {
+          console.error("S3 XHR network error — likely CORS. Check S3 bucket CORS config.");
+          reject(new Error("Upload blocked — S3 CORS not configured. See console for details."));
+        };
         xhr.send(file);
       });
 
