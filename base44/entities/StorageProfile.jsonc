@@ -1,0 +1,48 @@
+{
+  "name": "StorageProfile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Friendly name for this storage profile"
+    },
+    "bucket": {
+      "type": "string",
+      "description": "S3 bucket name"
+    },
+    "region": {
+      "type": "string",
+      "description": "AWS region"
+    },
+    "access_key_id": {
+      "type": "string",
+      "description": "AWS Access Key ID"
+    },
+    "secret_access_key": {
+      "type": "string",
+      "description": "AWS Secret Access Key"
+    },
+    "upload_prefix": {
+      "type": "string",
+      "description": "Default key prefix for uploads (e.g. pep-test/Pluto-Test)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active",
+      "description": "Profile status"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this is the default storage profile"
+    }
+  },
+  "required": [
+    "bucket",
+    "region"
+  ]
+}

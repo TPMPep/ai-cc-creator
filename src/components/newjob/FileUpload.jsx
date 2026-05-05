@@ -27,12 +27,14 @@ export default function FileUpload({ onUploadComplete }) {
         contentType: file.type || "application/octet-stream",
       });
 
-      if (!data.uploadUrl) throw new Error("Failed to get upload URL");
+      const uploadUrl = data.upload_url || data.uploadUrl;
+      const publicUrl = data.public_url || data.publicUrl;
+      if (!uploadUrl) throw new Error("Failed to get upload URL");
 
       // 2. Upload directly to S3
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", data.uploadUrl);
+        xhr.open("PUT", uploadUrl);
 
         xhr.upload.onprogress = (evt) => {
           if (evt.lengthComputable) {
@@ -55,7 +57,7 @@ export default function FileUpload({ onUploadComplete }) {
       });
 
       // 3. Pass the public S3 URL back
-      onUploadComplete(data.publicUrl);
+      onUploadComplete(publicUrl);
       toast.success("File uploaded successfully");
     } catch (err) {
       console.error("Upload error:", err);
