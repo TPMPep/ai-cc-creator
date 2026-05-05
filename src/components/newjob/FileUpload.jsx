@@ -112,7 +112,7 @@ export default function FileUpload({ onUploadComplete }) {
           type="button"
           variant="outline"
           onClick={() => fileRef.current?.click()}
-          className="border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800/50 gap-2 w-full"
+          className="border-zinc-600 border-dashed text-zinc-300 hover:text-white hover:bg-zinc-800/60 hover:border-zinc-500 gap-2 w-full h-11 transition-colors duration-200"
         >
           <Upload className="w-4 h-4" /> Upload Video / Audio File
         </Button>

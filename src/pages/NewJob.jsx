@@ -160,11 +160,11 @@ export default function NewJob() {
   };
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8 py-8">
+    <div className="px-4 sm:px-6 lg:px-8 py-10">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
+        <div className="mb-10">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">New Caption Job</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">New Caption Job</h1>
             {user?.role === "admin" && (
               <PayloadInspector
                 mediaUrl={mediaUrl}
@@ -176,90 +176,90 @@ export default function NewJob() {
               />
             )}
           </div>
-          <p className="text-sm text-zinc-500 mt-1">Submit a public media URL to generate broadcast-ready captions.</p>
+          <p className="text-sm text-zinc-400 mt-1.5">Submit a public media URL to generate broadcast-ready captions.</p>
         </div>
 
         <div className="grid lg:grid-cols-5 gap-8">
           {/* Left column - Input + Rules */}
           <div className="lg:col-span-3 space-y-6">
             {/* Media URL */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6 space-y-5">
-              <div className="space-y-2">
-                <Label className="text-sm text-zinc-300 font-medium">Media URL *</Label>
+            <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 p-6 space-y-5">
+              <div className="space-y-3">
+                <Label className="text-sm text-zinc-200 font-semibold">Media URL <span className="text-blue-400">*</span></Label>
                 <Input
                   value={mediaUrl}
                   onChange={(e) => { setMediaUrl(e.target.value); setUrlError(null); }}
                   placeholder="https://…/video.mp4"
-                  className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus:border-blue-500 h-11"
+                  className="bg-zinc-800/80 border-zinc-500/60 text-white placeholder:text-zinc-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 h-12 text-sm"
                 />
                 {urlError && (
-                  <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {urlError}</p>
+                  <p className="text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 rounded-md px-3 py-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> {urlError}</p>
                 )}
 
-                <div className="relative flex items-center gap-3 my-1">
-                  <div className="flex-1 border-t border-zinc-800" />
-                  <span className="text-xs text-zinc-600">or upload a file</span>
-                  <div className="flex-1 border-t border-zinc-800" />
+                <div className="relative flex items-center gap-3 my-2">
+                  <div className="flex-1 border-t border-zinc-700/50" />
+                  <span className="text-xs text-zinc-500 font-medium">or upload a file</span>
+                  <div className="flex-1 border-t border-zinc-700/50" />
                 </div>
 
                 <FileUpload onUploadComplete={(url) => { if (url) setMediaUrl(url); }} />
 
-                <div className="flex items-start gap-2">
-                  <Info className="w-3.5 h-3.5 text-zinc-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-zinc-600">
+                <div className="flex items-start gap-2 mt-1">
+                  <Info className="w-3.5 h-3.5 text-zinc-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-zinc-500 leading-relaxed">
                     Paste a URL or upload a file directly. Uploaded files go to your S3 bucket.
-                    {settings?.allowlistEnabled && <span className="text-amber-400"> Only approved domains are allowed.</span>}
+                    {settings?.allowlistEnabled && <span className="text-amber-400 font-medium"> Only approved domains are allowed.</span>}
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-6">
+              <div className="flex flex-wrap gap-x-8 gap-y-3 pt-2 border-t border-zinc-700/30">
                 <div className="flex items-center gap-2.5">
                   <Switch checked={speakerLabels} onCheckedChange={setSpeakerLabels} className="data-[state=checked]:bg-blue-600" />
-                  <Label className="text-xs text-zinc-400">Speaker labels</Label>
+                  <Label className="text-sm text-zinc-300 cursor-pointer">Speaker labels</Label>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Switch checked={languageDetection} onCheckedChange={setLanguageDetection} className="data-[state=checked]:bg-blue-600" />
-                  <Label className="text-xs text-zinc-400">Language detection</Label>
+                  <Label className="text-sm text-zinc-300 cursor-pointer">Language detection</Label>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Switch checked={allowHttp} onCheckedChange={setAllowHttp} className="data-[state=checked]:bg-blue-600" />
-                  <Label className="text-xs text-zinc-400">Allow HTTP</Label>
+                  <Label className="text-sm text-zinc-300 cursor-pointer">Allow HTTP</Label>
                 </div>
               </div>
             </div>
 
             {/* Protected Phrases */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6 space-y-3">
+            <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 p-6 space-y-3">
               <div className="space-y-1">
-                <Label className="text-sm text-zinc-300 font-medium">Protected Phrases <span className="text-zinc-600 font-normal">(optional)</span></Label>
-                <p className="text-xs text-zinc-500">Phrases that must not be split across lines — e.g. show titles, character names, brands. One per line or comma-separated.</p>
+                <Label className="text-sm text-zinc-200 font-semibold">Protected Phrases <span className="text-zinc-500 font-normal">(optional)</span></Label>
+                <p className="text-xs text-zinc-400 leading-relaxed">Phrases that must not be split across lines — e.g. show titles, character names, brands. One per line or comma-separated.</p>
               </div>
               <Textarea
                 value={protectedPhrases}
                 onChange={(e) => setProtectedPhrases(e.target.value)}
                 placeholder={"Watch What Happens Live\nBelow Deck Med\nAndy Cohen"}
                 rows={4}
-                className="bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus:border-blue-500 text-sm resize-y"
+                className="bg-zinc-800/80 border-zinc-500/60 text-white placeholder:text-zinc-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 text-sm resize-y"
               />
             </div>
 
             {/* Caption Options */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6">
+            <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 p-6">
               <CaptionOptionsPanel options={captionOptions} onOptionsChange={setCaptionOptions} />
             </div>
 
             {/* Submit */}
             <div>
               {error && (
-                <div className="mb-4 p-3 rounded-lg border border-red-500/30 bg-red-500/5 text-sm text-red-400 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> {error}
+                <div className="mb-4 p-4 rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-300 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-red-400" /> {error}
                 </div>
               )}
               <Button
                 onClick={handleSubmit}
                 disabled={submitting || !mediaUrl.trim()}
-                className="bg-blue-600 hover:bg-blue-700 text-white h-11 px-8 text-sm font-semibold w-full sm:w-auto"
+                className="bg-blue-600 hover:bg-blue-500 text-white h-12 px-10 text-sm font-semibold w-full sm:w-auto transition-colors duration-200 shadow-lg shadow-blue-600/20"
               >
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating…</>
@@ -272,31 +272,33 @@ export default function NewJob() {
 
           {/* Right column - Instructions */}
           <div className="lg:col-span-2">
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-6 sticky top-20">
-              <div className="flex items-center gap-2 mb-4">
-                <Info className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-semibold text-zinc-200">How it works</h3>
+            <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 p-6 sticky top-20">
+              <div className="flex items-center gap-2.5 mb-5">
+                <div className="w-7 h-7 rounded-lg bg-blue-600/15 flex items-center justify-center">
+                  <Info className="w-4 h-4 text-blue-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-zinc-100">How it works</h3>
               </div>
-              <ol className="space-y-4 text-sm text-zinc-400">
+              <ol className="space-y-4 text-sm text-zinc-300">
                 <li className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                  <span className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
                   <span>Paste a publicly accessible video or audio URL above.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                  <span className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
                   <span>Configure caption rules (or use the NBCU default preset).</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                  <span className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
                   <span>Click "Create Captions" — the job will process in the background.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-500 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                  <span className="w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
                   <span>Review captions with synced playback, QC checks, and download SRT/VTT/SCC exports.</span>
                 </li>
               </ol>
-              <div className="mt-6 p-3 rounded-lg bg-blue-600/5 border border-blue-500/10">
-                <p className="text-xs text-blue-400/80 leading-relaxed">
+              <div className="mt-6 p-3.5 rounded-lg bg-blue-600/10 border border-blue-500/20">
+                <p className="text-xs text-blue-300 leading-relaxed">
                   The media URL must be reachable by our backend. Private/authenticated URLs will fail.
                 </p>
               </div>
