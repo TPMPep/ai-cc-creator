@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Shield, Settings, Save, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Shield, Settings, Save, RotateCcw, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import moment from "moment";
 

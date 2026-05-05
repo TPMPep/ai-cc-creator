@@ -129,13 +129,22 @@ export default function NewJob() {
       const data = await createJob(payload);
 
       // Save to DB
+      // Railway may return error as string or object — normalize to string
+      let errorMsg = data.error || null;
+      if (errorMsg && typeof errorMsg === "object") {
+        errorMsg = errorMsg.message || JSON.stringify(errorMsg);
+      }
+      
+      // Map Railway "failed" status to our "error" status
+      const mappedStatus = (data.status === "failed") ? "error" : (data.status || "processing");
+
       await base44.entities.Job.create({
         railwayJobId: data.id,
         userId: user?.email || "",
         mediaUrl,
         title: deriveTitleFromUrl(mediaUrl),
-        status: data.status || "processing",
-        error: data.error || null,
+        status: mappedStatus,
+        error: errorMsg,
         allowHttp,
         speakerLabels,
         languageDetection,
