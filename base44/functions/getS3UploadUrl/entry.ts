@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
+// S3 upload path: public/ppantoja/Testing/Pluto/
 const REGION = Deno.env.get("AWS_S3_REGION");
 const BUCKET = Deno.env.get("AWS_S3_BUCKET");
 const ACCESS_KEY = Deno.env.get("AWS_ACCESS_KEY_ID");
@@ -57,7 +58,7 @@ Deno.serve(async (req) => {
     // Build S3 key with timestamp to avoid collisions
     const timestamp = Date.now();
     const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const key = `uploads/${timestamp}_${sanitized}`;
+    const key = `public/ppantoja/Testing/Pluto/${timestamp}_${sanitized}`;
 
     // Generate presigned PUT URL using AWS Signature V4
     const now = new Date();
