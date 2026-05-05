@@ -6,6 +6,7 @@ import { createJob } from "../components/shared/RailwayApi";
 import { CAPTION_OPTIONS_DEFAULTS } from "../components/shared/RulesDefaults";
 import { ensureSettingsExist, getSettings, matchesDomainAllowlist, checkRateLimit } from "../components/shared/ValidationUtils";
 import CaptionOptionsPanel from "../components/newjob/CaptionOptionsPanel";
+import FileUpload from "../components/newjob/FileUpload";
 import PayloadInspector from "../components/newjob/PayloadInspector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,10 +194,19 @@ export default function NewJob() {
                 {urlError && (
                   <p className="text-xs text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {urlError}</p>
                 )}
+
+                <div className="relative flex items-center gap-3 my-1">
+                  <div className="flex-1 border-t border-zinc-800" />
+                  <span className="text-xs text-zinc-600">or upload a file</span>
+                  <div className="flex-1 border-t border-zinc-800" />
+                </div>
+
+                <FileUpload onUploadComplete={(url) => { if (url) setMediaUrl(url); }} />
+
                 <div className="flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 text-zinc-600 mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-zinc-600">
-                    Media URLs must be publicly accessible (signed URLs supported). 
+                    Paste a URL or upload a file directly. Uploaded files go to your S3 bucket.
                     {settings?.allowlistEnabled && <span className="text-amber-400"> Only approved domains are allowed.</span>}
                   </p>
                 </div>
