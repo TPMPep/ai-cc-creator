@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast as sonnerToast } from "sonner";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
-import { pollJob, createReformatJob } from "../components/shared/RailwayApi";
+import { pollJob } from "../components/shared/RailwayApi";
 import StatusBadge from "../components/shared/StatusBadge";
 import VideoPlayer from "../components/jobdetail/VideoPlayer";
 import CueList from "../components/jobdetail/CueList";
@@ -12,13 +12,14 @@ import QCPanel from "../components/jobdetail/QCPanel";
 import CaptionSettings from "../components/jobdetail/CaptionSettings";
 import CaptionEditor from "../components/jobdetail/CaptionEditor";
 import { getCuesFromResultAsync } from "../components/shared/CueUtils";
-import { parseTTML, cuesToSrt, cuesToVtt, parseVTT } from "../components/shared/SubtitleParsers";
+import { parseVTT, parseTTML, cuesToSrt, cuesToVtt } from "../components/shared/SubtitleParsers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, RotateCcw } from "lucide-react";
+import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
 import JobConfigPanel from "../components/jobdetail/JobConfigPanel";
+import ProfileApplyPanel from "../components/jobdetail/ProfileApplyPanel";
 
 export default function JobDetail() {
   const navigate = useNavigate();
@@ -35,8 +36,6 @@ export default function JobDetail() {
   const [rawUtterances, setRawUtterances] = useState([]);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
-  const [reformatting, setReformatting] = useState(false);
-
   const jobId = searchParams.get("jobId");
   const recordId = searchParams.get("recordId");
 
@@ -256,93 +255,8 @@ export default function JobDetail() {
     navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
 
-  const handleReformat = async () => {
-    const transcriptId = job.result?.assemblyai_transcript_id;
-    if (!transcriptId) {
-      toast.error("No AssemblyAI transcript ID found on this job.");
-      return;
-    }
-    setReformatting(true);
-    try {
-      const captionOptions = job.rules || {};
-      const data = await createReformatJob(transcriptId, captionOptions);
-      console.log("[Reformat] Full response:", JSON.stringify(data, null, 2).substring(0, 3000));
-      console.log("[Reformat] Response keys:", Object.keys(data));
-      
-      const newRailwayJobId = data.job_id || data.id;
-      if (!newRailwayJobId) throw new Error("No job_id returned from Railway");
-
-      // Check if the reformat response already contains result data (synchronous reformat)
-      const resultData = data.result || data;
-      const srt = resultData.srt || null;
-      const vtt = resultData.vtt || null;
-      const scc = resultData.scc || null;
-      const ttml = resultData.ttml || null;
-      const qc = resultData.qc || null;
-      const alreadyDone = !!(srt || vtt || ttml);
-
-      let jobStatus = alreadyDone ? "done" : "processing";
-      let jobResult = undefined;
-
-      if (alreadyDone) {
-        console.log("[Reformat] Result available inline, processing cues");
-        let parsedCues = [];
-        if (vtt) {
-          parsedCues = parseVTT(vtt);
-        } else if (srt) {
-          parsedCues = parseVTT("WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2'));
-        } else if (ttml) {
-          parsedCues = parseTTML(ttml);
-        }
-
-        // Generate SRT/VTT from cues if not returned by Railway
-        const effectiveSrt = srt || (parsedCues.length > 0 ? cuesToSrt(parsedCues) : null);
-        const effectiveVtt = vtt || (parsedCues.length > 0 ? cuesToVtt(parsedCues) : null);
-
-        const uploadText = async (text, filename) => {
-          const file = new File([text], filename, { type: "text/plain" });
-          const { file_url } = await base44.integrations.Core.UploadFile({ file });
-          return file_url;
-        };
-        const uploadPromises = [];
-        if (effectiveSrt) uploadPromises.push(uploadText(effectiveSrt, `${newRailwayJobId}-reformat.srt`).then(url => ({ key: "srt_url", url })));
-        if (effectiveVtt) uploadPromises.push(uploadText(effectiveVtt, `${newRailwayJobId}-reformat.vtt`).then(url => ({ key: "vtt_url", url })));
-        if (scc) uploadPromises.push(uploadText(scc, `${newRailwayJobId}-reformat.scc`).then(url => ({ key: "scc_url", url })));
-        if (ttml) uploadPromises.push(uploadText(ttml, `${newRailwayJobId}-reformat.ttml`).then(url => ({ key: "ttml_url", url })));
-        const uploaded = await Promise.all(uploadPromises);
-        const urlMap = {};
-        for (const { key, url } of uploaded) urlMap[key] = url;
-
-        jobResult = {
-          ...urlMap,
-          qc,
-          cues: parsedCues,
-          assemblyai_transcript_id: data.assemblyai_transcript_id || data.transcript_id || transcriptId,
-        };
-      }
-
-      // Create a new Job record for the reformat
-      const newJob = await base44.entities.Job.create({
-        railwayJobId: newRailwayJobId,
-        userId: job.userId,
-        mediaUrl: job.mediaUrl,
-        title: `${job.title || "Untitled"} (reformat)`,
-        status: jobStatus,
-        pipeline: "railway",
-        speakerLabels: job.speakerLabels,
-        languageDetection: job.languageDetection,
-        rules: job.rules,
-        ...(jobResult ? { result: jobResult, durationMs: jobResult.cues?.length > 0 ? jobResult.cues[jobResult.cues.length - 1].end : null, issuesCount: qc?.issuesCount || 0 } : {}),
-      });
-
-      toast.success("Reformat job submitted! Redirecting…");
-      navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}&recordId=${newJob.id}`);
-    } catch (err) {
-      console.error("Reformat error:", err);
-      toast.error(`Reformat failed: ${err.message}`);
-    } finally {
-      setReformatting(false);
-    }
+  const handleReformatComplete = (newRailwayJobId, newRecordId) => {
+    navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}&recordId=${newRecordId}`);
   };
 
   if (!jobId && !recordId) {
@@ -406,18 +320,6 @@ export default function JobDetail() {
             <span className="text-xs text-zinc-600">{moment(job.created_date).format("MMM D, YYYY h:mm A")}</span>
           </div>
           <div className="flex items-center gap-2">
-            {isDone && job.result?.assemblyai_transcript_id && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleReformat}
-                disabled={reformatting}
-                className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800 bg-transparent"
-              >
-                {reformatting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
-                Reformat Captions
-              </Button>
-            )}
             <Link to={createPageUrl("NewJob")}>
               <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Plus className="w-3.5 h-3.5 mr-1.5" /> New Job
@@ -462,8 +364,11 @@ export default function JobDetail() {
         {/* Done state - main content */}
         {isDone && (
           <>
-            {/* Job Config Panel */}
+            {/* Job Config Summary */}
             <JobConfigPanel job={job} />
+
+            {/* Apply Profile / Reformat Panel */}
+            <ProfileApplyPanel job={job} onReformatComplete={handleReformatComplete} />
 
             {/* Top Section: 70% Video Left / 30% QC + Exports Right */}
             <div className="grid grid-cols-10 gap-6 mb-6">
