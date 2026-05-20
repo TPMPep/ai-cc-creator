@@ -6,7 +6,7 @@ import { Shield, Pencil, Trash2, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import SaveProfileModal from "./SaveProfileModal";
 
-export default function ProfileSelector({ currentOptions, onProfileSelect }) {
+export default function ProfileSelector({ currentOptions, jobSettings, onProfileSelect }) {
   const [profiles, setProfiles] = useState([]);
   const [selectedId, setSelectedId] = useState("custom");
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -141,6 +141,7 @@ export default function ProfileSelector({ currentOptions, onProfileSelect }) {
         open={showSaveModal}
         onOpenChange={setShowSaveModal}
         currentOptions={currentOptions}
+        jobSettings={jobSettings}
         existingProfile={editingProfile}
         onSaved={handleSaved}
       />

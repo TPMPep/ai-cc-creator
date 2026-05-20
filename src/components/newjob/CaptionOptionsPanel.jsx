@@ -380,12 +380,11 @@ function CustomOverridesSection({ opts, up }) {
 
 
 // ─── Main ──────────────────────────────────────
-export default function CaptionOptionsPanel({ options, onOptionsChange }) {
+export default function CaptionOptionsPanel({ options, onOptionsChange, jobSettings, onJobSettingsChange }) {
   const [activeProfile, setActiveProfile] = React.useState(null);
 
   const lockedFields = activeProfile?.lockedFields || [];
   const isFieldLocked = (field) => lockedFields.includes(field);
-  const hasAnyLock = lockedFields.length > 0;
 
   const up = (key, val) => {
     onOptionsChange({ ...options, [key]: val });
@@ -402,11 +401,21 @@ export default function CaptionOptionsPanel({ options, onOptionsChange }) {
     } else {
       // Apply profile settings
       setActiveProfile(profile);
+      const { protectedPhrases, speakerLabels, languageDetection, allowHttp, ...captionSettings } = profile.settings;
       onOptionsChange({
         ...CAPTION_OPTIONS_DEFAULTS,
-        ...profile.settings,
+        ...captionSettings,
         captionProfile: profile.name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
       });
+      // Apply job-level settings from profile if they exist
+      if (onJobSettingsChange) {
+        const jobUpdates = {};
+        if (protectedPhrases !== undefined) jobUpdates.protectedPhrases = protectedPhrases;
+        if (speakerLabels !== undefined) jobUpdates.speakerLabels = speakerLabels;
+        if (languageDetection !== undefined) jobUpdates.languageDetection = languageDetection;
+        if (allowHttp !== undefined) jobUpdates.allowHttp = allowHttp;
+        if (Object.keys(jobUpdates).length > 0) onJobSettingsChange(jobUpdates);
+      }
     }
   };
 
@@ -427,6 +436,7 @@ export default function CaptionOptionsPanel({ options, onOptionsChange }) {
         </div>
         <ProfileSelector
           currentOptions={options}
+          jobSettings={jobSettings}
           onProfileSelect={handleProfileSelect}
         />
       </div>

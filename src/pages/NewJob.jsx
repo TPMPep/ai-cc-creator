@@ -246,7 +246,22 @@ export default function NewJob() {
 
             {/* Caption Options */}
             <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 p-6">
-              <CaptionOptionsPanel options={captionOptions} onOptionsChange={setCaptionOptions} />
+              <CaptionOptionsPanel
+                options={captionOptions}
+                onOptionsChange={setCaptionOptions}
+                jobSettings={{
+                  protectedPhrases,
+                  speakerLabels,
+                  languageDetection,
+                  allowHttp,
+                }}
+                onJobSettingsChange={(updates) => {
+                  if (updates.protectedPhrases !== undefined) setProtectedPhrases(updates.protectedPhrases);
+                  if (updates.speakerLabels !== undefined) setSpeakerLabels(updates.speakerLabels);
+                  if (updates.languageDetection !== undefined) setLanguageDetection(updates.languageDetection);
+                  if (updates.allowHttp !== undefined) setAllowHttp(updates.allowHttp);
+                }}
+              />
             </div>
 
             {/* Submit */}

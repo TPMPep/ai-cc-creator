@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
-export default function SaveProfileModal({ open, onOpenChange, currentOptions, existingProfile, onSaved }) {
+export default function SaveProfileModal({ open, onOpenChange, currentOptions, jobSettings, existingProfile, onSaved }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,7 +35,13 @@ export default function SaveProfileModal({ open, onOpenChange, currentOptions, e
     setSaving(true);
 
     // Build settings from currentOptions — strip the captionProfile key itself
-    const { captionProfile, ...settings } = currentOptions;
+    const { captionProfile, ...captionSettings } = currentOptions;
+
+    // Include job-level settings (protected phrases, toggles) in the profile
+    const settings = {
+      ...captionSettings,
+      ...(jobSettings || {}),
+    };
 
     const profileData = {
       name: trimmed,
@@ -91,7 +97,7 @@ export default function SaveProfileModal({ open, onOpenChange, currentOptions, e
           </div>
           <div className="rounded-lg bg-zinc-800/60 border border-zinc-700/50 p-3">
             <p className="text-xs text-zinc-400">
-              This will save all your current caption settings (output format, speaker mode, sound density, custom overrides, etc.) to this profile.
+              This will save <span className="text-zinc-200">all</span> your current settings — caption options, protected phrases, speaker labels, language detection, and HTTP preference.
             </p>
           </div>
         </div>
