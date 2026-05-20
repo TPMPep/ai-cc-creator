@@ -58,17 +58,29 @@ export function buildCaptionEnvVars(opts) {
   // Timecode
   if (opts.timecodeOffsetMs) vars.TIMECODE_OFFSET_MS = String(opts.timecodeOffsetMs);
 
-  // Custom overrides (only when profile=custom)
+  // Caption rules — ALWAYS send these so Python scripts can read them.
+  // For NBCU profile, send NBCU defaults. For custom, send user values.
   if (profile === "custom") {
-    if (opts.customMaxLines !== undefined)          vars.CUSTOM_MAX_LINES = String(opts.customMaxLines);
-    if (opts.customMaxChars !== undefined)           vars.CUSTOM_MAX_CHARS = String(opts.customMaxChars);
-    if (opts.customTargetCps !== undefined)          vars.CUSTOM_TARGET_CPS = String(opts.customTargetCps);
-    if (opts.customMaxCps !== undefined)             vars.CUSTOM_MAX_CPS = String(opts.customMaxCps);
-    if (opts.customMinDisplayMs !== undefined)       vars.CUSTOM_MIN_DISPLAY_MS = String(opts.customMinDisplayMs);
-    if (opts.customMinSoundDisplayMs !== undefined)  vars.CUSTOM_MIN_SOUND_DISPLAY_MS = String(opts.customMinSoundDisplayMs);
-    if (opts.customMinSoundMs !== undefined)         vars.CUSTOM_MIN_SOUND_MS = String(opts.customMinSoundMs);
-    if (opts.customSoundClusterGapMs !== undefined)  vars.CUSTOM_SOUND_CLUSTER_GAP_MS = String(opts.customSoundClusterGapMs);
-    if (opts.customMergeGapMs !== undefined)         vars.CUSTOM_MERGE_GAP_MS = String(opts.customMergeGapMs);
+    vars.CUSTOM_MAX_LINES = String(opts.customMaxLines ?? 2);
+    vars.CUSTOM_MAX_CHARS = String(opts.customMaxChars ?? 32);
+    vars.CUSTOM_TARGET_CPS = String(opts.customTargetCps ?? 27);
+    vars.CUSTOM_MAX_CPS = String(opts.customMaxCps ?? 45);
+    vars.CUSTOM_MIN_DISPLAY_MS = String(opts.customMinDisplayMs ?? 800);
+    vars.CUSTOM_MIN_SOUND_DISPLAY_MS = String(opts.customMinSoundDisplayMs ?? 800);
+    vars.CUSTOM_MIN_SOUND_MS = String(opts.customMinSoundMs ?? 250);
+    vars.CUSTOM_SOUND_CLUSTER_GAP_MS = String(opts.customSoundClusterGapMs ?? 1500);
+    vars.CUSTOM_MERGE_GAP_MS = String(opts.customMergeGapMs ?? 80);
+  } else {
+    // NBCU defaults — always send so Python reads from env instead of hardcoding
+    vars.CUSTOM_MAX_LINES = "2";
+    vars.CUSTOM_MAX_CHARS = "32";
+    vars.CUSTOM_TARGET_CPS = "27";
+    vars.CUSTOM_MAX_CPS = "45";
+    vars.CUSTOM_MIN_DISPLAY_MS = "800";
+    vars.CUSTOM_MIN_SOUND_DISPLAY_MS = "800";
+    vars.CUSTOM_MIN_SOUND_MS = "250";
+    vars.CUSTOM_SOUND_CLUSTER_GAP_MS = "1500";
+    vars.CUSTOM_MERGE_GAP_MS = "80";
   }
 
   return vars;
@@ -84,6 +96,7 @@ export async function createJob(payload) {
       speakerLabels: payload.speaker_labels,
       languageDetection: payload.language_detection,
       allowHttp: payload.allowHttp,
+      protected_phrases: payload.protected_phrases || [],
       protectedPhrases: payload.protected_phrases || [],
       captionOptions: captionEnv,
     }),
