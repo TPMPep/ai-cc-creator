@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X, RotateCcw } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
+import JobConfigPanel from "../components/jobdetail/JobConfigPanel";
 
 export default function JobDetail() {
   const navigate = useNavigate();
@@ -461,6 +462,9 @@ export default function JobDetail() {
         {/* Done state - main content */}
         {isDone && (
           <>
+            {/* Job Config Panel */}
+            <JobConfigPanel job={job} />
+
             {/* Top Section: 70% Video Left / 30% QC + Exports Right */}
             <div className="grid grid-cols-10 gap-6 mb-6">
               {/* Left: Video (70%) */}

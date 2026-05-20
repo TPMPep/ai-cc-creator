@@ -149,6 +149,7 @@ export default function NewJob() {
         allowHttp,
         speakerLabels,
         languageDetection,
+        rules: captionOptions,
         result: data.assemblyai_transcript_id ? { assemblyai_transcript_id: data.assemblyai_transcript_id } : undefined,
       });
 
