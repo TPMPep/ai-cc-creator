@@ -1,0 +1,34 @@
+{
+  "name": "CaptionProfile",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name for this profile (e.g. NBCU CM-051, Netflix, Custom)"
+    },
+    "isSystem": {
+      "type": "boolean",
+      "default": false,
+      "description": "System profiles cannot be edited or deleted"
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of this profile"
+    },
+    "settings": {
+      "type": "object",
+      "description": "All caption option settings for this profile"
+    },
+    "lockedFields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of field keys that are locked (non-editable) when this profile is active"
+    }
+  },
+  "required": [
+    "name",
+    "settings"
+  ]
+}

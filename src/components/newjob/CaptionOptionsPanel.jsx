@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shield, HelpCircle, FileOutput, Film, Users, Volume2, Italic, AlignCenter, Clock, Plus, Trash2, SlidersHorizontal, CheckCircle, Activity } from "lucide-react";
 import { CAPTION_OPTIONS_DEFAULTS, NBCU_LOCKED_VALUES, CUSTOM_OVERRIDES_CONFIG } from "../shared/RulesDefaults";
+import ProfileSelector from "./ProfileSelector";
 
 const SEC = "space-y-3 border-b border-zinc-700/30 pb-5 last:border-0 last:pb-0";
 const LBL = "text-xs text-zinc-300 font-medium";
@@ -376,91 +377,93 @@ function CustomOverridesSection({ opts, up }) {
   );
 }
 
-// ─── NBCU Locked Summary ──────────────────────
-function NbcuLockedSummary() {
-  const items = [
-    ["Output", "TTML"],
-    ["Speakers", "Dash (no names)"],
-    ["Max Lines", "2"],
-    ["Max Chars", "32"],
-    ["Sound", "Simple"],
-    ["Sound Density", "Conservative"],
-    ["Alignment", "None"],
-    ["TTML Validate", "Yes + Fail"],
-  ];
-  return (
-    <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 px-4 py-3">
-      <p className="text-xs text-amber-300 leading-relaxed mb-2.5 font-medium">
-        <Shield className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-        NBCU CM-051 compliance active — core rules are locked to spec.
-      </p>
-      <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
-        {items.map(([k, v]) => (
-          <div key={k} className="flex justify-between text-xs">
-            <span className="text-zinc-400">{k}</span>
-            <span className="text-zinc-200 font-mono">{v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+
 
 // ─── Main ──────────────────────────────────────
 export default function CaptionOptionsPanel({ options, onOptionsChange }) {
-  const isNbcu = (options.captionProfile || "nbcu") === "nbcu";
+  const [activeProfile, setActiveProfile] = React.useState(null);
+
+  const lockedFields = activeProfile?.lockedFields || [];
+  const isFieldLocked = (field) => lockedFields.includes(field);
+  const hasAnyLock = lockedFields.length > 0;
 
   const up = (key, val) => {
     onOptionsChange({ ...options, [key]: val });
   };
 
-  const switchProfile = (p) => {
-    if (p === "nbcu") {
-      onOptionsChange({
-        ...options,
-        captionProfile: "nbcu",
-        ...NBCU_LOCKED_VALUES,
-      });
-    } else {
+  const handleProfileSelect = (profile) => {
+    if (!profile) {
+      // Custom mode — unlock everything, keep current settings
+      setActiveProfile(null);
       onOptionsChange({
         ...options,
         captionProfile: "custom",
-        validateTtml: 0,
-        failOnTtmlValidation: 0,
-        soundDensity: "balanced",
+      });
+    } else {
+      // Apply profile settings
+      setActiveProfile(profile);
+      onOptionsChange({
+        ...CAPTION_OPTIONS_DEFAULTS,
+        ...profile.settings,
+        captionProfile: profile.name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
       });
     }
   };
 
+  // Check if specific sections are fully locked
+  const outputLocked = isFieldLocked("outputFormat");
+  const speakerLocked = isFieldLocked("speakerLabelMode");
+  const soundLocked = isFieldLocked("soundLabelStyle");
+  const densityLocked = isFieldLocked("soundDensity");
+  const validationLocked = isFieldLocked("validateTtml");
+  const alignmentLocked = isFieldLocked("alignmentDefault");
+  const overridesLocked = isFieldLocked("customMaxLines");
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-white">Caption Options</h3>
-        <Select value={isNbcu ? "nbcu" : "custom"} onValueChange={switchProfile}>
-          <SelectTrigger className="h-9 w-48 bg-zinc-800 border-zinc-600 text-zinc-200 text-xs font-medium">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className={SELECT_CONTENT_CLS}>
-            <SelectItem value="nbcu" className={SELECT_ITEM_CLS}>
-              <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-400" /> NBCU CM-051</span>
-            </SelectItem>
-            <SelectItem value="custom" className={SELECT_ITEM_CLS}>Custom</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-white">Caption Options</h3>
+        </div>
+        <ProfileSelector
+          currentOptions={options}
+          onProfileSelect={handleProfileSelect}
+        />
       </div>
 
-      {isNbcu && <NbcuLockedSummary />}
+      {activeProfile?.isSystem && (
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/25 px-4 py-3">
+          <p className="text-xs text-amber-300 leading-relaxed font-medium">
+            <Shield className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+            {activeProfile.name} profile active — locked fields cannot be changed.
+          </p>
+          {activeProfile.description && (
+            <p className="text-xs text-zinc-400 mt-1">{activeProfile.description}</p>
+          )}
+        </div>
+      )}
 
-      <OutputSection opts={options} up={up} locked={isNbcu} />
-      <ValidationSection opts={options} up={up} locked={isNbcu} />
-      <SpeakerSection opts={options} up={up} locked={isNbcu} />
-      <SoundSection opts={options} up={up} locked={isNbcu} />
-      <SoundDensitySection opts={options} up={up} locked={isNbcu} />
+      {activeProfile && !activeProfile.isSystem && (
+        <div className="rounded-lg bg-blue-500/10 border border-blue-500/25 px-4 py-3">
+          <p className="text-xs text-blue-300 leading-relaxed font-medium">
+            Profile: {activeProfile.name}
+          </p>
+          {activeProfile.description && (
+            <p className="text-xs text-zinc-400 mt-1">{activeProfile.description}</p>
+          )}
+        </div>
+      )}
+
+      <OutputSection opts={options} up={up} locked={outputLocked} />
+      <ValidationSection opts={options} up={up} locked={validationLocked} />
+      <SpeakerSection opts={options} up={up} locked={speakerLocked} />
+      <SoundSection opts={options} up={up} locked={soundLocked} />
+      <SoundDensitySection opts={options} up={up} locked={densityLocked} />
       <ItalicsSection opts={options} up={up} />
-      <AlignmentSection opts={options} up={up} locked={isNbcu} />
+      <AlignmentSection opts={options} up={up} locked={alignmentLocked} />
       <TimecodeSection opts={options} up={up} />
 
-      {!isNbcu && <CustomOverridesSection opts={options} up={up} />}
+      {!overridesLocked && <CustomOverridesSection opts={options} up={up} />}
     </div>
   );
 }
