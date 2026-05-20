@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { toast as sonnerToast } from "sonner";
 import { createPageUrl } from "../utils";
 import { base44 } from "@/api/base44Client";
 import { pollJob } from "../components/shared/RailwayApi";
 import StatusBadge from "../components/shared/StatusBadge";
 import VideoPlayer from "../components/jobdetail/VideoPlayer";
-import CueList from "../components/jobdetail/CueList";
-import ExportPanel from "../components/jobdetail/ExportPanel";
-import QCPanel from "../components/jobdetail/QCPanel";
 import CaptionSettings from "../components/jobdetail/CaptionSettings";
-import CaptionEditor from "../components/jobdetail/CaptionEditor";
-import { getCuesFromResultAsync } from "../components/shared/CueUtils";
-import { parseVTT, parseTTML, cuesToSrt, cuesToVtt } from "../components/shared/SubtitleParsers";
+import SourceTranscriptPanel from "../components/jobdetail/SourceTranscriptPanel";
+import DeliveryTabs from "../components/jobdetail/DeliveryTabs";
+import DeliveryPanel from "../components/jobdetail/DeliveryPanel";
+import AddDeliveryModal from "../components/jobdetail/AddDeliveryModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, RefreshCw, AlertCircle, Pencil, Check, X } from "lucide-react";
 import moment from "moment";
 import { toast } from "sonner";
-import JobConfigPanel from "../components/jobdetail/JobConfigPanel";
-import ProfileApplyPanel from "../components/jobdetail/ProfileApplyPanel";
 
 export default function JobDetail() {
   const navigate = useNavigate();
@@ -31,13 +26,17 @@ export default function JobDetail() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [captionSettings, setCaptionSettings] = useState({ fontSize: 16, opacity: 0.8, position: "bottom" });
-  const [cues, setCues] = useState([]);
-  const [rawSrtText, setRawSrtText] = useState(null);
   const [rawUtterances, setRawUtterances] = useState([]);
+  const [activeDeliveryId, setActiveDeliveryId] = useState(null);
+  const [addDeliveryOpen, setAddDeliveryOpen] = useState(false);
   const pollingRef = useRef(null);
   const pollStartRef = useRef(null);
   const jobId = searchParams.get("jobId");
   const recordId = searchParams.get("recordId");
+
+  // Active delivery's cues for video overlay
+  const activeDelivery = job?.deliveries?.find(d => d.id === activeDeliveryId);
+  const activeCues = activeDelivery?.cues || [];
 
   // Load job from DB
   useEffect(() => {
@@ -45,7 +44,6 @@ export default function JobDetail() {
     const loadJob = async () => {
       let jobs = [];
       if (recordId) {
-        // Direct lookup by Base44 record ID (used for reformats to avoid duplicate railwayJobId collisions)
         const allJobs = await base44.entities.Job.list("-created_date", 50);
         const match = allJobs.find(j => j.id === recordId);
         if (match) jobs = [match];
@@ -54,40 +52,53 @@ export default function JobDetail() {
         jobs = await base44.entities.Job.filter({ railwayJobId: jobId }, "-created_date", 1);
       }
       if (jobs.length > 0) {
-        const loadedJob = jobs[0];
-        setJob(loadedJob);
+        let loadedJob = jobs[0];
         setTitleDraft(loadedJob.title || "");
-        // Load cues from all formats (cue_url, cue_chunks, cues)
-        const loadedCues = await getCuesFromResultAsync(loadedJob.result);
-        setCues(loadedCues);
 
-        // Get transcript ID — check result first, then backfill from Railway if missing
-        let tid = loadedJob.result?.assemblyai_transcript_id;
-        if (!tid && loadedJob.status === "done" && loadedJob.railwayJobId) {
-          try {
-            const railwayData = await pollJob(loadedJob.railwayJobId);
-            tid = railwayData.assemblyai_transcript_id || null;
-            if (tid) {
-              // Backfill into DB so we don't need to re-poll next time
-              const patchedResult = { ...(loadedJob.result || {}), assemblyai_transcript_id: tid };
-              await base44.entities.Job.update(loadedJob.id, { result: patchedResult });
-              const patchedJob = { ...loadedJob, result: patchedResult };
-              setJob(patchedJob);
-              console.log("[JobDetail] Backfilled assemblyai_transcript_id:", tid);
-            }
-          } catch (e) {
-            console.warn("[JobDetail] Could not backfill transcript ID from Railway:", e);
+        // Backward compat: migrate old jobs with result.cues but no deliveries
+        const hasLegacyResult = loadedJob.status === "done" && loadedJob.result &&
+          (loadedJob.result.cues?.length > 0 || loadedJob.result.cue_chunks?.length > 0 || loadedJob.result.srt_url) &&
+          (!loadedJob.deliveries || loadedJob.deliveries.length === 0);
+
+        if (hasLegacyResult) {
+          const legacyDelivery = {
+            id: "legacy-" + loadedJob.id,
+            profileName: loadedJob.rules?.captionProfile === "nbcu" ? "NBCU CM-051" :
+              loadedJob.rules?.captionProfile || "Initial Format",
+            profileSettings: loadedJob.rules || {},
+            status: "done",
+            railwayJobId: loadedJob.railwayJobId,
+            cues: loadedJob.result.cues || [],
+            cue_chunks: loadedJob.result.cue_chunks || null,
+            qc: loadedJob.result.qc || null,
+            srt_url: loadedJob.result.srt_url || null,
+            vtt_url: loadedJob.result.vtt_url || null,
+            scc_url: loadedJob.result.scc_url || null,
+            ttml_url: loadedJob.result.ttml_url || null,
+            created_date: loadedJob.created_date,
+          };
+          loadedJob = { ...loadedJob, deliveries: [legacyDelivery] };
+          // Also ensure rawTranscript is set
+          if (!loadedJob.rawTranscript && loadedJob.result?.assemblyai_transcript_id) {
+            loadedJob.rawTranscript = { transcriptId: loadedJob.result.assemblyai_transcript_id };
           }
         }
 
-        // Fetch raw AAI data if transcript id exists
+        setJob(loadedJob);
+
+        // Select first delivery if exists
+        if (loadedJob.deliveries?.length > 0) {
+          setActiveDeliveryId(loadedJob.deliveries[0].id);
+        }
+
+        // Load raw utterances
+        const tid = loadedJob.rawTranscript?.transcriptId || loadedJob.result?.assemblyai_transcript_id;
         if (tid) {
-          base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "srt" })
-            .then(res => setRawSrtText(res.data?.srt || null))
-            .catch(() => {});
-          base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "utterances" })
-            .then(res => setRawUtterances(res.data?.utterances || []))
-            .catch(() => {});
+          fetchRawData(tid);
+          // Backfill rawTranscript if missing
+          if (!loadedJob.rawTranscript && tid) {
+            base44.entities.Job.update(loadedJob.id, { rawTranscript: { transcriptId: tid } });
+          }
         }
       }
       setLoading(false);
@@ -95,11 +106,19 @@ export default function JobDetail() {
     loadJob();
   }, [jobId, recordId]);
 
-  // Use a ref to always have the latest job for polling without re-creating the callback
+  const fetchRawData = async (tid) => {
+    try {
+      const res = await base44.functions.invoke("fetchAssemblyAIRaw", { transcriptId: tid, format: "utterances" });
+      setRawUtterances(res.data?.utterances || []);
+    } catch (e) {
+      console.warn("Could not fetch raw utterances:", e);
+    }
+  };
+
+  // Polling for transcription (initial job processing)
   const jobRef = useRef(job);
   useEffect(() => { jobRef.current = job; }, [job]);
 
-  // Polling logic — uses jobRef to avoid stale closures
   const doPoll = useCallback(async () => {
     const currentJob = jobRef.current;
     if (!jobId || !currentJob) return;
@@ -107,97 +126,38 @@ export default function JobDetail() {
 
     try {
       const data = await pollJob(jobId);
-      console.log("[JobDetail] Poll raw status:", data.status);
-      
-      // Map Railway API status to app status
-      // Railway returns "completed" / "failed" / "processing" / "queued"
-      const statusMap = { "completed": "done", "complete": "done", "finished": "done", "success": "done", "failed": "error", "failure": "error" };
+      const statusMap = { completed: "done", complete: "done", finished: "done", success: "done", failed: "error", failure: "error" };
       const mappedStatus = statusMap[data.status] || data.status;
-      console.log("[JobDetail] Mapped status:", mappedStatus);
-      
       const updates = { status: mappedStatus, lastPolledAt: new Date().toISOString() };
-      if (data.error) updates.error = data.error;
-      
-      // Save results when completed — Railway returns result.srt/.vtt/.scc/.ttml/.qc
+      if (data.error) updates.error = typeof data.error === "object" ? data.error.message : data.error;
+
       if (mappedStatus === "done") {
-        // Railway may return result at top level or nested — handle both
-        const resultData = data.result || data;
-        const srt = resultData.srt || null;
-        const vtt = resultData.vtt || null;
-        const scc = resultData.scc || null;
-        const ttml = resultData.ttml || null;
-        const qc = resultData.qc || null;
+        // Extract transcript ID for raw data
+        const tid = data.assemblyai_transcript_id || data.transcript_id ||
+          (data.result && (data.result.assemblyai_transcript_id || data.result.transcript_id));
         
-        console.log("[JobDetail] Result data keys:", Object.keys(resultData));
-        console.log("[JobDetail] Result found:", { hasSrt: !!srt, hasVtt: !!vtt, hasScc: !!scc, hasTtml: !!ttml, hasQc: !!qc });
-        
-        // Parse cues from best available format: VTT > SRT > TTML
-        let parsedCues = [];
-        if (vtt) {
-          parsedCues = parseVTT(vtt);
-          console.log("[JobDetail] Parsed", parsedCues.length, "cues from VTT");
-        } else if (srt) {
-          const vttFromSrt = "WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-          parsedCues = parseVTT(vttFromSrt);
-          console.log("[JobDetail] Parsed", parsedCues.length, "cues from SRT");
-        } else if (ttml) {
-          parsedCues = parseTTML(ttml);
-          console.log("[JobDetail] Parsed", parsedCues.length, "cues from TTML");
+        if (tid) {
+          updates.rawTranscript = {
+            transcriptId: tid,
+          };
+          // Fetch raw data
+          fetchRawData(tid);
         }
 
-        // Generate SRT from cues if Railway didn't return it (e.g. TTML-only output)
-        let effectiveSrt = srt;
-        let effectiveVtt = vtt;
-        if (!srt && parsedCues.length > 0) {
-          effectiveSrt = cuesToSrt(parsedCues);
-        }
-        if (!vtt && parsedCues.length > 0) {
-          effectiveVtt = cuesToVtt(parsedCues);
-        }
-        
-        // Upload large text content as files to avoid entity field size limits
-        const uploadText = async (text, filename) => {
-          const file = new File([text], filename, { type: "text/plain" });
-          const { file_url } = await base44.integrations.Core.UploadFile({ file });
-          return file_url;
-        };
-        
-        const uploadPromises = [];
-        if (effectiveSrt) uploadPromises.push(uploadText(effectiveSrt, `${jobId}.srt`).then(url => ({ key: "srt_url", url })));
-        if (effectiveVtt) uploadPromises.push(uploadText(effectiveVtt, `${jobId}.vtt`).then(url => ({ key: "vtt_url", url })));
-        if (scc) uploadPromises.push(uploadText(scc, `${jobId}.scc`).then(url => ({ key: "scc_url", url })));
-        if (ttml) uploadPromises.push(uploadText(ttml, `${jobId}.ttml`).then(url => ({ key: "ttml_url", url })));
-        
-        const uploaded = await Promise.all(uploadPromises);
-        const urlMap = {};
-        for (const { key, url } of uploaded) urlMap[key] = url;
-        console.log("[JobDetail] Uploaded files:", urlMap);
-        
+        // Store minimal result with transcript ID
         updates.result = {
-          ...urlMap,
-          qc,
-          cues: parsedCues,
-          assemblyai_transcript_id: data.assemblyai_transcript_id || data.transcript_id || resultData.assemblyai_transcript_id || resultData.transcript_id || null,
+          assemblyai_transcript_id: tid || null,
         };
-        
-        // Compute derived fields
-        if (parsedCues.length > 0) {
-          const lastCue = parsedCues[parsedCues.length - 1];
-          updates.durationMs = lastCue.end;
-        }
-        if (qc) {
-          updates.issuesCount = qc.issuesCount || 0;
+
+        // Initialize empty deliveries — user will add deliveries manually
+        if (!currentJob.deliveries || currentJob.deliveries.length === 0) {
+          updates.deliveries = [];
         }
       }
 
       await base44.entities.Job.update(currentJob.id, updates);
-      setJob((prev) => ({ ...prev, ...updates }));
-      if (updates.result) {
-        const freshCues = await getCuesFromResultAsync(updates.result);
-        setCues(freshCues);
-      }
+      setJob(prev => ({ ...prev, ...updates }));
 
-      // Stop polling on terminal states
       if (mappedStatus === "done" || mappedStatus === "error") {
         if (pollingRef.current) clearTimeout(pollingRef.current);
         pollingRef.current = null;
@@ -213,13 +173,11 @@ export default function JobDetail() {
     if (job.status === "done" || job.status === "error") return;
 
     pollStartRef.current = Date.now();
-
     const tick = () => {
       const elapsed = Date.now() - pollStartRef.current;
       const interval = elapsed < 20000 ? 2000 : 5000;
       pollingRef.current = setTimeout(async () => {
         await doPoll();
-        // Only continue ticking if job is still processing
         const currentJob = jobRef.current;
         if (currentJob && currentJob.status !== "done" && currentJob.status !== "error") {
           tick();
@@ -227,37 +185,48 @@ export default function JobDetail() {
       }, interval);
     };
     tick();
-
     return () => { if (pollingRef.current) clearTimeout(pollingRef.current); };
   }, [job?.id, doPoll]);
 
   const handleSaveTitle = async () => {
     if (!titleDraft.trim()) return;
     await base44.entities.Job.update(job.id, { title: titleDraft.trim() });
-    setJob((prev) => ({ ...prev, title: titleDraft.trim() }));
+    setJob(prev => ({ ...prev, title: titleDraft.trim() }));
     setEditingTitle(false);
   };
 
-  const handleJumpToCue = (cueIndex) => {
-    const cues = job?.result?.cues;
-    if (!cues || !cues[cueIndex]) return;
-    const cue = cues[cueIndex];
-    if (videoRef.current) {
-      videoRef.current.currentTime = cue.start / 1000;
-    }
-  };
-
   const handleRetry = () => {
-    const params = new URLSearchParams({
-      mediaUrl: job.mediaUrl,
-      rules: JSON.stringify(job.rules || {}),
-    });
+    const params = new URLSearchParams({ mediaUrl: job.mediaUrl });
     navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
 
-  const handleReformatComplete = (newRailwayJobId, newRecordId) => {
-    navigate(createPageUrl("JobDetail") + `?jobId=${newRailwayJobId}&recordId=${newRecordId}`);
+  const handleDeliveryCreated = (delivery, updatedDeliveries) => {
+    setJob(prev => ({ ...prev, deliveries: updatedDeliveries }));
+    setActiveDeliveryId(delivery.id);
   };
+
+  const handleDeliveryUpdated = async (updatedDelivery) => {
+    const updatedDeliveries = (job.deliveries || []).map(d =>
+      d.id === updatedDelivery.id ? updatedDelivery : d
+    );
+    await base44.entities.Job.update(job.id, { deliveries: updatedDeliveries });
+    setJob(prev => ({ ...prev, deliveries: updatedDeliveries }));
+  };
+
+  const handleRemoveDelivery = async (deliveryId) => {
+    const updatedDeliveries = (job.deliveries || []).filter(d => d.id !== deliveryId);
+    await base44.entities.Job.update(job.id, { deliveries: updatedDeliveries });
+    setJob(prev => ({ ...prev, deliveries: updatedDeliveries }));
+    if (activeDeliveryId === deliveryId) {
+      setActiveDeliveryId(updatedDeliveries.length > 0 ? updatedDeliveries[0].id : null);
+    }
+  };
+
+  const handleSeek = (timeSec) => {
+    if (videoRef.current) videoRef.current.currentTime = timeSec;
+  };
+
+  // --- Render ---
 
   if (!jobId && !recordId) {
     return (
@@ -332,8 +301,9 @@ export default function JobDetail() {
         {isProcessing && (
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-8 text-center mb-6">
             <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-white mb-2">Transcribing and generating captions…</h2>
-            <p className="text-sm text-zinc-500 mb-4">Updating automatically</p>
+            <h2 className="text-lg font-semibold text-white mb-2">Transcribing audio…</h2>
+            <p className="text-sm text-zinc-500 mb-1">Your raw transcript will appear once complete.</p>
+            <p className="text-xs text-zinc-600 mb-4">Then you can apply delivery profiles to format your captions.</p>
             <Button variant="outline" size="sm" onClick={doPoll} className="border-zinc-800 text-zinc-400 hover:text-white">
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Refresh now
             </Button>
@@ -361,63 +331,85 @@ export default function JobDetail() {
           </div>
         )}
 
-        {/* Done state - main content */}
+        {/* Done state — Split Panel Layout */}
         {isDone && (
           <>
-            {/* Job Config Summary */}
-            <JobConfigPanel job={job} />
+            {/* Video Player — full width, compact */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
+                <p className="text-[10px] text-zinc-600">
+                  Space (play/pause) • ←/→ (±5s) • J/K/L (−10s/pause/+10s)
+                </p>
+              </div>
+              <VideoPlayer
+                mediaUrl={job.mediaUrl}
+                cues={activeCues}
+                videoRef={videoRef}
+                onTimeUpdate={setCurrentTimeMs}
+                captionSettings={captionSettings}
+              />
+            </div>
 
-            {/* Apply Profile / Reformat Panel */}
-            <ProfileApplyPanel job={job} onReformatComplete={handleReformatComplete} />
-
-            {/* Top Section: 70% Video Left / 30% QC + Exports Right */}
-            <div className="grid grid-cols-10 gap-6 mb-6">
-              {/* Left: Video (70%) */}
-              <div className="col-span-7 space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <CaptionSettings settings={captionSettings} onSettingsChange={setCaptionSettings} />
-                  <p className="text-[10px] text-zinc-600">
-                    Shortcuts: Space (play/pause) • ←/→ (±5s) • J/K/L (−10s/pause/+10s)
-                  </p>
-                </div>
-                <VideoPlayer
-                  mediaUrl={job.mediaUrl}
-                  cues={cues}
-                  videoRef={videoRef}
-                  onTimeUpdate={setCurrentTimeMs}
-                  captionSettings={captionSettings}
+            {/* Split Panel: Source (left) | Deliveries (right) */}
+            <div className="grid grid-cols-10 gap-4" style={{ minHeight: "65vh" }}>
+              {/* Left: Source Transcript (30%) */}
+              <div className="col-span-3 rounded-xl border border-zinc-800/60 bg-zinc-900/30 overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
+                <SourceTranscriptPanel
+                  utterances={rawUtterances}
+                  currentTimeMs={currentTimeMs}
+                  onSeek={handleSeek}
                 />
               </div>
 
-              {/* Right: QC Panel + Exports (30%) */}
-              <div className="col-span-3 flex flex-col gap-4" style={{ height: "fit-content", maxHeight: "600px" }}>
-                {/* Exports */}
-                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
-                  <ExportPanel result={job.result} title={job.title} jobId={job.railwayJobId || job.jobId} assemblyaiTranscriptId={job.result?.assemblyai_transcript_id} />
-                </div>
+              {/* Right: Deliveries (70%) */}
+              <div className="col-span-7 rounded-xl border border-zinc-800/60 bg-zinc-900/30 overflow-hidden flex flex-col" style={{ maxHeight: "75vh" }}>
+                <DeliveryTabs
+                  deliveries={job.deliveries || []}
+                  activeDeliveryId={activeDeliveryId}
+                  onSelect={setActiveDeliveryId}
+                  onAdd={() => setAddDeliveryOpen(true)}
+                  onRemove={handleRemoveDelivery}
+                />
 
-                {/* QC Panel - scrollable */}
-                <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4 overflow-auto flex-1">
-                  <QCPanel qc={job.result?.qc} onJumpToCue={handleJumpToCue} />
-                </div>
+                {activeDelivery ? (
+                  <div className="flex-1 overflow-auto">
+                    <DeliveryPanel
+                      key={activeDelivery.id}
+                      delivery={activeDelivery}
+                      job={job}
+                      currentTimeMs={currentTimeMs}
+                      videoRef={videoRef}
+                      onDeliveryUpdated={handleDeliveryUpdated}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center flex-1 py-16 gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 flex items-center justify-center mb-2">
+                      <Plus className="w-7 h-7 text-zinc-600" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-zinc-300">No deliveries yet</h3>
+                    <p className="text-xs text-zinc-500 text-center max-w-xs">
+                      Click "Add Delivery" to apply a caption profile (NBCU, Netflix, custom) and generate formatted captions from your transcript.
+                    </p>
+                    <Button
+                      onClick={() => setAddDeliveryOpen(true)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white mt-2"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add Delivery
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Full Width Caption Editor Below */}
-            <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/30 overflow-hidden">
-              <CaptionEditor 
-                cues={cues}
-                currentTimeMs={currentTimeMs}
-                videoRef={videoRef}
-                job={job}
-                rawSrtText={rawSrtText}
-                rawUtterances={rawUtterances}
-                onCuesChanged={(updatedCues) => {
-                  setCues(updatedCues);
-                  setJob(prev => ({ ...prev, result: { ...prev.result, cues: updatedCues } }));
-                }}
-              />
-            </div>
+            {/* Add Delivery Modal */}
+            <AddDeliveryModal
+              open={addDeliveryOpen}
+              onClose={() => setAddDeliveryOpen(false)}
+              job={job}
+              onDeliveryCreated={handleDeliveryCreated}
+            />
           </>
         )}
       </div>

@@ -80,6 +80,7 @@ export default function CaptionEditor({
   videoRef, 
   job,
   onCuesChanged,
+  onSaveCues,
   rawSrtText,
   rawUtterances: externalRawUtterances,
 }) {
@@ -173,12 +174,18 @@ export default function CaptionEditor({
 
   const handleSaveCues = async () => {
     setSaving(true);
-    const cueChunks = [];
-    const cueStr = JSON.stringify(cues);
-    for (let i = 0; i < cueStr.length; i += 75000) cueChunks.push(cueStr.slice(i, i + 75000));
-    const updatedResult = { ...job.result, cue_chunks: cueChunks };
-    delete updatedResult.cues;
-    await base44.entities.Job.update(job.id, { result: updatedResult });
+    if (onSaveCues) {
+      // Delegate save to parent (e.g., DeliveryPanel)
+      await onSaveCues(cues);
+    } else {
+      // Legacy: save directly to job.result
+      const cueChunks = [];
+      const cueStr = JSON.stringify(cues);
+      for (let i = 0; i < cueStr.length; i += 75000) cueChunks.push(cueStr.slice(i, i + 75000));
+      const updatedResult = { ...job.result, cue_chunks: cueChunks };
+      delete updatedResult.cues;
+      await base44.entities.Job.update(job.id, { result: updatedResult });
+    }
     onCuesChanged?.(cues);
     toast.success("Captions saved");
     setSaving(false);

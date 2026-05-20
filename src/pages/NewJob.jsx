@@ -128,6 +128,8 @@ export default function NewJob() {
         speakerLabels,
         languageDetection,
         result: data.assemblyai_transcript_id ? { assemblyai_transcript_id: data.assemblyai_transcript_id } : undefined,
+        rawTranscript: data.assemblyai_transcript_id ? { transcriptId: data.assemblyai_transcript_id } : undefined,
+        deliveries: [],
       });
 
       navigate(createPageUrl("JobDetail") + `?jobId=${data.id}`);

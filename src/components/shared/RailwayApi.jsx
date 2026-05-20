@@ -116,12 +116,15 @@ export async function createJob(payload) {
  * Create a reformat-only job on Railway.
  * Skips AAI transcription — re-runs GPT formatting on existing transcript.
  */
-export async function createReformatJob(transcriptId, captionOptions) {
+export async function createReformatJob(transcriptId, captionOptions, protectedPhrases) {
   const captionEnv = buildCaptionEnvVars(captionOptions);
+  const phrases = protectedPhrases || [];
   const payload = {
     transcript_id: transcriptId,
     reformat_only: true,
     captionOptions: captionEnv,
+    protected_phrases: phrases,
+    protectedPhrases: phrases,
   };
   console.log("POST /v1/jobs (reformat) payload:", JSON.stringify(payload, null, 2));
   const response = await fetch(`${API_BASE}/v1/jobs`, {
