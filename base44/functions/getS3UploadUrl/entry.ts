@@ -114,13 +114,14 @@ Deno.serve(async (req) => {
     const now = new Date();
     const dateStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const shortDate = dateStamp.substring(0, 8);
-    const expiresIn = 3600;
+    const uploadExpiresIn = 3600;       // 1 hour for upload
+    const getExpiresIn = 7 * 24 * 3600; // 7 days for download/playback (max for IAM user creds)
 
     // Generate presigned PUT URL (for upload)
-    const uploadUrl = await generatePresignedUrl("PUT", bucket, region, key, accessKey, secretKey, dateStamp, shortDate, expiresIn);
+    const uploadUrl = await generatePresignedUrl("PUT", bucket, region, key, accessKey, secretKey, dateStamp, shortDate, uploadExpiresIn);
 
-    // Generate presigned GET URL (for playback)
-    const publicUrl = await generatePresignedUrl("GET", bucket, region, key, accessKey, secretKey, dateStamp, shortDate, expiresIn);
+    // Generate presigned GET URL (for playback & AssemblyAI download)
+    const publicUrl = await generatePresignedUrl("GET", bucket, region, key, accessKey, secretKey, dateStamp, shortDate, getExpiresIn);
 
     return Response.json({ upload_url: uploadUrl, public_url: publicUrl, key });
   } catch (error) {
