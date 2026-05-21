@@ -47,7 +47,24 @@ export default function DeliveryPanel({ delivery, job, currentTimeMs, videoRef, 
     loadCues();
   }, [delivery?.id, delivery?.cues?.length, delivery?.cue_chunks?.length]);
 
+  // Normalize Railway cue format (start_ms/end_ms/lines) to our internal format (start/end/text)
+  const normalizeRailwayCues = (rawCues) => {
+    if (!rawCues || rawCues.length === 0) return [];
+    // Check if already in our format
+    if (rawCues[0].start !== undefined && rawCues[0].text !== undefined) return rawCues;
+    return rawCues.map((c) => ({
+      start: c.start_ms ?? c.start,
+      end: c.end_ms ?? c.end,
+      text: Array.isArray(c.lines) ? c.lines.join("\n") : (c.text || ""),
+      speaker: c.speaker || null,
+      type: c.type === "dialogue" ? "caption" : (c.type || "caption"),
+    }));
+  };
+
   // Poll delivery if it's still processing
+  const onDeliveryUpdatedRef = useRef(onDeliveryUpdated);
+  useEffect(() => { onDeliveryUpdatedRef.current = onDeliveryUpdated; }, [onDeliveryUpdated]);
+
   const doPoll = useCallback(async () => {
     const d = deliveryRef.current;
     if (!d || d.status !== "processing" || !d.railwayJobId) return;
@@ -58,17 +75,28 @@ export default function DeliveryPanel({ delivery, job, currentTimeMs, videoRef, 
       const mappedStatus = statusMap[data.status] || data.status;
 
       if (mappedStatus === "done") {
+        console.log("[DeliveryPanel] Railway job completed, processing result...");
         const resultData = data.result || data;
+
+        // Try JSON cues first (Railway returns cues array directly)
+        let parsedCues = [];
+        if (resultData.cues && Array.isArray(resultData.cues) && resultData.cues.length > 0) {
+          parsedCues = normalizeRailwayCues(resultData.cues);
+          console.log(`[DeliveryPanel] Parsed ${parsedCues.length} cues from JSON`);
+        }
+
         const srt = resultData.srt || null;
         const vtt = resultData.vtt || null;
         const scc = resultData.scc || null;
         const ttml = resultData.ttml || null;
         const qc = resultData.qc || null;
 
-        let parsedCues = [];
-        if (vtt) parsedCues = parseVTT(vtt);
-        else if (srt) parsedCues = parseVTT("WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2"));
-        else if (ttml) parsedCues = parseTTML(ttml);
+        // Fall back to parsing subtitle text if no JSON cues
+        if (parsedCues.length === 0) {
+          if (vtt) parsedCues = parseVTT(vtt);
+          else if (srt) parsedCues = parseVTT("WEBVTT\n\n" + srt.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2"));
+          else if (ttml) parsedCues = parseTTML(ttml);
+        }
 
         const effectiveSrt = srt || (parsedCues.length > 0 ? cuesToSrt(parsedCues) : null);
         const effectiveVtt = vtt || (parsedCues.length > 0 ? cuesToVtt(parsedCues) : null);
@@ -98,7 +126,7 @@ export default function DeliveryPanel({ delivery, job, currentTimeMs, videoRef, 
         };
 
         setCues(parsedCues);
-        onDeliveryUpdated(updatedDelivery);
+        onDeliveryUpdatedRef.current(updatedDelivery);
         toast.success(`"${d.profileName}" delivery complete`);
 
         if (pollingRef.current) clearInterval(pollingRef.current);
@@ -109,23 +137,21 @@ export default function DeliveryPanel({ delivery, job, currentTimeMs, videoRef, 
           status: "error",
           error: data.error?.message || data.error || "Unknown error",
         };
-        onDeliveryUpdated(updatedDelivery);
+        onDeliveryUpdatedRef.current(updatedDelivery);
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
       }
     } catch (err) {
       console.error("[DeliveryPanel] Poll error:", err);
     }
-  }, [onDeliveryUpdated]);
+  }, []);
 
   useEffect(() => {
     if (delivery?.status !== "processing") return;
 
-    // Start polling
-    const tick = () => {
-      pollingRef.current = setInterval(doPoll, 3000);
-    };
-    tick();
+    // Poll immediately on mount, then every 3 seconds
+    doPoll();
+    pollingRef.current = setInterval(doPoll, 3000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);

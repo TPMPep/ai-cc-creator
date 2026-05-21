@@ -205,13 +205,16 @@ export default function JobDetail() {
     setActiveDeliveryId(delivery.id);
   };
 
-  const handleDeliveryUpdated = async (updatedDelivery) => {
-    const updatedDeliveries = (job.deliveries || []).map(d =>
-      d.id === updatedDelivery.id ? updatedDelivery : d
-    );
-    await base44.entities.Job.update(job.id, { deliveries: updatedDeliveries });
-    setJob(prev => ({ ...prev, deliveries: updatedDeliveries }));
-  };
+  const handleDeliveryUpdated = useCallback(async (updatedDelivery) => {
+    setJob(prev => {
+      const updatedDeliveries = (prev.deliveries || []).map(d =>
+        d.id === updatedDelivery.id ? updatedDelivery : d
+      );
+      // Persist to DB (fire and forget — state is updated immediately)
+      base44.entities.Job.update(prev.id, { deliveries: updatedDeliveries });
+      return { ...prev, deliveries: updatedDeliveries };
+    });
+  }, []);
 
   const handleRemoveDelivery = async (deliveryId) => {
     const updatedDeliveries = (job.deliveries || []).filter(d => d.id !== deliveryId);
