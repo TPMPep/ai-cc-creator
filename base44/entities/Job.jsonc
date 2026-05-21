@@ -1,0 +1,204 @@
+{
+  "name": "Job",
+  "type": "object",
+  "properties": {
+    "railwayJobId": {
+      "type": "string",
+      "description": "Railway job_id or AssemblyAI transcript_id"
+    },
+    "userId": {
+      "type": "string",
+      "description": "User email who owns this job"
+    },
+    "mediaUrl": {
+      "type": "string",
+      "description": "Public media URL submitted"
+    },
+    "title": {
+      "type": "string",
+      "default": "Untitled Job",
+      "description": "User-editable job title"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "processing",
+        "done",
+        "error"
+      ],
+      "default": "processing",
+      "description": "Current job status"
+    },
+    "pipeline": {
+      "type": "string",
+      "enum": [
+        "railway",
+        "ai"
+      ],
+      "default": "railway",
+      "description": "Which pipeline processed this job"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error message if status is error"
+    },
+    "allowHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether HTTP was allowed for this job"
+    },
+    "speakerLabels": {
+      "type": "boolean",
+      "default": true,
+      "description": "Speaker labels enabled"
+    },
+    "languageDetection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Language detection enabled"
+    },
+    "rules": {
+      "type": "object",
+      "description": "Caption rules used for this job (legacy)"
+    },
+    "result": {
+      "type": "object",
+      "description": "Full result payload once job is done (cues, srt, vtt, scc, qc)"
+    },
+    "rawTranscript": {
+      "type": "object",
+      "description": "Raw AssemblyAI transcript data (utterances, words, transcript_id, srt_url)"
+    },
+    "deliveries": {
+      "type": "array",
+      "description": "Array of formatted delivery outputs, each with its own profile, cues, QC, and export URLs",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "profileName": {
+            "type": "string"
+          },
+          "profileSettings": {
+            "type": "object"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "done",
+              "error"
+            ]
+          },
+          "railwayJobId": {
+            "type": "string"
+          },
+          "qc": {
+            "type": "object"
+          },
+          "srt_url": {
+            "type": "string"
+          },
+          "vtt_url": {
+            "type": "string"
+          },
+          "scc_url": {
+            "type": "string"
+          },
+          "ttml_url": {
+            "type": "string"
+          },
+          "cue_chunks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Cues JSON serialized into string chunks to avoid field size limits"
+          },
+          "created_date": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "durationMs": {
+      "type": "number",
+      "description": "Computed from cues when done"
+    },
+    "issuesCount": {
+      "type": "number",
+      "description": "QC issues count from result.qc"
+    },
+    "lastPolledAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last poll timestamp"
+    },
+    "pipelineLog": {
+      "type": "array",
+      "description": "Step-by-step pipeline progress log with status per stage",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error",
+              "running"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "ts": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "processingPlan": {
+      "type": "object",
+      "description": "Stores batches/gaps/highlights/language between pipeline steps"
+    },
+    "costEstimate": {
+      "type": "object",
+      "description": "Estimated costs breakdown for this job",
+      "properties": {
+        "assemblyai": {
+          "type": "number"
+        },
+        "openai": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "audioDurationSec": {
+          "type": "number"
+        },
+        "openaiInputTokens": {
+          "type": "number"
+        },
+        "openaiOutputTokens": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "required": [
+    "railwayJobId",
+    "userId",
+    "mediaUrl",
+    "status"
+  ]
+}

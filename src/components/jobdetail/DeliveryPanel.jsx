@@ -117,13 +117,19 @@ export default function DeliveryPanel({ delivery, job, currentTimeMs, videoRef, 
         const urlMap = {};
         for (const { key, url } of uploaded) urlMap[key] = url;
 
+        // Serialize cues into chunks for DB storage (avoid field size limits + schema validation)
+        const cueStr = JSON.stringify(parsedCues);
+        const cueChunks = [];
+        for (let i = 0; i < cueStr.length; i += 75000) cueChunks.push(cueStr.slice(i, i + 75000));
+
         const updatedDelivery = {
           ...d,
           status: "done",
-          cues: parsedCues,
+          cue_chunks: cueChunks,
           qc,
           ...urlMap,
         };
+        delete updatedDelivery.cues; // Never store cue objects directly — use cue_chunks
 
         setCues(parsedCues);
         onDeliveryUpdatedRef.current(updatedDelivery);
