@@ -195,7 +195,36 @@ export default function JobDetail() {
     setEditingTitle(false);
   };
 
-  const handleRetry = () => {
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    // Extract s3Key from the job or parse it from the presigned URL
+    let key = job.s3Key;
+    if (!key && job.mediaUrl) {
+      try {
+        const u = new URL(job.mediaUrl);
+        // S3 presigned URLs have the key as the pathname (minus leading /)
+        if (u.hostname.includes('.s3.') && u.hostname.includes('.amazonaws.com')) {
+          key = decodeURIComponent(u.pathname.slice(1));
+        }
+      } catch {}
+    }
+
+    if (key) {
+      setRetrying(true);
+      try {
+        const res = await base44.functions.invoke("refreshS3Url", { s3Key: job.s3Key });
+        const freshUrl = res.data?.url;
+        if (freshUrl) {
+          const params = new URLSearchParams({ mediaUrl: freshUrl });
+          navigate(createPageUrl("NewJob") + `?${params.toString()}`);
+          return;
+        }
+      } catch (e) {
+        console.warn("Could not refresh S3 URL, using original:", e);
+      } finally {
+        setRetrying(false);
+      }
+    }
     const params = new URLSearchParams({ mediaUrl: job.mediaUrl });
     navigate(createPageUrl("NewJob") + `?${params.toString()}`);
   };
@@ -326,8 +355,8 @@ export default function JobDetail() {
                     <p className="text-xs text-red-400/70 font-mono break-all">{job.error || "An unknown error occurred."}</p>
                   </div>
                 </details>
-                <Button variant="outline" size="sm" onClick={handleRetry} className="border-red-500/30 text-red-300 hover:bg-red-500/10 mt-4">
-                  Retry Job
+                <Button variant="outline" size="sm" onClick={handleRetry} disabled={retrying} className="border-red-500/30 text-red-300 hover:bg-red-500/10 mt-4">
+                  {retrying ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Refreshing URL…</> : "Retry Job"}
                 </Button>
               </div>
             </div>

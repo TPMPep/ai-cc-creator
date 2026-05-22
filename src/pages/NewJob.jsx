@@ -23,6 +23,7 @@ export default function NewJob() {
   const [urlError, setUrlError] = useState(null);
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [s3Key, setS3Key] = useState(null);
 
   useEffect(() => {
     const init = async () => {
@@ -121,6 +122,7 @@ export default function NewJob() {
         railwayJobId: data.id,
         userId: user?.email || "",
         mediaUrl,
+        s3Key: s3Key || undefined,
         title: deriveTitleFromUrl(mediaUrl),
         status: mappedStatus,
         error: errorMsg,
@@ -169,7 +171,7 @@ export default function NewJob() {
                   <div className="flex-1 border-t border-zinc-700/50" />
                 </div>
 
-                <FileUpload onUploadComplete={(url) => { if (url) setMediaUrl(url); }} />
+                <FileUpload onUploadComplete={(url, key) => { if (url) { setMediaUrl(url); setS3Key(key || null); } else { setS3Key(null); } }} />
 
                 <div className="flex items-start gap-2 mt-1">
                   <Info className="w-3.5 h-3.5 text-zinc-500 mt-0.5 flex-shrink-0" />

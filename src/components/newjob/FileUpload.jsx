@@ -56,8 +56,8 @@ export default function FileUpload({ onUploadComplete }) {
         xhr.send(file);
       });
 
-      // 3. Pass the public S3 URL back
-      onUploadComplete(publicUrl);
+      // 3. Pass the public S3 URL and key back
+      onUploadComplete(publicUrl, data.key);
       toast.success("File uploaded successfully");
     } catch (err) {
       console.error("Upload error:", err);
