@@ -1,0 +1,36 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Contact name"
+    },
+    "email": {
+      "type": "string",
+      "description": "Contact email"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name"
+    },
+    "role": {
+      "type": "string",
+      "description": "Job role (optional)"
+    },
+    "message": {
+      "type": "string",
+      "description": "Contact message"
+    },
+    "wantsDemo": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether they want a demo"
+    }
+  },
+  "required": [
+    "name",
+    "email",
+    "message"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "Settings",
+  "type": "object",
+  "properties": {
+    "settingsId": {
+      "type": "string",
+      "default": "global",
+      "description": "Fixed ID for singleton pattern"
+    },
+    "allowlistEnabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable domain allowlist for URL validation"
+    },
+    "allowedDomains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "List of allowed domains (supports wildcards like *.cloudfront.net)"
+    },
+    "defaultAllowHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Default state for Allow HTTP toggle in New Job form"
+    },
+    "jobsPerMinute": {
+      "type": "number",
+      "default": 3,
+      "description": "Max jobs a user can create per minute"
+    },
+    "maxConcurrentProcessingJobsPerUser": {
+      "type": "number",
+      "default": 3,
+      "description": "Max concurrent processing jobs per user"
+    }
+  },
+  "required": [
+    "settingsId"
+  ]
+}
